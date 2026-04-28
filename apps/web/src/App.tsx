@@ -150,6 +150,7 @@ type SettingsTab =
   | 'about'
 
 type ViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
+type TaskStreamStatus = 'idle' | 'connecting' | 'live' | 'fallback'
 
 const examples = [
   {
@@ -300,6 +301,8 @@ function App() {
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
+  const [taskStreamStatus, setTaskStreamStatus] = useState<TaskStreamStatus>('idle')
+  const [taskStreamUpdatedAt, setTaskStreamUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
@@ -559,20 +562,35 @@ function App() {
   }, [Boolean(runningTask)])
 
   useEffect(() => {
-    if (!selectedTaskId || selectedTask?.status !== 'running') return
+    if (!selectedTaskId || selectedTask?.status !== 'running') {
+      setTaskStreamStatus('idle')
+      setTaskStreamUpdatedAt(null)
+      return
+    }
 
+    setTaskStreamStatus('connecting')
+    setTaskStreamUpdatedAt(null)
     const source = new EventSource(taskStreamUrl(selectedTaskId))
+    source.addEventListener('open', () => {
+      setTaskStreamStatus('live')
+      setTaskStreamUpdatedAt(new Date().toISOString())
+    })
     source.addEventListener('task', (event) => {
       try {
         const payload = JSON.parse((event as MessageEvent).data) as { task?: Task }
         if (!payload.task) return
         setState((current) => mergeStreamedTask(current, payload.task!))
+        setTaskStreamStatus('live')
+        setTaskStreamUpdatedAt(new Date().toISOString())
       } catch {
         // Ignore malformed SSE payloads; the polling fallback will refresh state.
       }
     })
     source.addEventListener('task.deleted', () => {
       void refresh().catch(() => undefined)
+    })
+    source.addEventListener('error', () => {
+      setTaskStreamStatus('fallback')
     })
 
     return () => source.close()
@@ -1385,6 +1403,7 @@ function App() {
                 <div>
                   Hermes
                   <span>运行中</span>
+                  <span className={`stream-pill ${taskStreamStatus}`}>{taskStreamLabel(taskStreamStatus)}</span>
                 </div>
                 <button
                   className="inline-stop-button"
@@ -1497,7 +1516,12 @@ function App() {
           任务上下文
         </div>
 
-        <TaskSummaryCard task={selectedTask} workspace={selectedWorkspace} />
+        <TaskSummaryCard
+          task={selectedTask}
+          workspace={selectedWorkspace}
+          streamStatus={taskStreamStatus}
+          streamUpdatedAt={taskStreamUpdatedAt}
+        />
 
         <section className="inspector-card todo-card">
           <div className="card-heading-row">
@@ -4561,7 +4585,17 @@ function EmptyInspectorState({ title, detail }: { title: string; detail: string 
   )
 }
 
-function TaskSummaryCard({ task, workspace }: { task?: Task; workspace?: Workspace }) {
+function TaskSummaryCard({
+  task,
+  workspace,
+  streamStatus,
+  streamUpdatedAt
+}: {
+  task?: Task
+  workspace?: Workspace
+  streamStatus: TaskStreamStatus
+  streamUpdatedAt: string | null
+}) {
   if (!task) {
     return (
       <section className="inspector-card task-summary-card">
@@ -4612,6 +4646,14 @@ function TaskSummaryCard({ task, workspace }: { task?: Task; workspace?: Workspa
         <span><Wrench size={13} />{stats.tools} 工具</span>
         <span><FileText size={13} />{stats.files} 文件</span>
         <span><FileArchive size={13} />{task.artifacts.length} 产物</span>
+      </div>
+
+      <div className={`task-stream-state ${streamStatus}`}>
+        <span />
+        <div>
+          <strong>{taskStreamLabel(streamStatus)}</strong>
+          <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
+        </div>
       </div>
 
       {latest && (
@@ -5501,6 +5543,22 @@ function statusLabel(status: Task['status']) {
     failed: '失败',
     stopped: '已停止'
   }[status]
+}
+
+function taskStreamLabel(status: TaskStreamStatus) {
+  return {
+    idle: '未连接',
+    connecting: '连接中',
+    live: '实时同步',
+    fallback: '轮询兜底'
+  }[status]
+}
+
+function taskStreamDescription(status: TaskStreamStatus, updatedAt: string | null) {
+  if (status === 'live') return updatedAt ? `最近同步 ${formatTime(updatedAt)}` : '事件流已连接'
+  if (status === 'connecting') return '正在连接 Hermes 任务事件流'
+  if (status === 'fallback') return '事件流暂不可用，正在用轮询刷新'
+  return '任务运行时会自动连接事件流'
 }
 
 function formatTime(value: string) {

@@ -2418,6 +2418,36 @@ summary:focus-visible {
   font-weight: 400;
 }
 
+.stream-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.stream-pill.live {
+  color: var(--moss);
+  background: var(--moss-soft);
+}
+
+.stream-pill.connecting {
+  color: var(--cobalt);
+  background: #e5eff8;
+}
+
+.stream-pill.fallback {
+  color: var(--amber);
+  background: #fff5e4;
+}
+
+.stream-pill.idle {
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+}
+
 .inline-stop-button,
 .mini-danger-button {
   display: inline-flex;
@@ -3240,6 +3270,56 @@ summary:focus-visible {
   border-radius: 999px;
   font-size: 10px;
   font-weight: 800;
+}
+
+.task-stream-state {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  padding: 9px 10px;
+  background: rgba(255, 253, 247, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.task-stream-state > span {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  background: var(--ink-soft);
+  border-radius: 999px;
+}
+
+.task-stream-state.live > span {
+  background: var(--moss);
+  box-shadow: 0 0 0 4px rgba(49, 92, 66, 0.11);
+}
+
+.task-stream-state.connecting > span {
+  background: var(--cobalt);
+}
+
+.task-stream-state.fallback > span {
+  background: var(--amber);
+}
+
+.task-stream-state strong,
+.task-stream-state p {
+  display: block;
+  min-width: 0;
+}
+
+.task-stream-state strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.task-stream-state p {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .task-summary-latest {
