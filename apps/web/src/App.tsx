@@ -1607,9 +1607,12 @@ function App() {
 
       {viewMode === 'tasks' && (
       <aside className="inspector">
-        <div className="inspector-title">
-          <PanelRight size={17} />
-          任务上下文
+        <div className="inspector-title-block">
+          <div className="inspector-title">
+            <PanelRight size={17} />
+            工作区
+          </div>
+          <p>{selectedWorkspace?.name ?? '未选择工作区'} · 当前任务的步骤、产出物和过程资源</p>
         </div>
 
         <TaskProgressCard
@@ -1629,8 +1632,8 @@ function App() {
         <AgentResourcesCard task={selectedTask} workspaceFiles={workspaceFiles} />
 
         {selectedTask && (
-          <details className="inspector-card inspector-details">
-            <summary>任务操作</summary>
+          <details className="inspector-card inspector-details inspector-utility-details">
+            <summary>更多操作</summary>
             <div className="task-tag-editor">
               <div className="tag-editor-title">
                 <Tags size={13} />
@@ -1667,8 +1670,8 @@ function App() {
           </details>
         )}
 
-        <details className="inspector-card inspector-details debug-details">
-          <summary>调试信息</summary>
+        <details className="inspector-card inspector-details debug-details inspector-utility-details">
+          <summary>后台调试</summary>
           {selectedTask && (
             <div className="debug-section">
               <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
@@ -5138,8 +5141,8 @@ function AgentResourcesCard({ task, workspaceFiles }: { task?: Task; workspaceFi
     <section className="inspector-card resource-focus-card">
       <div className="card-heading-row">
         <div>
-          <h3>{task?.status === 'running' ? '当前步骤资源' : '过程资源'}</h3>
-          <p>{task?.status === 'running' ? '随任务步骤刷新，Skill 会保留' : '任务最终用到的工具、链接、文件和 Skill'}</p>
+          <h3>{task?.status === 'running' ? '当前步骤资源' : '本轮过程资源'}</h3>
+          <p>{task?.status === 'running' ? '随任务步骤刷新，Skill 会保留' : '保留本轮最终有效的工具、链接、文件和 Skill'}</p>
         </div>
         {task && <span className="soft-count">{total} 项</span>}
       </div>
