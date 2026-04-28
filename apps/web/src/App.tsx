@@ -1235,6 +1235,9 @@ function App() {
                   setSelectedTaskId(task.id)
                   setSelectedWorkspaceId(task.workspaceId)
                 }}
+                onContinue={() => handleContinueTask(task)}
+                onRetry={() => handleRetryTask(task)}
+                onArchive={() => void handleArchiveTask(task)}
               />
             ))}
           </div>
@@ -4747,19 +4750,62 @@ function StatusIcon({ status }: { status: Task['status'] }) {
 function SidebarRecentTaskRow({
   task,
   active,
-  onSelect
+  onSelect,
+  onContinue,
+  onRetry,
+  onArchive
 }: {
   task: Task
   active: boolean
   onSelect: () => void
+  onContinue: () => void
+  onRetry: () => void
+  onArchive: () => void
 }) {
+  const hasResult = Boolean(taskResultText(task).trim())
+  const hasArtifacts = task.artifacts.length > 0
+  const meta = [
+    statusLabel(task.status),
+    formatTime(task.updatedAt),
+    hasArtifacts ? `${task.artifacts.length} 产物` : hasResult ? '有结果' : ''
+  ].filter(Boolean).join(' · ')
+  const action = recentTaskAction(task)
+
   return (
-    <button className={active ? 'recent-task-row active' : 'recent-task-row'} onClick={onSelect}>
-      <span className={`recent-task-status ${task.status}`} />
-      <span>{task.title}</span>
-      {task.pinned && <Star size={11} />}
-    </button>
+    <div className={['recent-task-row', active ? 'active' : '', task.status].filter(Boolean).join(' ')}>
+      <button className="recent-task-main" onClick={onSelect}>
+        <span className={`recent-task-status ${task.status}`} />
+        <span className="recent-task-copy">
+          <strong>{task.title}</strong>
+          <em>{meta}</em>
+        </span>
+        {task.pinned && <Star size={11} />}
+      </button>
+      <div className="recent-task-actions">
+        {action === 'continue' && (
+          <button type="button" title="继续追问" onClick={onContinue}>
+            <MessageSquarePlus size={12} />
+          </button>
+        )}
+        {action === 'retry' && (
+          <button type="button" title="重新运行" onClick={onRetry}>
+            <RefreshCw size={12} />
+          </button>
+        )}
+        {task.status !== 'running' && (
+          <button type="button" title={task.archivedAt ? '取消归档' : '归档'} onClick={onArchive}>
+            {task.archivedAt ? <ArchiveRestore size={12} /> : <Archive size={12} />}
+          </button>
+        )}
+      </div>
+    </div>
   )
+}
+
+function recentTaskAction(task: Task) {
+  if (task.status === 'failed' || task.status === 'stopped') return 'retry'
+  if (task.status === 'completed') return 'continue'
+  return 'none'
 }
 
 function TaskRow({

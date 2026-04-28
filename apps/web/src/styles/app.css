@@ -274,19 +274,19 @@ summary:focus-visible {
 .recent-task-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   overflow: auto;
   min-height: 0;
 }
 
 .recent-task-row {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   width: 100%;
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 48px;
+  padding: 5px;
   color: var(--ink);
   background: transparent;
   border-radius: 7px;
@@ -298,16 +298,86 @@ summary:focus-visible {
   background: rgba(49, 92, 66, 0.09);
 }
 
-.recent-task-row span:nth-child(2) {
+.recent-task-row.running {
+  background: rgba(40, 93, 145, 0.09);
+}
+
+.recent-task-row.failed {
+  background: rgba(184, 81, 55, 0.08);
+}
+
+.recent-task-main {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 5px;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.recent-task-main:hover {
+  background: rgba(255, 253, 247, 0.42);
+}
+
+.recent-task-copy,
+.recent-task-copy strong,
+.recent-task-copy em {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
 }
 
-.recent-task-row svg {
+.recent-task-copy strong {
+  font-size: 12px;
+}
+
+.recent-task-copy em {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.recent-task-main svg {
   color: var(--amber);
+}
+
+.recent-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.recent-task-row:hover .recent-task-actions,
+.recent-task-row.active .recent-task-actions,
+.recent-task-row.failed .recent-task-actions,
+.recent-task-row.running .recent-task-actions {
+  opacity: 1;
+}
+
+.recent-task-actions button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--ink-soft);
+  background: rgba(255, 253, 247, 0.56);
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.recent-task-actions button:hover {
+  color: var(--ink);
+  border-color: var(--line);
 }
 
 .recent-task-status {
