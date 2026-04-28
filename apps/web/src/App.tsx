@@ -105,6 +105,7 @@ import {
   Task,
   testHermesMcpServer,
   taskExportUrl,
+  taskStreamUrl,
   tasksExportUrl,
   Skill,
   SkillFile,
@@ -556,6 +557,26 @@ function App() {
     }, runningTask ? 900 : 1800)
     return () => window.clearInterval(interval)
   }, [Boolean(runningTask)])
+
+  useEffect(() => {
+    if (!selectedTaskId || selectedTask?.status !== 'running') return
+
+    const source = new EventSource(taskStreamUrl(selectedTaskId))
+    source.addEventListener('task', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { task?: Task }
+        if (!payload.task) return
+        setState((current) => mergeStreamedTask(current, payload.task!))
+      } catch {
+        // Ignore malformed SSE payloads; the polling fallback will refresh state.
+      }
+    })
+    source.addEventListener('task.deleted', () => {
+      void refresh().catch(() => undefined)
+    })
+
+    return () => source.close()
+  }, [selectedTaskId, selectedTask?.status])
 
   useEffect(() => {
     if (!selectedWorkspaceId) return
@@ -5162,6 +5183,26 @@ function WorkspaceFiles({
 
 function latestUserMessageId(task?: Task) {
   return task?.messages.slice().reverse().find((message) => message.role === 'user')?.id
+}
+
+function mergeStreamedTask(current: AppState, task: Task): AppState {
+  const exists = current.tasks.some((item) => item.id === task.id)
+  const tasks = exists
+    ? current.tasks.map((item) => (item.id === task.id ? task : item))
+    : [task, ...current.tasks]
+
+  return {
+    ...current,
+    tasks,
+    messages: [
+      ...current.messages.filter((message) => message.taskId !== task.id),
+      ...(task.messages ?? [])
+    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    artifacts: [
+      ...current.artifacts.filter((artifact) => artifact.taskId !== task.id),
+      ...(task.artifacts ?? [])
+    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
 }
 
 type TraceRow = {

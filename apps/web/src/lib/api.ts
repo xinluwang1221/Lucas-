@@ -601,6 +601,10 @@ export function taskExportUrl(taskId: string) {
   return `/api/tasks/${taskId}/export.md`
 }
 
+export function taskStreamUrl(taskId: string) {
+  return `/api/tasks/${encodeURIComponent(taskId)}/stream`
+}
+
 export function tasksExportUrl(taskIds: string[]) {
   const params = new URLSearchParams()
   if (taskIds.length) params.set('ids', taskIds.join(','))

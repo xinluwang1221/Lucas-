@@ -1,5 +1,6 @@
 import cors from 'cors'
 import express from 'express'
+import type { Response } from 'express'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile, spawn } from 'node:child_process'
@@ -19,6 +20,7 @@ const app = express()
 const port = Number(process.env.PORT || 8787)
 const upload = multer({ dest: path.join(process.cwd(), 'data', 'uploads') })
 const runningTasks = new Map<string, ReturnType<typeof import('node:child_process').spawn>>()
+const taskStreamClients = new Map<string, Set<Response>>()
 
 app.use(cors({ origin: ['http://127.0.0.1:5173', 'http://localhost:5173'] }))
 app.use(express.json({ limit: '2mb' }))
@@ -548,6 +550,31 @@ app.get('/api/tasks/:taskId', (req, res) => {
   res.json(enrichTask(state, task))
 })
 
+app.get('/api/tasks/:taskId/stream', (req, res) => {
+  const taskId = req.params.taskId
+  const task = store.snapshot.tasks.find((item) => item.id === taskId)
+  if (!task) {
+    res.status(404).json({ error: 'task not found' })
+    return
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders?.()
+
+  addTaskStreamClient(taskId, res)
+  sendTaskStreamSnapshot(taskId, res)
+  const heartbeat = setInterval(() => {
+    writeSse(res, 'heartbeat', { taskId, updatedAt: new Date().toISOString() })
+  }, 15000)
+
+  req.on('close', () => {
+    clearInterval(heartbeat)
+    removeTaskStreamClient(taskId, res)
+  })
+})
+
 app.get('/api/tasks/:taskId/export.md', (req, res) => {
   const state = store.snapshot
   const task = state.tasks.find((item) => item.id === req.params.taskId)
@@ -618,11 +645,9 @@ app.post('/api/tasks', (req, res) => {
   })
 
   void executeTask(task.id, workspace.path, prompt.trim(), undefined, model, normalizedSkillNames)
-  res.status(201).json({
-    ...task,
-    messages: state.messages.filter((message) => message.taskId === task.id),
-    artifacts: []
-  })
+  const createdState = store.snapshot
+  const createdTask = createdState.tasks.find((item) => item.id === task.id)
+  res.status(201).json(createdTask ? enrichTask(createdState, createdTask) : task)
 })
 
 app.post('/api/tasks/:taskId/messages', (req, res) => {
@@ -671,6 +696,7 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
       createdAt: now
     })
   })
+  broadcastTaskUpdate(task.id)
 
   void executeTask(task.id, workspace.path, prompt.trim(), task.hermesSessionId, model, normalizedSkillNames)
   res.status(202).json({ ok: true })
@@ -710,6 +736,7 @@ app.post('/api/tasks/:taskId/stop', (req, res) => {
       })
     }
   })
+  broadcastTaskUpdate(taskId)
   res.json({ ok: true })
 })
 
@@ -921,6 +948,7 @@ async function executeTask(
         task.events = finalEvents
         task.updatedAt = task.completedAt ?? completedAt
       })
+      broadcastTaskUpdate(taskId)
       return
     }
 
@@ -949,6 +977,7 @@ async function executeTask(
       })
       state.artifacts.push(...artifacts)
     })
+    broadcastTaskUpdate(taskId)
   } catch (error) {
     runningTasks.delete(taskId)
     const completedAt = new Date().toISOString()
@@ -968,6 +997,7 @@ async function executeTask(
         createdAt: completedAt
       })
     })
+    broadcastTaskUpdate(taskId)
   }
 }
 
@@ -1218,6 +1248,7 @@ function updateRunningOutput(taskId: string, output: { stdout?: string; stderr?:
     if (output.stderr !== undefined) task.stderr = output.stderr.trimEnd()
     task.updatedAt = new Date().toISOString()
   })
+  broadcastTaskUpdate(taskId)
 }
 
 function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
@@ -1242,6 +1273,7 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
     }
     task.updatedAt = new Date().toISOString()
   })
+  broadcastTaskUpdate(taskId)
 }
 
 function cleanBridgeStdout(output: string) {
@@ -1532,6 +1564,47 @@ function enrichTask(state: AppState, task: Task) {
     messages: state.messages.filter((message) => message.taskId === task.id),
     artifacts: state.artifacts.filter((artifact) => artifact.taskId === task.id)
   }
+}
+
+function addTaskStreamClient(taskId: string, res: Response) {
+  const clients = taskStreamClients.get(taskId) ?? new Set<Response>()
+  clients.add(res)
+  taskStreamClients.set(taskId, clients)
+}
+
+function removeTaskStreamClient(taskId: string, res: Response) {
+  const clients = taskStreamClients.get(taskId)
+  if (!clients) return
+  clients.delete(res)
+  if (!clients.size) taskStreamClients.delete(taskId)
+}
+
+function sendTaskStreamSnapshot(taskId: string, res: Response) {
+  const state = store.snapshot
+  const task = state.tasks.find((item) => item.id === taskId)
+  if (!task) {
+    writeSse(res, 'task.deleted', { taskId })
+    return
+  }
+  writeSse(res, 'task', { task: enrichTask(state, task) })
+}
+
+function broadcastTaskUpdate(taskId: string) {
+  const clients = taskStreamClients.get(taskId)
+  if (!clients?.size) return
+
+  for (const res of [...clients]) {
+    if (res.destroyed) {
+      removeTaskStreamClient(taskId, res)
+      continue
+    }
+    sendTaskStreamSnapshot(taskId, res)
+  }
+}
+
+function writeSse(res: Response, event: string, data: unknown) {
+  res.write(`event: ${event}\n`)
+  res.write(`data: ${JSON.stringify(data)}\n\n`)
 }
 
 function buildExecutionView(task: Task): ExecutionView {
