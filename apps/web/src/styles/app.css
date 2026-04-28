@@ -2524,6 +2524,12 @@ summary:focus-visible {
   font-weight: 700;
 }
 
+.agent-trace-details summary em {
+  color: #9a9e96;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .agent-trace-details summary::-webkit-details-marker {
   display: none;
 }
@@ -2552,6 +2558,12 @@ summary:focus-visible {
   color: var(--danger);
   background: #fff1eb;
   border-color: #e3b8aa;
+}
+
+.agent-trace-note {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 11px;
 }
 
 .agent-trace-current {
@@ -2748,6 +2760,8 @@ summary:focus-visible {
 }
 
 .live-output {
+  max-height: 180px;
+  overflow: auto;
   border-color: #b6c9b7;
   background: linear-gradient(180deg, #fffdf7, #f3f8f0);
 }
@@ -3188,6 +3202,43 @@ summary:focus-visible {
 .inspector-card h3 {
   margin: 0 0 13px;
   font-size: 13px;
+}
+
+.inspector-disclosure {
+  padding: 0;
+  overflow: hidden;
+}
+
+.inspector-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.inspector-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.inspector-disclosure > summary h3 {
+  margin: 0;
+}
+
+.inspector-disclosure > summary svg {
+  color: var(--ink-soft);
+  transition: transform 0.18s ease;
+}
+
+.inspector-disclosure[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.inspector-disclosure-body {
+  padding: 0 16px 16px;
 }
 
 .task-summary-card {

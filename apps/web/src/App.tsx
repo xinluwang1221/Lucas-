@@ -1553,55 +1553,67 @@ function App() {
           )}
         </section>
 
-        <section className="inspector-card">
-          <h3>最近操作</h3>
-          {selectedTask ? (
-            <RecentOperations task={selectedTask} />
-          ) : (
-            <EmptyInspectorState title="暂无操作" detail="Hermes 的搜索、读写文件和工具调用会显示在这里" />
-          )}
-        </section>
-
-        <section className="inspector-card">
-          <h3>任务产物</h3>
-          {!(selectedTask?.artifacts ?? []).length && (
-            <EmptyInspectorState title="暂无产物" detail="任务完成后，生成的文件会展示在这里" />
-          )}
-          <div className="artifact-list">
-            {(selectedTask?.artifacts ?? []).map((artifact) => (
-              <div className="artifact" key={artifact.id}>
-                <FileArchive size={17} />
-                <div>
-                  <strong>{artifact.name}</strong>
-                  <span>{artifact.relativePath}</span>
-                </div>
-                <button title="预览文本产物" onClick={() => void handlePreview(artifact)}>
-                  <FileText size={15} />
-                </button>
-                <button title="在 Finder 中显示" onClick={() => void handleRevealArtifact(artifact)}>
-                  <FolderOpen size={15} />
-                </button>
-                <a title="下载" href={`/api/artifacts/${artifact.id}/download`}>
-                  <Upload size={15} />
-                </a>
-              </div>
-            ))}
+        <details className="inspector-card inspector-disclosure" open={selectedTask?.status === 'running'}>
+          <summary>
+            <h3>最近操作</h3>
+            <ChevronDown size={14} />
+          </summary>
+          <div className="inspector-disclosure-body">
+            {selectedTask ? (
+              <RecentOperations task={selectedTask} />
+            ) : (
+              <EmptyInspectorState title="暂无操作" detail="Hermes 的搜索、读写文件和工具调用会显示在这里" />
+            )}
           </div>
-        </section>
+        </details>
 
-        <section className="inspector-card reference-card">
-          <h3>参考信息</h3>
-          <ReferenceInfo task={selectedTask} workspaceFiles={workspaceFiles} />
-          <details className="reference-files">
-            <summary>工作区文件</summary>
-            <WorkspaceFiles
-              files={workspaceFiles}
-              onUseFile={insertFileContext}
-              onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
-              onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
-            />
-          </details>
-        </section>
+        {(selectedTask?.status === 'running' || (selectedTask?.artifacts ?? []).length > 0) && (
+          <section className="inspector-card">
+            <h3>任务产物</h3>
+            {!(selectedTask?.artifacts ?? []).length && (
+              <EmptyInspectorState title="暂无产物" detail="任务完成后，生成的文件会展示在这里" />
+            )}
+            <div className="artifact-list">
+              {(selectedTask?.artifacts ?? []).map((artifact) => (
+                <div className="artifact" key={artifact.id}>
+                  <FileArchive size={17} />
+                  <div>
+                    <strong>{artifact.name}</strong>
+                    <span>{artifact.relativePath}</span>
+                  </div>
+                  <button title="预览文本产物" onClick={() => void handlePreview(artifact)}>
+                    <FileText size={15} />
+                  </button>
+                  <button title="在 Finder 中显示" onClick={() => void handleRevealArtifact(artifact)}>
+                    <FolderOpen size={15} />
+                  </button>
+                  <a title="下载" href={`/api/artifacts/${artifact.id}/download`}>
+                    <Upload size={15} />
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <details className="inspector-card inspector-disclosure reference-card" open={selectedTask?.status === 'running'}>
+          <summary>
+            <h3>参考信息</h3>
+            <ChevronDown size={14} />
+          </summary>
+          <div className="inspector-disclosure-body">
+            <ReferenceInfo task={selectedTask} workspaceFiles={workspaceFiles} />
+            <details className="reference-files">
+              <summary>工作区文件</summary>
+              <WorkspaceFiles
+                files={workspaceFiles}
+                onUseFile={insertFileContext}
+                onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
+                onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
+              />
+            </details>
+          </div>
+        </details>
 
         {selectedTask && (
           <details className="inspector-card inspector-details">
@@ -4228,13 +4240,16 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   const rows = executionTraceRows(task)
   if (!rows.length) return null
 
+  const visibleRows = compactTraceRows(task, rows)
+  const hiddenCount = Math.max(0, rows.length - visibleRows.length)
   const toolCount = rows.filter((row) => row.kind === 'tool' || row.kind === 'search' || row.kind === 'file').length
   const thinkingCount = rows.filter((row) => row.kind === 'thinking').length
   const fileCount = rows.filter((row) => row.kind === 'file').length
   const searchCount = rows.filter((row) => row.kind === 'search').length
   const errorCount = rows.filter((row) => row.kind === 'error').length
-  const defaultOpen = task.status === 'running' || rows.length <= 8
+  const defaultOpen = task.status === 'running'
   const lastRow = rows[rows.length - 1]
+  const summaryLabel = task.status === 'running' ? '查看实时过程' : '查看过程记录'
 
   return (
     <section className="agent-trace">
@@ -4248,7 +4263,8 @@ function InlineExecutionTrace({ task }: { task: Task }) {
 
       <details className="agent-trace-details" open={defaultOpen}>
         <summary>
-          <span>查看详情</span>
+          <span>{summaryLabel}</span>
+          <em>{toolCount} 次操作 · {statusLabel(task.status)}</em>
           <ChevronDown size={14} />
         </summary>
         <div className="agent-trace-stats">
@@ -4259,6 +4275,11 @@ function InlineExecutionTrace({ task }: { task: Task }) {
           {errorCount > 0 && <span className="danger-text">{errorCount} 个异常</span>}
           <span>{statusLabel(task.status)}</span>
         </div>
+        {hiddenCount > 0 && (
+          <p className="agent-trace-note">
+            已收起 {hiddenCount} 条较早过程，只显示当前轮最近记录。
+          </p>
+        )}
         {lastRow && (
           <div className={`agent-trace-current ${lastRow.kind}`}>
             <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
@@ -4275,7 +4296,7 @@ function InlineExecutionTrace({ task }: { task: Task }) {
           })}
         </div>
         <ol className="agent-trace-list">
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <li className={`agent-trace-row ${row.kind}`} key={row.id}>
               <span className="agent-trace-icon">{traceIcon(row.kind)}</span>
               <div>
@@ -4608,6 +4629,7 @@ function TaskSummaryCard({
   const stats = taskOperationStats(task)
   const summaryRows = executionTraceRows(task)
   const latest = summaryRows[summaryRows.length - 1]
+  const showStreamState = task.status === 'running' || streamStatus === 'connecting' || streamStatus === 'live'
 
   return (
     <section className="inspector-card task-summary-card">
@@ -4648,13 +4670,15 @@ function TaskSummaryCard({
         <span><FileArchive size={13} />{task.artifacts.length} 产物</span>
       </div>
 
-      <div className={`task-stream-state ${streamStatus}`}>
-        <span />
-        <div>
-          <strong>{taskStreamLabel(streamStatus)}</strong>
-          <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
+      {showStreamState && (
+        <div className={`task-stream-state ${streamStatus}`}>
+          <span />
+          <div>
+            <strong>{taskStreamLabel(streamStatus)}</strong>
+            <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {latest && (
         <div className={`task-summary-latest ${latest.kind}`}>
@@ -4670,7 +4694,7 @@ function TaskSummaryCard({
 }
 
 function RecentOperations({ task }: { task: Task }) {
-  const rows = executionTraceRows(task).filter((row) => row.kind !== 'thinking').slice(-6)
+  const rows = executionTraceRows(task).filter((row) => row.kind !== 'thinking').slice(-4)
   if (!rows.length) return <p className="muted-copy">还没有捕获到工具、网页、文件或结果事件。</p>
 
   return (
@@ -5077,7 +5101,7 @@ function parseDelimitedRows(input: string, delimiter: string) {
 }
 
 function TodoSteps({ task }: { task: Task }) {
-  const events = task.events ?? []
+  const events = taskRunEvents(task)
   const hasThinking = events.some((event) => event.type === 'thinking' || event.type === 'step')
   const hasTools = events.some((event) => event.type.startsWith('tool.'))
   const hasArtifacts = task.artifacts.length > 0
@@ -5255,8 +5279,29 @@ type TraceRow = {
   createdAt: string
 }
 
+function taskRunEvents(task: Task) {
+  const runStartedAt = new Date(task.startedAt ?? task.createdAt).getTime()
+  if (!Number.isFinite(runStartedAt)) return task.events ?? []
+
+  let events = (task.events ?? []).filter((event) => {
+    const eventTime = new Date(event.createdAt).getTime()
+    return !Number.isFinite(eventTime) || eventTime >= runStartedAt - 1000
+  })
+
+  if (task.status === 'completed') {
+    events = events.filter((event) => event.category !== 'error')
+  }
+
+  if (task.status === 'completed' || task.status === 'failed' || task.status === 'stopped') {
+    const terminalIndex = events.findIndex((event) => ['task.completed', 'task.failed', 'task.stopped'].includes(event.type))
+    if (terminalIndex >= 0) return events.slice(0, terminalIndex + 1)
+  }
+
+  return events
+}
+
 function executionTraceRows(task: Task): TraceRow[] {
-  const rows = (task.events ?? [])
+  const rows = taskRunEvents(task)
     .filter((event) =>
       ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
@@ -5336,6 +5381,36 @@ function executionTraceRows(task: Task): TraceRow[] {
       }
     })
 
+  if (task.status === 'completed' && !rows.some((row) => row.kind === 'done')) {
+    rows.push({
+      id: `${task.id}-completed`,
+      kind: 'done',
+      title: '任务完成',
+      detail: 'Hermes 已返回最终结果',
+      createdAt: task.completedAt ?? task.updatedAt
+    })
+  }
+
+  if (task.status === 'stopped' && !rows.some((row) => row.kind === 'stopped')) {
+    rows.push({
+      id: `${task.id}-stopped`,
+      kind: 'stopped',
+      title: '任务已停止',
+      detail: '用户已停止这次执行',
+      createdAt: task.completedAt ?? task.updatedAt
+    })
+  }
+
+  if (task.status === 'failed' && !rows.some((row) => row.kind === 'error')) {
+    rows.push({
+      id: `${task.id}-failed`,
+      kind: 'error',
+      title: '任务失败',
+      detail: task.error || 'Hermes 返回失败状态',
+      createdAt: task.completedAt ?? task.updatedAt
+    })
+  }
+
   if (task.status === 'running' && !rows.some((row) => row.kind === 'done' || row.kind === 'error')) {
     rows.push({
       id: `${task.id}-running`,
@@ -5347,6 +5422,13 @@ function executionTraceRows(task: Task): TraceRow[] {
   }
 
   return rows.slice(-24)
+}
+
+function compactTraceRows(task: Task, rows: TraceRow[]) {
+  if (task.status === 'running') return rows.slice(-8)
+
+  const durableRows = rows.filter((row) => row.kind !== 'thinking' || row.title !== '思考')
+  return (durableRows.length ? durableRows : rows).slice(-5)
 }
 
 function traceToolKind(name: string, event: ExecutionEvent): TraceRow['kind'] {
