@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import type { Response } from 'express'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { execFile, spawn } from 'node:child_process'
 import multer from 'multer'
@@ -48,6 +49,14 @@ app.get('/api/hermes/runtime', async (_req, res) => {
       parsed: parseHermesStatus(statusText),
       updatedAt: new Date().toISOString()
     })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/sessions', (_req, res) => {
+  try {
+    res.json(readHermesSessions(store.snapshot))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -1706,6 +1715,65 @@ function revealPath(targetPath: string) {
   const args = fs.statSync(targetPath).isDirectory() ? [targetPath] : ['-R', targetPath]
   const child = spawn('open', args, { stdio: 'ignore', detached: true })
   child.unref()
+}
+
+function readHermesSessions(state: AppState) {
+  const sessionsDir = path.join(os.homedir(), '.hermes', 'sessions')
+  const linkedTasks = new Map<string, Task[]>()
+  for (const task of state.tasks) {
+    if (!task.hermesSessionId) continue
+    linkedTasks.set(task.hermesSessionId, [...(linkedTasks.get(task.hermesSessionId) ?? []), task])
+  }
+
+  if (!fs.existsSync(sessionsDir)) {
+    return {
+      sessionsDir,
+      sessions: [],
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  const sessions = fs
+    .readdirSync(sessionsDir)
+    .filter((file) => /^session_.+\.json$/.test(file))
+    .flatMap((file) => {
+      const fullPath = path.join(sessionsDir, file)
+      try {
+        const raw = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as Record<string, unknown>
+        const sessionId = String(raw.session_id ?? file.replace(/^session_/, '').replace(/\.json$/, ''))
+        const tasks = linkedTasks.get(sessionId) ?? []
+        const stat = fs.statSync(fullPath)
+        return [{
+          id: sessionId,
+          file,
+          model: String(raw.model ?? '') || undefined,
+          platform: String(raw.platform ?? '') || undefined,
+          messageCount: Number(raw.message_count ?? (Array.isArray(raw.messages) ? raw.messages.length : 0)) || 0,
+          startedAt: normalizeHermesDate(raw.session_start) ?? stat.birthtime.toISOString(),
+          updatedAt: normalizeHermesDate(raw.last_updated) ?? stat.mtime.toISOString(),
+          linkedTaskIds: tasks.map((task) => task.id),
+          linkedTaskTitle: tasks[0]?.title,
+          linkedWorkspaceIds: [...new Set(tasks.map((task) => task.workspaceId))]
+        }]
+      } catch {
+        return []
+      }
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 80)
+
+  return {
+    sessionsDir,
+    sessions,
+    updatedAt: new Date().toISOString()
+  }
+}
+
+function normalizeHermesDate(value: unknown) {
+  if (!value) return undefined
+  const text = String(value)
+  const parsed = new Date(text.endsWith('Z') || /[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`)
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined
 }
 
 function listWorkspaceFiles(rootPath: string) {

@@ -63,6 +63,7 @@ import {
   getHermesMcpConfig,
   getHermesMcpRecommendations,
   getHermesRuntime,
+  getHermesSessions,
   getHermesMcpServeStatus,
   HermesMcpConfig,
   HermesMcpInstallResult,
@@ -72,6 +73,7 @@ import {
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesModelOverview,
+  HermesSessionSummary,
   getState,
   HermesRuntime,
   installBackgroundServices,
@@ -317,6 +319,7 @@ function App() {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [uploadNotice, setUploadNotice] = useState<string | null>(null)
   const [runtime, setRuntime] = useState<HermesRuntime | null>(null)
+  const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
   const [mcpTestResults, setMcpTestResults] = useState<Record<string, HermesMcpTestResult>>({})
@@ -552,6 +555,13 @@ function App() {
   })
   const activeTaskCount = scopedTasks.filter((task) => !task.archivedAt).length
   const archivedTaskCount = scopedTasks.filter((task) => task.archivedAt).length
+  const selectedTaskMessages = selectedTask ? visibleTaskMessages(selectedTask) : []
+  const selectedTaskHiddenMessages = selectedTask ? hiddenTaskMessages(selectedTask, selectedTaskMessages) : []
+  const selectedHermesSession = selectedTask?.hermesSessionId
+    ? hermesSessions.find((session) => session.id === selectedTask.hermesSessionId)
+    : undefined
+  const currentWorkspaceTaskCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && !task.archivedAt).length
+  const currentWorkspaceRunningCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && task.status === 'running').length
 
   useEffect(() => {
     void refresh().catch((cause) => setError(cause.message))
@@ -605,6 +615,7 @@ function App() {
 
   useEffect(() => {
     void refreshRuntime()
+    void refreshHermesSessions()
     void refreshHermesMcp()
     void refreshMcpServeStatus()
     void refreshMcpRecommendationsState()
@@ -782,6 +793,21 @@ function App() {
     setSelectedTaskId(null)
     setViewMode('tasks')
     setSelectedSkill(null)
+    focusComposer()
+  }
+
+  function handleContinueTask(task: Task) {
+    setViewMode('tasks')
+    setSelectedTaskId(task.id)
+    setSelectedWorkspaceId(task.workspaceId)
+    focusComposer()
+  }
+
+  function handleRetryTask(task: Task) {
+    setViewMode('tasks')
+    setSelectedWorkspaceId(task.workspaceId)
+    setSelectedTaskId(null)
+    setPrompt(task.prompt)
     focusComposer()
   }
 
@@ -1069,6 +1095,15 @@ function App() {
     }
   }
 
+  async function refreshHermesSessions() {
+    try {
+      const response = await getHermesSessions()
+      setHermesSessions(response.sessions)
+    } catch {
+      setHermesSessions([])
+    }
+  }
+
   function insertFileContext(file: WorkspaceFile) {
     const snippet = `请读取这个文件并作为上下文：${file.path}`
     setPrompt((current) => (current.trim() ? `${current.trim()}\n\n${snippet}` : snippet))
@@ -1119,56 +1154,70 @@ function App() {
         </button>
 
         <button
-          className={viewMode === 'search' ? 'secondary-nav active' : 'secondary-nav'}
-          onClick={() => setViewMode('search')}
-        >
-          <Search size={17} />
-          搜索
-        </button>
-
-        <button
-          className={viewMode === 'scheduled' ? 'secondary-nav active' : 'secondary-nav'}
-          onClick={() => setViewMode('scheduled')}
-        >
-          <Clock3 size={17} />
-          定时任务
-        </button>
-
-        <button
-          className={viewMode === 'projects' ? 'secondary-nav active' : 'secondary-nav'}
+          className="sidebar-workspace-card"
           onClick={() => setViewMode('projects')}
         >
-          <Folder size={17} />
-          项目
+          <Folder size={16} />
+          <span>
+            <strong>{selectedWorkspace?.name ?? '未选择工作区'}</strong>
+            <em>{currentWorkspaceRunningCount ? `${currentWorkspaceRunningCount} 个运行中` : `${currentWorkspaceTaskCount} 个任务`}</em>
+          </span>
+          <ChevronDown size={14} />
         </button>
 
-        <button
-          className={viewMode === 'dispatch' ? 'secondary-nav active' : 'secondary-nav'}
-          onClick={() => setViewMode('dispatch')}
-        >
-          <Globe2 size={17} />
-          调度
-        </button>
+        <div className="sidebar-nav-group">
+          <button
+            className={viewMode === 'search' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => setViewMode('search')}
+          >
+            <Search size={17} />
+            搜索
+          </button>
 
-        <button
-          className={viewMode === 'ideas' ? 'secondary-nav active' : 'secondary-nav'}
-          onClick={() => setViewMode('ideas')}
-        >
-          <BookOpen size={17} />
-          任务模板
-        </button>
+          <button
+            className={viewMode === 'scheduled' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => setViewMode('scheduled')}
+          >
+            <Clock3 size={17} />
+            定时任务
+          </button>
 
-        <button
-          className={viewMode === 'skills' ? 'secondary-nav active' : 'secondary-nav'}
-          onClick={() => {
-            setViewMode('skills')
-            void refreshSkills().catch(() => undefined)
-            void refreshHermesMcp()
-          }}
-        >
-          <Hammer size={17} />
-          自定义
-        </button>
+          <button
+            className={viewMode === 'projects' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => setViewMode('projects')}
+          >
+            <Folder size={17} />
+            项目
+          </button>
+
+          <button
+            className={viewMode === 'dispatch' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => setViewMode('dispatch')}
+          >
+            <Globe2 size={17} />
+            调度
+          </button>
+
+          <button
+            className={viewMode === 'ideas' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => setViewMode('ideas')}
+          >
+            <BookOpen size={17} />
+            模板
+          </button>
+
+          <button
+            className={viewMode === 'skills' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => {
+              setViewMode('skills')
+              void refreshSkills().catch(() => undefined)
+              void refreshHermesMcp()
+            }}
+          >
+            <Hammer size={17} />
+            自定义
+          </button>
+        </div>
 
         <div className="sidebar-section tasks-section">
           <div className="section-title">
@@ -1189,7 +1238,6 @@ function App() {
               />
             ))}
           </div>
-          <p className="local-task-note">这些任务只在本机运行，不会同步到其他设备。</p>
         </div>
 
         <div className="sidebar-foot">
@@ -1365,6 +1413,18 @@ function App() {
         {error && <div className="error-banner">{error}</div>}
         {uploadNotice && !error && <div className="upload-banner">{uploadNotice}</div>}
 
+        {selectedTask && (
+          <TaskFocusPanel
+            task={selectedTask}
+            workspace={selectedWorkspace}
+            session={selectedHermesSession}
+            onContinue={() => handleContinueTask(selectedTask)}
+            onRetry={() => handleRetryTask(selectedTask)}
+            onArchive={() => void handleArchiveTask(selectedTask)}
+            onDelete={() => void handleDeleteTask(selectedTask)}
+          />
+        )}
+
         <section className="conversation">
           {!selectedTask && (
             <div className="welcome-panel">
@@ -1388,7 +1448,28 @@ function App() {
             </div>
           )}
 
-          {(selectedTask?.messages ?? []).map((message) => (
+          {selectedTaskHiddenMessages.length > 0 && (
+            <details className="conversation-history">
+              <summary>
+                <span>较早对话</span>
+                <em>{selectedTaskHiddenMessages.length} 条已收起</em>
+                <ChevronDown size={14} />
+              </summary>
+              <div>
+                {selectedTaskHiddenMessages.map((message) => (
+                  <article className={`message ${message.role} compact`} key={message.id}>
+                    <div className="message-meta">
+                      {message.role === 'user' ? '你' : 'Hermes'}
+                      <span>{formatTime(message.createdAt)}</span>
+                    </div>
+                    <div className="message-body">{message.content}</div>
+                  </article>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {selectedTaskMessages.map((message) => (
             <FragmentWithTrace
               key={message.id}
               message={message}
@@ -1522,6 +1603,10 @@ function App() {
           streamStatus={taskStreamStatus}
           streamUpdatedAt={taskStreamUpdatedAt}
         />
+
+        {selectedTask && (
+          <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
+        )}
 
         <section className="inspector-card todo-card">
           <div className="card-heading-row">
@@ -4312,6 +4397,152 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   )
 }
 
+function TaskFocusPanel({
+  task,
+  workspace,
+  session,
+  onContinue,
+  onRetry,
+  onArchive,
+  onDelete
+}: {
+  task: Task
+  workspace?: Workspace
+  session?: HermesSessionSummary
+  onContinue: () => void
+  onRetry: () => void
+  onArchive: () => void
+  onDelete: () => void
+}) {
+  const result = taskResultText(task)
+  const references = extractTaskReferences(task).slice(0, 3)
+  const isTerminal = task.status === 'completed' || task.status === 'failed' || task.status === 'stopped'
+  const title = task.status === 'running'
+    ? 'Hermes 正在执行'
+    : task.status === 'failed'
+      ? '这次执行失败'
+      : task.status === 'stopped'
+        ? '这次执行已停止'
+        : '任务结果'
+
+  return (
+    <section className={`task-focus-panel ${task.status}`}>
+      <div className="task-focus-head">
+        <div>
+          <span className={`status-pill compact ${task.status}`}>
+            <StatusIcon status={task.status} />
+            {statusLabel(task.status)}
+          </span>
+          <h2>{title}</h2>
+        </div>
+        <div className="task-focus-actions">
+          {isTerminal && (
+            <>
+              <button type="button" className="ghost-button" onClick={onContinue}>
+                <MessageSquarePlus size={15} />
+                继续追问
+              </button>
+              <button type="button" className="ghost-button" onClick={onRetry}>
+                <RefreshCw size={15} />
+                重新运行
+              </button>
+            </>
+          )}
+          <button type="button" className="ghost-button" onClick={onArchive}>
+            {task.archivedAt ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+            {task.archivedAt ? '取消归档' : '归档'}
+          </button>
+          <button type="button" className="ghost-button danger-lite" onClick={onDelete}>
+            <Trash2 size={15} />
+            删除
+          </button>
+        </div>
+      </div>
+
+      <div className="task-focus-grid">
+        <div>
+          <span>工作区</span>
+          <strong>{workspace?.name ?? task.workspaceId}</strong>
+        </div>
+        <div>
+          <span>运行时长</span>
+          <strong>{taskElapsedLabel(task)}</strong>
+        </div>
+        <div>
+          <span>Hermes Session</span>
+          <strong>{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '未生成'}</strong>
+        </div>
+        <div>
+          <span>原生记录</span>
+          <strong>{session ? `${session.messageCount} 条消息` : task.hermesSessionId ? '未索引' : '等待生成'}</strong>
+        </div>
+      </div>
+
+      {task.status === 'running' ? (
+        <div className="task-focus-live">
+          <Loader2 size={16} className="spin" />
+          <span>Hermes 会把思考、工具和结果实时同步到当前任务。</span>
+        </div>
+      ) : task.status === 'failed' ? (
+        <div className="task-focus-error">
+          <strong>{task.error || 'Hermes 返回失败状态'}</strong>
+          <span>可以重新运行，或展开调试信息查看原始日志。</span>
+        </div>
+      ) : result ? (
+        <div className="task-result-digest">
+          <span>结果摘要</span>
+          <p>{stringifyPreview(result, 360)}</p>
+        </div>
+      ) : (
+        <div className="task-result-digest empty">
+          <span>结果摘要</span>
+          <p>这次任务没有可展示的正文结果。</p>
+        </div>
+      )}
+
+      {(task.artifacts.length > 0 || references.length > 0) && (
+        <div className="task-focus-support">
+          {task.artifacts.length > 0 && <span><FileArchive size={13} />{task.artifacts.length} 个产物</span>}
+          {references.map((reference) => (
+            <span title={reference} key={reference}><ExternalLink size={13} />{shortReference(reference)}</span>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function HermesSessionCard({ task, session }: { task: Task; session?: HermesSessionSummary }) {
+  return (
+    <section className="inspector-card hermes-session-card">
+      <div className="card-heading-row">
+        <h3>Hermes Session</h3>
+        <span className={session ? 'session-state linked' : 'session-state'}>
+          {session ? '已对齐' : task.hermesSessionId ? '待索引' : '未生成'}
+        </span>
+      </div>
+      <div className="session-card-body">
+        <div>
+          <span>Session ID</span>
+          <strong title={task.hermesSessionId}>{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '任务完成后生成'}</strong>
+        </div>
+        <div>
+          <span>模型</span>
+          <strong>{session?.model || (task.modelId === 'auto' ? 'Hermes 默认' : task.modelId) || '未知'}</strong>
+        </div>
+        <div>
+          <span>消息数</span>
+          <strong>{session ? `${session.messageCount} 条` : `${task.messages.length} 条 Cowork 消息`}</strong>
+        </div>
+        <div>
+          <span>最近更新</span>
+          <strong>{session ? formatTime(session.updatedAt) : formatTime(task.updatedAt)}</strong>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function SkillDetailModal({
   skill,
   files,
@@ -5249,6 +5480,39 @@ function WorkspaceFiles({
 
 function latestUserMessageId(task?: Task) {
   return task?.messages.slice().reverse().find((message) => message.role === 'user')?.id
+}
+
+function visibleTaskMessages(task: Task) {
+  if (task.status === 'running') return task.messages
+  const latestUserMessage = task.messages.slice().reverse().find((message) => message.role === 'user')
+  if (latestUserMessage) return [latestUserMessage]
+  if (task.messages.length <= 4) return task.messages
+  return task.messages.slice(-4)
+}
+
+function hiddenTaskMessages(task: Task, visibleMessages: Message[]) {
+  if (task.status === 'running') return []
+  const visibleIds = new Set(visibleMessages.map((message) => message.id))
+  return task.messages.filter((message) => !visibleIds.has(message.id))
+}
+
+function taskResultText(task: Task) {
+  const assistantMessage = task.messages.slice().reverse().find((message) => message.role === 'assistant')
+  return task.executionView?.response || assistantMessage?.content || task.stdout || ''
+}
+
+function shortSessionId(value: string) {
+  return value.length > 18 ? `${value.slice(0, 13)}...${value.slice(-5)}` : value
+}
+
+function shortReference(value: string) {
+  try {
+    const url = new URL(value)
+    return url.hostname.replace(/^www\./, '')
+  } catch {
+    const parts = value.split(/[\\/]/).filter(Boolean)
+    return parts.slice(-2).join('/')
+  }
 }
 
 function mergeStreamedTask(current: AppState, task: Task): AppState {

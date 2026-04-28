@@ -183,6 +183,25 @@ export type HermesRuntime = {
   updatedAt: string
 }
 
+export type HermesSessionSummary = {
+  id: string
+  file: string
+  model?: string
+  platform?: string
+  messageCount: number
+  startedAt: string
+  updatedAt: string
+  linkedTaskIds: string[]
+  linkedTaskTitle?: string
+  linkedWorkspaceIds: string[]
+}
+
+export type HermesSessionsResponse = {
+  sessionsDir: string
+  sessions: HermesSessionSummary[]
+  updatedAt: string
+}
+
 export type HermesMcpServer = {
   id: string
   name: string
@@ -371,6 +390,10 @@ export async function getState(): Promise<AppState> {
 
 export async function getHermesRuntime(): Promise<HermesRuntime> {
   return request('/api/hermes/runtime')
+}
+
+export async function getHermesSessions(): Promise<HermesSessionsResponse> {
+  return request('/api/hermes/sessions')
 }
 
 export async function getHermesMcpConfig(): Promise<HermesMcpConfig> {
