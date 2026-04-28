@@ -1600,108 +1600,21 @@ function App() {
           任务上下文
         </div>
 
-        <TaskSummaryCard
+        <TaskProgressCard
           task={selectedTask}
-          workspace={selectedWorkspace}
           streamStatus={taskStreamStatus}
           streamUpdatedAt={taskStreamUpdatedAt}
+          stopping={selectedTask ? stoppingTaskId === selectedTask.id : false}
+          onStop={() => selectedTask && void handleStop(selectedTask)}
         />
 
-        {selectedTask && (
-          <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
-        )}
+        <TaskArtifactsCard
+          task={selectedTask}
+          onPreview={(artifact) => void handlePreview(artifact)}
+          onReveal={(artifact) => void handleRevealArtifact(artifact)}
+        />
 
-        <section className="inspector-card todo-card">
-          <div className="card-heading-row">
-            <h3>任务进度</h3>
-            {selectedTask && (
-              <div className="progress-heading-actions">
-                <div className={`status-pill compact ${selectedTask.status}`}>
-                  <StatusIcon status={selectedTask.status} />
-                  {statusLabel(selectedTask.status)}
-                </div>
-                {selectedTask.status === 'running' && (
-                  <button
-                    type="button"
-                    className="mini-danger-button"
-                    onClick={() => void handleStop(selectedTask)}
-                    disabled={stoppingTaskId === selectedTask.id}
-                  >
-                    <Square size={12} />
-                    停止
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          {selectedTask ? (
-            <TodoSteps task={selectedTask} />
-          ) : (
-            <EmptyInspectorState title="暂无待办" detail="任务运行后，进度会显示在这里" />
-          )}
-        </section>
-
-        <details className="inspector-card inspector-disclosure" open={selectedTask?.status === 'running'}>
-          <summary>
-            <h3>最近操作</h3>
-            <ChevronDown size={14} />
-          </summary>
-          <div className="inspector-disclosure-body">
-            {selectedTask ? (
-              <RecentOperations task={selectedTask} />
-            ) : (
-              <EmptyInspectorState title="暂无操作" detail="Hermes 的搜索、读写文件和工具调用会显示在这里" />
-            )}
-          </div>
-        </details>
-
-        {(selectedTask?.status === 'running' || (selectedTask?.artifacts ?? []).length > 0) && (
-          <section className="inspector-card">
-            <h3>任务产物</h3>
-            {!(selectedTask?.artifacts ?? []).length && (
-              <EmptyInspectorState title="暂无产物" detail="任务完成后，生成的文件会展示在这里" />
-            )}
-            <div className="artifact-list">
-              {(selectedTask?.artifacts ?? []).map((artifact) => (
-                <div className="artifact" key={artifact.id}>
-                  <FileArchive size={17} />
-                  <div>
-                    <strong>{artifact.name}</strong>
-                    <span>{artifact.relativePath}</span>
-                  </div>
-                  <button title="预览文本产物" onClick={() => void handlePreview(artifact)}>
-                    <FileText size={15} />
-                  </button>
-                  <button title="在 Finder 中显示" onClick={() => void handleRevealArtifact(artifact)}>
-                    <FolderOpen size={15} />
-                  </button>
-                  <a title="下载" href={`/api/artifacts/${artifact.id}/download`}>
-                    <Upload size={15} />
-                  </a>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <details className="inspector-card inspector-disclosure reference-card" open={selectedTask?.status === 'running'}>
-          <summary>
-            <h3>参考信息</h3>
-            <ChevronDown size={14} />
-          </summary>
-          <div className="inspector-disclosure-body">
-            <ReferenceInfo task={selectedTask} workspaceFiles={workspaceFiles} />
-            <details className="reference-files">
-              <summary>工作区文件</summary>
-              <WorkspaceFiles
-                files={workspaceFiles}
-                onUseFile={insertFileContext}
-                onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
-                onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
-              />
-            </details>
-          </div>
-        </details>
+        <AgentResourcesCard task={selectedTask} workspaceFiles={workspaceFiles} />
 
         {selectedTask && (
           <details className="inspector-card inspector-details">
@@ -1744,6 +1657,11 @@ function App() {
 
         <details className="inspector-card inspector-details debug-details">
           <summary>调试信息</summary>
+          {selectedTask && (
+            <div className="debug-section">
+              <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
+            </div>
+          )}
           <div className="debug-section">
             <div className="card-heading-row">
               <h3>Hermes 运行时</h3>
@@ -4883,6 +4801,184 @@ function EmptyInspectorState({ title, detail }: { title: string; detail: string 
   )
 }
 
+function TaskProgressCard({
+  task,
+  streamStatus,
+  streamUpdatedAt,
+  stopping,
+  onStop
+}: {
+  task?: Task
+  streamStatus: TaskStreamStatus
+  streamUpdatedAt: string | null
+  stopping: boolean
+  onStop: () => void
+}) {
+  if (!task) {
+    return (
+      <section className="inspector-card progress-focus-card">
+        <h3>任务步骤</h3>
+        <EmptyInspectorState title="未选择任务" detail="选择左侧任务后，这里会显示拆分步骤和当前进度。" />
+      </section>
+    )
+  }
+
+  const progress = taskProgressSummary(task)
+  const showStreamState = task.status === 'running' || streamStatus === 'connecting' || streamStatus === 'live'
+
+  return (
+    <section className="inspector-card progress-focus-card">
+      <div className="card-heading-row">
+        <div>
+          <h3>任务步骤</h3>
+          <p>{progress.currentLabel}</p>
+        </div>
+        <div className="progress-heading-actions">
+          <div className={`status-pill compact ${task.status}`}>
+            <StatusIcon status={task.status} />
+            {statusLabel(task.status)}
+          </div>
+          {task.status === 'running' && (
+            <button type="button" className="mini-danger-button" onClick={onStop} disabled={stopping}>
+              <Square size={12} />
+              停止
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="task-progress-meter" aria-label={`任务进度 ${progress.doneCount}/${progress.totalCount}`}>
+        <span style={{ width: `${progress.percent}%` }} />
+      </div>
+      <div className="task-progress-copy">
+        <strong>{progress.doneCount}/{progress.totalCount} 步</strong>
+        <span>{taskElapsedLabel(task)}</span>
+      </div>
+      <TodoSteps task={task} />
+      {showStreamState && (
+        <div className={`task-stream-state ${streamStatus}`}>
+          <span />
+          <div>
+            <strong>{taskStreamLabel(streamStatus)}</strong>
+            <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function TaskArtifactsCard({
+  task,
+  onPreview,
+  onReveal
+}: {
+  task?: Task
+  onPreview: (artifact: Artifact) => void
+  onReveal: (artifact: Artifact) => void
+}) {
+  const artifacts = task?.artifacts ?? []
+
+  return (
+    <section className="inspector-card artifact-focus-card">
+      <div className="card-heading-row">
+        <h3>任务产出物</h3>
+        {artifacts.length > 0 && <span className="soft-count">{artifacts.length} 个</span>}
+      </div>
+      {!task ? (
+        <EmptyInspectorState title="暂无产出物" detail="选择任务后，这里会显示 Hermes 生成的文档、表格和文件。" />
+      ) : !artifacts.length ? (
+        <EmptyInspectorState title="暂无产出物" detail="任务生成文件后，会自动出现在这里。" />
+      ) : (
+        <div className="artifact-list">
+          {artifacts.map((artifact) => (
+            <div className="artifact" key={artifact.id}>
+              <FileArchive size={17} />
+              <div>
+                <strong>{artifact.name}</strong>
+                <span>{artifact.relativePath}</span>
+              </div>
+              <button title="预览文本产物" onClick={() => onPreview(artifact)}>
+                <FileText size={15} />
+              </button>
+              <button title="在 Finder 中显示" onClick={() => onReveal(artifact)}>
+                <FolderOpen size={15} />
+              </button>
+              <a title="下载" href={`/api/artifacts/${artifact.id}/download`}>
+                <Upload size={15} />
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function AgentResourcesCard({ task, workspaceFiles }: { task?: Task; workspaceFiles: WorkspaceFile[] }) {
+  const resources = task ? currentAgentResources(task) : null
+  const fileCount = resources?.files.length ?? 0
+  const toolCount = resources?.tools.length ?? 0
+  const linkCount = resources?.links.length ?? 0
+  const skillCount = resources?.skills.length ?? 0
+  const total = fileCount + toolCount + linkCount + skillCount
+
+  return (
+    <section className="inspector-card resource-focus-card">
+      <div className="card-heading-row">
+        <div>
+          <h3>{task?.status === 'running' ? '当前步骤资源' : '过程资源'}</h3>
+          <p>{task?.status === 'running' ? '随任务步骤刷新，Skill 会保留' : '任务最终用到的工具、链接、文件和 Skill'}</p>
+        </div>
+        {task && <span className="soft-count">{total} 项</span>}
+      </div>
+
+      {!task ? (
+        <EmptyInspectorState title="暂无资源" detail="任务运行时，Hermes 调用的工具、网站、文件和 Skill 会显示在这里。" />
+      ) : total === 0 ? (
+        <EmptyInspectorState title="当前步骤暂无资源" detail={workspaceFiles.length ? 'Hermes 还没有暴露可识别的工具或文件调用。' : '任务运行后，这里会随步骤刷新。'} />
+      ) : (
+        <div className="agent-resource-groups">
+          <ResourceGroup title="工具" items={resources?.tools ?? []} icon={<Wrench size={13} />} />
+          <ResourceGroup title="网站链接" items={resources?.links ?? []} icon={<Globe2 size={13} />} />
+          <ResourceGroup title="文件" items={resources?.files ?? []} icon={<FileText size={13} />} />
+          <ResourceGroup title="Skill" items={resources?.skills ?? []} icon={<BookOpen size={13} />} persistent />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ResourceGroup({
+  title,
+  items,
+  icon,
+  persistent = false
+}: {
+  title: string
+  items: string[]
+  icon: ReactNode
+  persistent?: boolean
+}) {
+  if (!items.length) return null
+
+  return (
+    <div className="agent-resource-group">
+      <div className="agent-resource-title">
+        <span>{title}</span>
+        {persistent && <em>常驻</em>}
+      </div>
+      <ul>
+        {items.slice(0, 6).map((item) => (
+          <li key={`${title}-${item}`}>
+            {icon}
+            <span title={item}>{shortReference(item)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function TaskSummaryCard({
   task,
   workspace,
@@ -5377,41 +5473,16 @@ function parseDelimitedRows(input: string, delimiter: string) {
   return rows
 }
 
-function TodoSteps({ task }: { task: Task }) {
-  const events = taskRunEvents(task)
-  const hasThinking = events.some((event) => event.type === 'thinking' || event.type === 'step')
-  const hasTools = events.some((event) => event.type.startsWith('tool.'))
-  const hasArtifacts = task.artifacts.length > 0
-  const hasErrors = task.status === 'failed' || events.some((event) => event.type === 'task.failed')
-  const wasStopped = task.status === 'stopped' || events.some((event) => event.type === 'task.stopped')
+type TodoStepStatus = 'done' | 'running' | 'pending' | 'skipped' | 'stopped' | 'failed'
 
-  const steps = [
-    {
-      label: '接收任务',
-      detail: task.prompt,
-      status: 'done'
-    },
-    {
-      label: '理解与规划',
-      detail: hasThinking ? 'Hermes 已进入推理流程' : '等待 Hermes 开始推理',
-      status: hasThinking || task.status !== 'running' ? 'done' : 'running'
-    },
-    {
-      label: '调用工具',
-      detail: hasTools ? '已捕获工具/技能调用事件' : '本轮可能无需工具，或工具细节尚未暴露',
-      status: hasTools ? 'done' : task.status === 'running' ? 'pending' : 'skipped'
-    },
-    {
-      label: '沉淀产物',
-      detail: hasArtifacts ? `识别到 ${task.artifacts.length} 个产物` : '暂无新增产物',
-      status: hasArtifacts ? 'done' : task.status === 'completed' ? 'skipped' : 'pending'
-    },
-    {
-      label: wasStopped ? '任务停止' : hasErrors ? '处理失败' : '返回结果',
-      detail: wasStopped ? '用户主动停止了这次执行' : hasErrors ? task.error || '查看错误页签获取原因' : statusLabel(task.status),
-      status: wasStopped ? 'stopped' : hasErrors ? 'failed' : task.status === 'completed' ? 'done' : task.status === 'running' ? 'running' : 'pending'
-    }
-  ]
+type TodoStepItem = {
+  label: string
+  detail: string
+  status: TodoStepStatus
+}
+
+function TodoSteps({ task }: { task: Task }) {
+  const steps = taskStepItems(task)
 
   return (
     <ol className="todo-steps">
@@ -5426,6 +5497,58 @@ function TodoSteps({ task }: { task: Task }) {
       ))}
     </ol>
   )
+}
+
+function taskStepItems(task: Task): TodoStepItem[] {
+  const events = taskRunEvents(task)
+  const hasThinking = events.some((event) => event.type === 'thinking' || event.type === 'step')
+  const hasTools = events.some((event) => event.type.startsWith('tool.'))
+  const hasArtifacts = task.artifacts.length > 0
+  const hasErrors = task.status === 'failed' || events.some((event) => event.type === 'task.failed')
+  const wasStopped = task.status === 'stopped' || events.some((event) => event.type === 'task.stopped')
+
+  return [
+    {
+      label: '接收任务',
+      detail: task.prompt,
+      status: 'done' as const
+    },
+    {
+      label: '理解与规划',
+      detail: hasThinking ? 'Hermes 已进入推理流程' : '等待 Hermes 开始推理',
+      status: hasThinking || task.status !== 'running' ? 'done' as const : 'running' as const
+    },
+    {
+      label: '调用工具',
+      detail: hasTools ? '已捕获工具/技能调用事件' : '本轮可能无需工具，或工具细节尚未暴露',
+      status: hasTools ? 'done' as const : task.status === 'running' ? 'pending' as const : 'skipped' as const
+    },
+    {
+      label: '沉淀产物',
+      detail: hasArtifacts ? `识别到 ${task.artifacts.length} 个产物` : '暂无新增产物',
+      status: hasArtifacts ? 'done' as const : task.status === 'completed' ? 'skipped' as const : 'pending' as const
+    },
+    {
+      label: wasStopped ? '任务停止' : hasErrors ? '处理失败' : '返回结果',
+      detail: wasStopped ? '用户主动停止了这次执行' : hasErrors ? task.error || '查看错误页签获取原因' : statusLabel(task.status),
+      status: wasStopped ? 'stopped' as const : hasErrors ? 'failed' as const : task.status === 'completed' ? 'done' as const : task.status === 'running' ? 'running' as const : 'pending' as const
+    }
+  ]
+}
+
+function taskProgressSummary(task: Task) {
+  const steps = taskStepItems(task)
+  const activeStep = steps.find((step) => ['running', 'failed', 'stopped'].includes(step.status))
+    ?? steps.filter((step) => step.status === 'done').at(-1)
+    ?? steps[0]
+  const doneCount = steps.filter((step) => step.status === 'done' || step.status === 'skipped').length
+  const totalCount = steps.length
+  return {
+    currentLabel: activeStep ? activeStep.label : '等待开始',
+    doneCount,
+    totalCount,
+    percent: Math.min(100, Math.round((doneCount / totalCount) * 100))
+  }
 }
 
 function ReferenceInfo({ task, workspaceFiles }: { task?: Task; workspaceFiles: WorkspaceFile[] }) {
@@ -5819,9 +5942,88 @@ function extractTaskReferences(task: Task) {
       payloadText(event.result)
     ])
   ].join('\n')
+  return extractReferencesFromText(text)
+}
+
+function extractReferencesFromText(text: string) {
   const urls = text.match(/https?:\/\/[^\s"'<>）)]+/g) ?? []
   const files = text.match(/(?:\/Users\/[^\s"'<>]+|[\w.-]+\/[\w./-]+\.(?:md|csv|xlsx|pdf|docx|txt|json))/g) ?? []
   return [...new Set([...urls, ...files])].slice(0, 16)
+}
+
+function currentAgentResources(task: Task) {
+  const events = currentResourceEvents(task)
+  const eventText = events
+    .flatMap((event) => [
+      event.name,
+      eventSummary(event),
+      toolPrimaryText(event),
+      payloadText(event.args),
+      payloadText(event.kwargs),
+      payloadText(event.result)
+    ])
+    .join('\n')
+  const references = extractReferencesFromText(eventText)
+  const links = references.filter((reference) => /^https?:\/\//.test(reference))
+  const files = [
+    ...references.filter((reference) => !/^https?:\/\//.test(reference)),
+    ...events
+      .filter((event) => event.type === 'artifact.created')
+      .map((event) => String(event.relativePath ?? event.name ?? ''))
+      .filter(Boolean)
+  ]
+  const tools = events
+    .filter((event) => event.type.startsWith('tool.'))
+    .map((event) => humanToolName(toolDisplayName(event)))
+    .filter((name) => name && !isInternalToolName(name))
+  return {
+    tools: uniqueCompact(tools).slice(0, 8),
+    links: uniqueByDisplay(links).slice(0, 8),
+    files: uniqueCompact(files).slice(0, 8),
+    skills: uniqueCompact(task.skillNames ?? []).slice(0, 8)
+  }
+}
+
+function currentResourceEvents(task: Task) {
+  const events = taskRunEvents(task)
+  if (task.status !== 'running') return events
+
+  const lastStepIndex = events.reduce((lastIndex, event, index) => {
+    if (event.type === 'step' || event.type === 'thinking' || event.type === 'status') return index
+    return lastIndex
+  }, -1)
+
+  return lastStepIndex >= 0 ? events.slice(lastStepIndex + 1) : events
+}
+
+function uniqueCompact(items: string[]) {
+  return [...new Set(items.map((item) => item.trim()).filter(Boolean))]
+}
+
+function uniqueByDisplay(items: string[]) {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const key = shortReference(item)
+    if (!key || key === '...') return false
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function humanToolName(name: string) {
+  const lower = name.toLowerCase()
+  if (lower.includes('mimo_web_search') || lower.includes('web_search') || lower.includes('smart_search')) return '网页搜索'
+  if (lower.includes('browser') || lower.includes('playwright') || lower.includes('chrome')) return '浏览器'
+  if (lower.includes('terminal') || lower.includes('shell') || lower.includes('command')) return '命令行'
+  if (lower.includes('file') || lower.includes('workspace')) return '文件读写'
+  if (lower.includes('lark') || lower.includes('feishu')) return '飞书'
+  return name
+}
+
+function isInternalToolName(name: string) {
+  const lower = name.toLowerCase()
+  return lower.includes('reasoning.') || lower === 'tool.started' || lower === 'tool.completed'
 }
 
 function eventTitle(event: ExecutionEvent) {

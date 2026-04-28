@@ -3733,6 +3733,128 @@ summary:focus-visible {
   line-height: 1.45;
 }
 
+.progress-focus-card,
+.artifact-focus-card,
+.resource-focus-card {
+  display: grid;
+  gap: 12px;
+}
+
+.progress-focus-card {
+  background: linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(245, 241, 230, 0.9));
+}
+
+.card-heading-row p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.42;
+}
+
+.soft-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 0 8px;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.task-progress-meter {
+  overflow: hidden;
+  height: 7px;
+  background: rgba(216, 209, 189, 0.72);
+  border-radius: 999px;
+}
+
+.task-progress-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--moss), #62a27a);
+  border-radius: inherit;
+  transition: width 0.22s ease;
+}
+
+.task-progress-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: -4px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.task-progress-copy strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.agent-resource-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-resource-group {
+  display: grid;
+  gap: 7px;
+}
+
+.agent-resource-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.agent-resource-title em {
+  color: var(--moss);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.agent-resource-group ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-resource-group li {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  background: rgba(255, 253, 247, 0.68);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.agent-resource-group li svg {
+  color: var(--cobalt);
+}
+
+.agent-resource-group li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-summary-latest {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
