@@ -174,11 +174,11 @@ HC_EVENT\t
 `apps/api/src/models.ts`
 
 - 读取 Hermes 当前默认模型、provider、base_url、api_mode、fallback、config/env 路径，不读取或展示 API 密钥。
-- 解析 `hermes status` 和 `hermes auth list` 的模型凭据状态，返回 API key/OAuth/凭据池是否可用，但不返回 token/key 值。
+- 解析 `hermes status` 和 `hermes auth list` 的模型凭据状态，返回 API key/OAuth/凭据池是否可用，但不返回 token/key 值；Hermes 原始英文状态会在后端转成中文摘要。
 - 聚合 Hermes Provider、当前 custom endpoint、`custom_providers` 和 Cowork 本地模型选项，形成模型设置页的 Provider/模型候选列表。
 - 支持把模型候选写回 Hermes `config.yaml` 的 `model.default`，写入前自动生成 `config.yaml.cowork-backup-*` 备份。
 - 支持管理 Hermes `fallback_providers`，写入前自动生成 `config.yaml.cowork-backup-*` 备份；关闭备用模型时写回空列表。
-- 模型设置页按“总览 / Provider / 备用模型 / 凭据”拆分：总览面向用户场景组织入口，包括临时切换 Cowork 任务模型、永久修改 Hermes 默认模型、配置备用模型、排查 key/凭据；Provider 页支持搜索和切换默认模型，备用模型页支持开关已配置 Provider 作为兜底，凭据页集中展示 provider 是否已配置。
+- 模型设置页已从配置后台收敛为“用户能力”页面：默认展示 Hermes 默认大脑、本次任务临时模型、备用路线和模型服务状态；长期默认模型可写回 Hermes `config.yaml`，本次任务模型只影响 Cowork 发起的新任务，Provider/Base URL/凭据状态统一收进高级折叠区。
 - 维护 Cowork 本地模型选项和当前选中模型。
 - `Hermes 默认模型 · <当前模型>` 表示不传 `--model`，完全跟随 Hermes 当前 `config.yaml` 与路由。
 
@@ -377,7 +377,7 @@ POST /api/models/fallbacks
 - 自定义页：扫描真实本机 skill 并展示在 Skills 子页；Connectors 子页读取 Hermes MCP 配置中的真实服务，如 `csv-analyzer`、`sqlite`、`mimo-web-search`，用于把 MCP 从设置页逐步迁移到产品化连接器入口。
 - Skill 执行接入：启用的 skill 会进入 Hermes 执行上下文；从 skill 详情点“使用技能”会把该 skill 预载到下一次任务。
 - 模型切换：底部输入框可展开模型菜单，默认项显示 Hermes 当前模型；选择默认项时不传 `--model`，选择指定模型时任务创建和继续对话会携带该模型。
-- 模型设置页已从 SOLO 静态壳改为 Hermes 覆盖页：展示 Hermes 当前默认模型、provider/base_url/api_mode、config/env 路径、Cowork 任务模型选择、Hermes Provider、备用模型与凭据状态，并可把候选模型写回 Hermes 默认模型。页面已拆成“总览 / Provider / 备用模型 / 凭据”四个子页；总览改成“临时换模型 / 永久换默认模型 / 配置备用模型 / 排查凭据”的用户场景入口，不再把复制 Hermes 原生命令作为主交互。
+- 模型设置页已从 SOLO 静态壳改为 Hermes 覆盖页：围绕“默认大脑 / 本次任务模型 / 长期默认模型 / 备用路线 / 模型服务状态”组织信息，并可把候选模型写回 Hermes 默认模型；Provider、Base URL、config/env 路径和凭据状态作为高级信息折叠展示，不再把底层配置项作为主交互。
 - 备用模型页覆盖 Hermes `fallback_providers`：只列出已配置且不是当前 Provider 的候选，用户开关后写回 Hermes 配置；空状态会提示先去凭据页确认服务是否可用。
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区已按新产品图收敛：不再把授权目录、筛选器和项目树放进侧栏；侧栏只保留一级导航、最近任务和本机说明，项目页继续承载授权工作区管理。

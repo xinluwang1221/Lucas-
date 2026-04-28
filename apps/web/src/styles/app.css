@@ -5829,6 +5829,66 @@ summary:focus-visible {
   letter-spacing: 0;
 }
 
+.model-user-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: #fffdf7;
+  border-bottom: 1px solid var(--line);
+}
+
+.model-user-summary span,
+.model-user-summary p,
+.model-ability-card span,
+.model-ability-card p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-user-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.model-user-summary p {
+  margin: 4px 0 0;
+}
+
+.model-ability-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.model-ability-card {
+  min-width: 0;
+  padding: 13px 14px;
+  background: #fffdf7;
+}
+
+.model-ability-card strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-ability-card p {
+  margin: 6px 0 0;
+}
+
 .model-health-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5932,6 +5992,14 @@ summary:focus-visible {
   padding: 12px;
 }
 
+.cowork-model-list.simplified {
+  padding-top: 0;
+}
+
+.model-provider-list.compact {
+  padding-top: 0;
+}
+
 .cowork-model-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 110px;
@@ -5941,6 +6009,7 @@ summary:focus-visible {
   background: #fffdf7;
   border: 1px solid var(--line);
   border-radius: 7px;
+  text-align: left;
 }
 
 .cowork-model-row.active {
@@ -5955,6 +6024,14 @@ summary:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cowork-model-row em {
+  justify-self: end;
+  color: var(--moss);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .model-provider-card {
@@ -6131,6 +6208,26 @@ summary:focus-visible {
 .fallback-provider-row.active {
   background: #f0fff6;
   border-color: #bfe2cb;
+}
+
+.model-advanced-details {
+  overflow: hidden;
+}
+
+.model-advanced-details summary {
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.model-advanced-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.model-advanced-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .inline-add-control {
@@ -6683,6 +6780,7 @@ summary:focus-visible {
   }
 
   .model-health-grid,
+  .model-ability-grid,
   .model-impact-grid,
   .dispatch-grid,
   .schedule-grid,
@@ -6750,11 +6848,16 @@ summary:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .model-user-summary {
+    flex-direction: column;
+  }
+
   .settings-control-action {
     justify-content: flex-start;
   }
 
   .model-health-grid,
+  .model-ability-grid,
   .model-impact-grid,
   .model-scenario-grid,
   .model-credential-grid,

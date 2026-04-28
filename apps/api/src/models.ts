@@ -272,10 +272,14 @@ function mergeCredentials(...groups: HermesModelCredential[][]) {
       merged.set(credential.id, credential)
       continue
     }
+    const mergedConfigured = existing.configured || credential.configured
+    const detailParts = [existing.detail, credential.detail]
+      .map((detail) => sanitizeStatusDetail(detail))
+      .filter((detail) => detail && !(mergedConfigured && detail.includes('未配置')))
     merged.set(credential.id, {
       ...existing,
-      configured: existing.configured || credential.configured,
-      detail: [existing.detail, credential.detail].filter(Boolean).join('；'),
+      configured: mergedConfigured,
+      detail: [...new Set(detailParts)].join('；'),
       kind: existing.configured ? existing.kind : credential.kind
     })
   }
@@ -398,7 +402,15 @@ function runHermesText(args: string[]) {
 }
 
 function sanitizeStatusDetail(value: string) {
-  return value.replace(/sk-[A-Za-z0-9._-]+/g, '<hidden>').replace(/[A-Za-z0-9_-]{16,}/g, '<hidden>').trim()
+  const masked = value.replace(/sk-[A-Za-z0-9._-]+/g, '<hidden>').replace(/[A-Za-z0-9_-]{16,}/g, '<hidden>').trim()
+  return masked
+    .replace(/^\(not set\)$/gi, '未设置')
+    .replace(/not logged in\s*\(run:\s*hermes model\)/gi, '未登录，请运行 hermes model')
+    .replace(/not logged in\s*\(run:\s*([^)]+)\)/gi, '未登录，请运行 $1')
+    .replace(/not logged in/gi, '未登录')
+    .replace(/not configured\s*\(run:\s*hermes model\)/gi, '未配置，请运行 hermes model')
+    .replace(/not configured/gi, '未配置')
+    .replace(/configured/gi, '已配置')
 }
 
 function credentialSummary(provider: string, credentials: HermesModelCredential[]) {

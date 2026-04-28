@@ -2895,23 +2895,13 @@ function SettingsModal({
   const [pathDraft, setPathDraft] = useState('')
   const [ruleDraft, setRuleDraft] = useState('')
   const [expandedMcpId, setExpandedMcpId] = useState<string | null>(null)
-  const [modelScope, setModelScope] = useState<'overview' | 'providers' | 'fallbacks' | 'credentials'>('overview')
-  const [modelProviderQuery, setModelProviderQuery] = useState('')
-  const customModels = models.filter((model) => !model.builtIn && model.id !== 'auto')
   const mcpServers = hermesMcp?.servers ?? []
   const modelProvidersForView = hermesModel?.providers ?? []
   const modelCredentialsForView = hermesModel?.credentials ?? []
   const fallbackProviderIds = hermesModel?.fallbackProviders ?? []
   const fallbackProviderSet = new Set(fallbackProviderIds)
   const configuredCredentialCount = modelCredentialsForView.filter((credential) => credential.configured).length
-  const configuredProviderCount = modelProvidersForView.filter((provider) => provider.configured).length
-  const currentHermesProvider = modelProvidersForView.find((provider) => provider.isCurrent)
   const fallbackCandidates = modelProvidersForView.filter((provider) => provider.configured && !provider.isCurrent)
-  const filteredModelProviders = modelProvidersForView.filter((provider) => {
-    const query = modelProviderQuery.trim().toLowerCase()
-    if (!query) return true
-    return `${provider.id} ${provider.label} ${provider.models.join(' ')}`.toLowerCase().includes(query)
-  })
   const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode; group?: 'main' | 'tools' | 'about' }> = [
     { id: 'account', label: '账号', icon: <User size={15} />, group: 'main' },
     { id: 'general', label: '通用', icon: <Settings size={15} />, group: 'main' },
@@ -3173,219 +3163,134 @@ function SettingsModal({
         )}
         {tab === 'models' && (
           <SettingsSection title="模型">
-            <SettingsSubtabs
-              value={modelScope}
-              options={[['overview', '总览'], ['providers', 'Provider'], ['fallbacks', '备用模型'], ['credentials', '凭据']]}
-              onChange={(value) => setModelScope(value as 'overview' | 'providers' | 'fallbacks' | 'credentials')}
-            />
+            <SettingsBlock title="Hermes 的模型能力">
+              <div className="model-user-summary">
+                <div>
+                  <span>当前默认模型</span>
+                  <strong>{hermesModel?.defaultModel || '未配置'}</strong>
+                  <p>{hermesModel?.providerLabel || 'Hermes 自动选择'} · {hermesModel?.apiMode || '自动 API 模式'}</p>
+                </div>
+                <button className="icon-button" title="刷新模型状态" onClick={onRefreshModels}>
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+              {hermesModelError && <div className="settings-error-line">{hermesModelError}</div>}
+              <div className="model-ability-grid">
+                <ModelAbilityCard title="默认大脑" value={hermesModel?.defaultModel || '未配置'} detail="决定 Hermes 日常任务默认用哪个模型。" />
+                <ModelAbilityCard title="本次任务临时模型" value={selectedModel.label} detail="只影响 Cowork 发起的新任务，不改 Hermes 配置。" />
+                <ModelAbilityCard title="备用路线" value={fallbackProviderIds.length ? `${fallbackProviderIds.length} 个备用` : '未开启'} detail="主模型失败时，Hermes 可尝试备用服务。" />
+                <ModelAbilityCard title="模型服务状态" value={`${configuredCredentialCount} 个可用凭据`} detail="只展示可用状态，不显示 API key 或 token。" />
+              </div>
+              <div className="settings-info-banner">
+                <Info size={15} />
+                普通使用只需要关注默认模型、本次任务模型和备用路线；Provider、Base URL、凭据属于高级配置。
+              </div>
+            </SettingsBlock>
 
-            {modelScope === 'overview' && (
-              <>
-                <SettingsBlock title="Hermes 当前模型">
-                  <div className="model-runtime-card">
+            <SettingsBlock title="本次任务用哪个模型">
+              <p className="settings-section-copy">选择“使用 Hermes 默认”时，Cowork 不传模型参数，完全跟随 Hermes 当前配置。</p>
+              <div className="cowork-model-list simplified">
+                {models.map((model) => (
+                  <button
+                    className={model.id === selectedModelId ? 'cowork-model-row active' : 'cowork-model-row'}
+                    key={model.id}
+                    onClick={() => onSelectModel(model)}
+                    disabled={model.id === selectedModelId}
+                  >
                     <div>
-                      <span>默认模型</span>
-                      <strong>{hermesModel?.defaultModel || '未配置'}</strong>
-                      <small>{hermesModel?.providerLabel || 'Hermes 自动选择'} · {hermesModel?.apiMode || '自动 API 模式'}</small>
+                      <strong>{model.label}</strong>
+                      <span>{model.description ?? model.provider ?? model.id}</span>
                     </div>
-                    <button className="icon-button" title="刷新模型状态" onClick={onRefreshModels}><RefreshCw size={14} /></button>
-                  </div>
-                  {hermesModelError && <div className="settings-error-line">{hermesModelError}</div>}
-                  <div className="model-health-grid">
-                    <div>
-                      <span>当前 Provider</span>
-                      <strong>{currentHermesProvider?.label ?? hermesModel?.providerLabel ?? '自动'}</strong>
-                    </div>
-                    <div>
-                      <span>可用 Provider</span>
-                      <strong>{configuredProviderCount}</strong>
-                    </div>
-                    <div>
-                      <span>可用凭据</span>
-                      <strong>{configuredCredentialCount}</strong>
-                    </div>
-                    <div>
-                      <span>备用模型</span>
-                      <strong>{fallbackProviderIds.length ? `${fallbackProviderIds.length} 个` : '未开启'}</strong>
-                    </div>
-                  </div>
-                  <InfoGrid items={[
-                    ['配置文件', hermesModel?.configPath ?? '/Users/lucas/.hermes/config.yaml'],
-                    ['环境变量文件', hermesModel?.envPath ?? '/Users/lucas/.hermes/.env'],
-                    ['Provider', hermesModel?.provider || 'auto'],
-                    ['Base URL', hermesModel?.baseUrl || '跟随 Hermes/provider 默认值'],
-                    ['备用模型', fallbackProviderIds.length ? fallbackProviderIds.join(', ') : '未设置：主模型不可用时不会自动切换']
-                  ]} />
-                  <div className="model-impact-grid">
-                    <div>
-                      <strong>Cowork 任务模型</strong>
-                      <span>只影响从 Hermes Cowork 发起的新任务；选“使用 Hermes 默认”时不会传 model 参数。</span>
-                    </div>
-                    <div>
-                      <strong>Hermes 默认模型</strong>
-                      <span>写回 Hermes 配置文件，CLI、新会话和 Cowork 默认模式都会跟随它。</span>
-                    </div>
-                    <div>
-                      <strong>备用模型</strong>
-                      <span>主模型不可用时由 Hermes 兜底切换；未设置代表失败时直接暴露错误。</span>
-                    </div>
-                  </div>
-                  <div className="settings-info-banner">
-                    <Info size={15} />
-                    这里读取 Hermes 的模型路由和凭据状态；API key、token 和 Header 值不会在 Cowork 中显示。
-                  </div>
-                </SettingsBlock>
-
-                <SettingsBlock title="你想做什么？">
-                  <div className="model-scenario-grid">
-                    <ModelScenarioCard
-                      title="这次任务临时换模型"
-                      detail="只影响 Cowork 发起的新任务，不改 Hermes 默认配置。适合临时让某个任务跑更快或更稳。"
-                      action="下方选择"
-                      onClick={() => document.querySelector('.cowork-model-list')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-                    />
-                    <ModelScenarioCard
-                      title="以后都使用这个模型"
-                      detail="写回 Hermes 的默认模型，新会话会跟随这个选择。适合你已经确定长期使用某个模型。"
-                      action="去选择"
-                      onClick={() => setModelScope('providers')}
-                    />
-                    <ModelScenarioCard
-                      title="主模型慢或经常失败"
-                      detail="给 Hermes 配一个备用 Provider。主模型不可用时，Hermes 可以自动改走备用模型。"
-                      action="配置备用"
-                      onClick={() => setModelScope('fallbacks')}
-                    />
-                    <ModelScenarioCard
-                      title="模型不可用或缺 key"
-                      detail="检查 API key、OAuth 登录和 Hermes 凭据池状态。密钥内容仍然不会在 Cowork 中显示。"
-                      action="检查凭据"
-                      onClick={() => setModelScope('credentials')}
-                    />
-                  </div>
-                </SettingsBlock>
-
-                <SettingsBlock title="Cowork 任务模型">
-                  <p className="settings-section-copy">决定 Cowork 发起任务时是否传 `--model`。选择 Hermes 默认模型时不传模型参数，完全跟随 Hermes 当前配置。</p>
-                  <div className="cowork-model-list">
-                    {models.map((model) => (
-                      <div className={model.id === selectedModelId ? 'cowork-model-row active' : 'cowork-model-row'} key={model.id}>
-                        <div>
-                          <strong>{model.label}</strong>
-                          <span>{model.description ?? model.provider ?? model.id}</span>
-                        </div>
-                        <button className="settings-link-button" disabled={model.id === selectedModelId} onClick={() => onSelectModel(model)}>
-                          {model.id === selectedModelId ? '当前使用' : '用于 Cowork'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button className="settings-add-button" onClick={onOpenAddModel}>
-                    <Plus size={14} />
-                    添加 Cowork 模型选项
+                    <em>{model.id === selectedModelId ? '当前使用' : '选择'}</em>
                   </button>
-                </SettingsBlock>
-              </>
-            )}
+                ))}
+              </div>
+              <button className="settings-add-button" onClick={onOpenAddModel}>
+                <Plus size={14} />
+                添加可选模型
+              </button>
+            </SettingsBlock>
 
-            {modelScope === 'providers' && (
-              <SettingsBlock title="Hermes Provider 与默认模型">
-                <div className="model-filter-bar">
-                  <Search size={14} />
-                  <input value={modelProviderQuery} onChange={(event) => setModelProviderQuery(event.target.value)} placeholder="搜索 provider 或模型" />
-                  <button className="settings-link-button" onClick={onRefreshModels}>刷新</button>
-                </div>
-                <div className="model-provider-list">
-                  {filteredModelProviders.map((provider) => (
-                    <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
-                      <div className="model-provider-head">
-                        <div>
-                          <strong>{provider.label}</strong>
-                          <span>{provider.credentialSummary}</span>
-                        </div>
-                        <em>{provider.isCurrent ? '当前 Provider' : provider.configured ? '可用' : '未配置'}</em>
+            <SettingsBlock title="长期默认模型">
+              <p className="settings-section-copy">这里会写回 Hermes `config.yaml`。适合你决定以后所有 Hermes 新任务都使用某个模型。</p>
+              <div className="model-provider-list compact">
+                {modelProvidersForView.slice(0, 5).map((provider) => (
+                  <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
+                    <div className="model-provider-head">
+                      <div>
+                        <strong>{provider.label}</strong>
+                        <span>{provider.credentialSummary || (provider.configured ? '已配置' : '未配置')}</span>
                       </div>
-                      {(provider.baseUrl || provider.apiMode) && (
-                        <div className="model-provider-meta">
-                          {provider.baseUrl && <span>{provider.baseUrl}</span>}
-                          {provider.apiMode && <span>{provider.apiMode}</span>}
-                        </div>
-                      )}
-                      <div className="model-chip-list">
-                        {provider.models.length ? provider.models.slice(0, 12).map((modelId) => (
-                          <button
-                            key={modelId}
-                            disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
-                            onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
-                            title="写回 Hermes config.yaml 的 model.default"
-                          >
-                            {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
-                            {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
-                            {modelId}
-                          </button>
-                        )) : <span className="model-chip-empty">未从 Hermes 配置中发现模型列表</span>}
+                      <em>{provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
+                    </div>
+                    <div className="model-chip-list">
+                      {provider.models.length ? provider.models.slice(0, 6).map((modelId) => (
+                        <button
+                          key={modelId}
+                          disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
+                          onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
+                        >
+                          {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
+                          {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
+                          {modelId}
+                        </button>
+                      )) : <span className="model-chip-empty">暂无可选模型</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SettingsBlock>
+
+            <SettingsBlock title="备用路线">
+              <div className="fallback-model-summary">
+                <div>
+                  <span>主模型失败时</span>
+                  <strong>{fallbackProviderIds.length ? fallbackProviderIds.join(' → ') : '直接提示失败'}</strong>
+                </div>
+                <button
+                  className="settings-link-button"
+                  disabled={!fallbackProviderIds.length || hermesModelUpdating === 'fallbacks'}
+                  onClick={() => onSetHermesFallbackProviders([])}
+                >
+                  关闭备用
+                </button>
+              </div>
+              <div className="fallback-provider-list">
+                {fallbackCandidates.length ? fallbackCandidates.slice(0, 6).map((provider) => {
+                  const checked = fallbackProviderSet.has(provider.id)
+                  return (
+                    <div className={checked ? 'fallback-provider-row active' : 'fallback-provider-row'} key={provider.id}>
+                      <div>
+                        <strong>{provider.label}</strong>
+                        <span>{provider.credentialSummary || provider.id}</span>
                       </div>
+                      <Toggle
+                        checked={checked}
+                        disabled={hermesModelUpdating === 'fallbacks'}
+                        onChange={(value) => {
+                          const next = value
+                            ? [...fallbackProviderIds, provider.id]
+                            : fallbackProviderIds.filter((id) => id !== provider.id)
+                          onSetHermesFallbackProviders(next)
+                        }}
+                      />
                     </div>
-                  ))}
-                </div>
-              </SettingsBlock>
-            )}
+                  )
+                }) : (
+                  <div className="model-table-empty">暂未发现可作为备用的已配置模型服务。</div>
+                )}
+              </div>
+            </SettingsBlock>
 
-            {modelScope === 'fallbacks' && (
-              <SettingsBlock title="Hermes 备用模型">
-                <div className="settings-info-banner">
-                  <Info size={15} />
-                  备用模型对应 Hermes 的 fallback_providers。开启后，主模型失败时 Hermes 可以尝试这些 Provider；Cowork 会写回配置并自动备份。
-                </div>
-                <div className="fallback-model-panel">
-                  <div className="fallback-model-summary">
-                    <div>
-                      <span>当前备用顺序</span>
-                      <strong>{fallbackProviderIds.length ? fallbackProviderIds.join(' → ') : '未设置'}</strong>
-                    </div>
-                    <button
-                      className="settings-link-button"
-                      disabled={!fallbackProviderIds.length || hermesModelUpdating === 'fallbacks'}
-                      onClick={() => onSetHermesFallbackProviders([])}
-                    >
-                      清空备用
-                    </button>
-                  </div>
-                  <div className="fallback-provider-list">
-                    {fallbackCandidates.length ? fallbackCandidates.map((provider) => {
-                      const checked = fallbackProviderSet.has(provider.id)
-                      return (
-                        <div className={checked ? 'fallback-provider-row active' : 'fallback-provider-row'} key={provider.id}>
-                          <div>
-                            <strong>{provider.label}</strong>
-                            <span>{provider.credentialSummary || provider.id}</span>
-                          </div>
-                          <Toggle
-                            checked={checked}
-                            disabled={hermesModelUpdating === 'fallbacks'}
-                            onChange={(value) => {
-                              const next = value
-                                ? [...fallbackProviderIds, provider.id]
-                                : fallbackProviderIds.filter((id) => id !== provider.id)
-                              onSetHermesFallbackProviders(next)
-                            }}
-                          />
-                        </div>
-                      )
-                    }) : (
-                      <div className="model-table-empty">暂未发现可作为备用的已配置 Provider。先在凭据页确认模型服务是否已经登录或配置。</div>
-                    )}
-                  </div>
-                </div>
-              </SettingsBlock>
-            )}
-
-            {modelScope === 'credentials' && (
-              <SettingsBlock title="Hermes 凭据状态">
-                <div className="settings-info-banner">
-                  <Shield size={15} />
-                  Cowork 只读取 Hermes 返回的配置状态和凭据池条目，不读取 `.env` 或 auth 文件中的密钥值。
-                </div>
+            <details className="settings-block model-advanced-details">
+              <summary>高级：模型服务与凭据状态</summary>
+              <div className="model-advanced-body">
+                <InfoGrid items={[
+                  ['配置文件', hermesModel?.configPath ?? '/Users/lucas/.hermes/config.yaml'],
+                  ['环境变量文件', hermesModel?.envPath ?? '/Users/lucas/.hermes/.env'],
+                  ['Provider', hermesModel?.provider || 'auto'],
+                  ['Base URL', hermesModel?.baseUrl || '跟随 Hermes/provider 默认值']
+                ]} />
                 <div className="model-credential-grid">
                   {modelCredentialsForView.map((credential) => (
                     <div className={credential.configured ? 'model-credential-pill configured' : 'model-credential-pill'} key={`${credential.id}-${credential.kind}`}>
@@ -3394,8 +3299,8 @@ function SettingsModal({
                     </div>
                   ))}
                 </div>
-              </SettingsBlock>
-            )}
+              </div>
+            </details>
           </SettingsSection>
         )}
         {tab === 'conversation' && (
@@ -3662,6 +3567,16 @@ function ModelScenarioCard({
       <button type="button" className="settings-link-button" onClick={onClick}>
         {action}
       </button>
+    </div>
+  )
+}
+
+function ModelAbilityCard({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return (
+    <div className="model-ability-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
     </div>
   )
 }
