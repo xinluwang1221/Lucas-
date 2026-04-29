@@ -83,6 +83,7 @@ export type Task = {
   workspaceId: string
   modelId?: string
   provider?: string
+  modelConfigKey?: string
   skillNames?: string[]
   title: string
   status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped'

@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
-import { configureHermesModel, listModelOptions, normalizeModelId, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
+import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
@@ -683,12 +683,14 @@ app.post('/api/tasks', (req, res) => {
 
   const now = new Date().toISOString()
   const model = resolveRequestedModel(modelId)
+  const modelConfigKey = modelSessionKey(model)
   const normalizedSkillNames = normalizeSkillNames(skillNames)
   const task: Task = {
     id: crypto.randomUUID(),
     workspaceId,
     modelId: model.id,
     provider: model.provider,
+    modelConfigKey,
     skillNames: normalizedSkillNames,
     title: prompt.trim().slice(0, 42),
     status: 'running',
@@ -741,7 +743,8 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
 
   const now = new Date().toISOString()
   const model = resolveRequestedModel(modelId || task.modelId)
-  const resumeSessionId = shouldResumeHermesSession(task, model) ? task.hermesSessionId : undefined
+  const modelConfigKey = modelSessionKey(model)
+  const resumeSessionId = shouldResumeHermesSession(task, model, modelConfigKey) ? task.hermesSessionId : undefined
   const normalizedSkillNames = normalizeSkillNames(skillNames, task.skillNames ?? [])
   store.update((mutable) => {
     const mutableTask = mutable.tasks.find((item) => item.id === task.id)
@@ -749,6 +752,7 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
     mutableTask.status = 'running'
     mutableTask.modelId = model.id
     mutableTask.provider = model.provider
+    mutableTask.modelConfigKey = modelConfigKey
     mutableTask.skillNames = normalizedSkillNames
     mutableTask.error = undefined
     mutableTask.startedAt = now
@@ -1074,9 +1078,19 @@ function resolveRequestedModel(modelId?: string) {
   return models.find((model) => model.id === requested) ?? selectedModelOption(settings)
 }
 
-function shouldResumeHermesSession(task: Task, model: ModelOption) {
+function shouldResumeHermesSession(task: Task, model: ModelOption, modelConfigKey: string) {
   if (!task.hermesSessionId) return false
+  if (task.modelConfigKey) return task.modelConfigKey === modelConfigKey
+  if (model.id === 'auto') return false
   return (task.modelId || 'auto') === model.id && (task.provider || '') === (model.provider || '')
+}
+
+function modelSessionKey(model: ModelOption) {
+  if (model.id === 'auto') {
+    const current = readHermesDefaultModel()
+    return `auto:${current.provider || ''}:${current.model || ''}`
+  }
+  return `${model.provider || ''}:${model.id}`
 }
 
 function enabledSkillNames() {

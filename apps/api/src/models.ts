@@ -220,7 +220,10 @@ export function setHermesDefaultModel(modelId: string, provider?: string) {
 
   const raw = fs.readFileSync(hermesConfigPath, 'utf8')
   const backupPath = backupHermesConfig(raw)
-  const nextRaw = upsertModelConfig(raw, safeModel, safeProvider)
+  let nextRaw = upsertModelConfig(raw, safeModel, safeProvider)
+  if (usesHermesNativeProviderConfig(safeProvider)) {
+    nextRaw = removeCustomProviderBlocks(nextRaw, [safeProvider])
+  }
   fs.writeFileSync(hermesConfigPath, nextRaw, 'utf8')
   return { ok: true, backupPath }
 }
@@ -252,7 +255,10 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   if (baseUrl) fields.base_url = baseUrl
   if (apiKey) fields.api_key = apiKey
   if (apiMode) fields.api_mode = apiMode
-  const nextRaw = upsertModelConfigFields(raw, fields)
+  let nextRaw = upsertModelConfigFields(raw, fields)
+  if (usesHermesNativeProviderConfig(provider)) {
+    nextRaw = removeCustomProviderBlocks(nextRaw, [provider])
+  }
   fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
   try {
     fs.chmodSync(hermesConfigPath, 0o600)
@@ -262,7 +268,7 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   return { ok: true, backupPath }
 }
 
-function readHermesDefaultModel() {
+export function readHermesDefaultModel() {
   try {
     const config = readHermesModelConfig()
     return { model: config.defaultModel, provider: config.provider }
@@ -275,13 +281,16 @@ function readHermesModelConfig() {
   const raw = fs.readFileSync(hermesConfigPath, 'utf8')
   const modelBlock = rootBlock(raw, 'model')
   const fallbackBlock = rootBlock(raw, 'fallback_providers')
+  const provider = normalizeProviderId(readYamlScalar(modelBlock, 'provider') || 'auto')
   return {
     defaultModel: readYamlScalar(modelBlock, 'default') || readYamlScalar(modelBlock, 'model'),
-    provider: normalizeProviderId(readYamlScalar(modelBlock, 'provider') || 'auto'),
+    provider,
     baseUrl: readYamlScalar(modelBlock, 'base_url'),
     apiMode: readYamlScalar(modelBlock, 'api_mode'),
     fallbackProviders: readYamlList(fallbackBlock),
-    customProviders: readCustomProviders(raw)
+    customProviders: readCustomProviders(raw).filter((customProvider) => {
+      return !(customProvider.id === provider && usesHermesNativeProviderConfig(provider))
+    })
   }
 }
 
@@ -340,15 +349,19 @@ function buildHermesProviders(
   }
 
   for (const provider of config.customProviders) {
+    const providerConfigured = Boolean(provider.apiKey) || isLocalModelEndpoint(provider.baseUrl)
     addProvider({
       id: provider.id,
       label: provider.name,
       source: 'config',
-      configured: true,
+      configured: providerConfigured,
       isCurrent: provider.id === currentProvider,
       baseUrl: provider.baseUrl,
+      apiMode: provider.apiMode,
       models: uniqueStrings(provider.models),
-      credentialSummary: '来自 config.yaml custom_providers'
+      credentialSummary: providerConfigured
+        ? '来自 config.yaml custom_providers'
+        : 'custom_providers 缺少 API Key'
     })
   }
 
@@ -463,8 +476,8 @@ function mergeCredentials(...groups: HermesModelCredential[][]) {
 
 function readCustomProviders(raw: string) {
   const block = rootBlock(raw, 'custom_providers')
-  const providers: Array<{ id: string; name: string; baseUrl?: string; models: string[] }> = []
-  let current: { name: string; baseUrl?: string; models: string[] } | null = null
+  const providers: Array<{ id: string; name: string; baseUrl?: string; apiKey?: string; apiMode?: string; models: string[] }> = []
+  let current: { name: string; baseUrl?: string; apiKey?: string; apiMode?: string; models: string[] } | null = null
   for (const line of block.split('\n')) {
     const itemMatch = line.match(/^\s*-\s+name:\s*(.+)$/)
     if (itemMatch) {
@@ -477,6 +490,8 @@ function readCustomProviders(raw: string) {
     if (!fieldMatch) continue
     const value = unquoteYaml(fieldMatch[2] ?? '')
     if (fieldMatch[1] === 'base_url' || fieldMatch[1] === 'url' || fieldMatch[1] === 'api') current.baseUrl = value
+    if (fieldMatch[1] === 'api_key') current.apiKey = value
+    if (fieldMatch[1] === 'api_mode') current.apiMode = value
     if ((fieldMatch[1] === 'model' || fieldMatch[1] === 'default_model') && value) current.models.push(value)
   }
   if (current) providers.push({ id: customProviderId(current.name), ...current })
@@ -565,6 +580,45 @@ function upsertRootYamlList(raw: string, key: string, values: string[]) {
     }
   }
   return [...lines.slice(0, start + 1), ...block, ...lines.slice(end)].join('\n')
+}
+
+function removeCustomProviderBlocks(raw: string, providers: string[]) {
+  const providerIds = new Set(providers.map(normalizeProviderId).filter(Boolean))
+  if (!providerIds.size) return raw
+
+  const lines = raw.replace(/\r/g, '').split('\n')
+  const start = lines.findIndex((line) => line.trim() === 'custom_providers:')
+  if (start === -1) return raw
+
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\S/.test(lines[index]) && lines[index].trim()) {
+      end = index
+      break
+    }
+  }
+
+  const nextBlock: string[] = []
+  let currentBlock: string[] = []
+  const flush = () => {
+    if (!currentBlock.length) return
+    const nameLine = currentBlock.find((line) => /^\s*-\s+name:\s*/.test(line))
+    const name = nameLine?.replace(/^\s*-\s+name:\s*/, '') ?? ''
+    const normalizedName = normalizeProviderId(unquoteYaml(name))
+    const normalizedCustomId = customProviderId(normalizedName)
+    if (!providerIds.has(normalizedName) && !providerIds.has(normalizedCustomId)) {
+      nextBlock.push(...currentBlock)
+    }
+    currentBlock = []
+  }
+
+  for (const line of lines.slice(start + 1, end)) {
+    if (/^\s*-\s+name:\s*/.test(line)) flush()
+    currentBlock.push(line)
+  }
+  flush()
+
+  return [...lines.slice(0, start + 1), ...nextBlock, ...lines.slice(end)].join('\n')
 }
 
 function backupHermesConfig(raw: string) {
@@ -716,6 +770,15 @@ function normalizeSecretValue(value: string) {
 function customProviderId(value: string) {
   const normalized = normalizeProviderId(value)
   return isChineseModelProvider(normalized) ? normalized : `custom:${normalized}`
+}
+
+function usesHermesNativeProviderConfig(provider: string) {
+  const normalized = normalizeProviderId(provider)
+  return isChineseModelProvider(normalized) && !normalized.startsWith('custom:')
+}
+
+function isLocalModelEndpoint(baseUrl?: string) {
+  return Boolean(baseUrl && /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/i.test(baseUrl))
 }
 
 function providerLabel(provider: string) {
