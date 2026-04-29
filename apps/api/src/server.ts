@@ -741,6 +741,7 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
 
   const now = new Date().toISOString()
   const model = resolveRequestedModel(modelId || task.modelId)
+  const resumeSessionId = shouldResumeHermesSession(task, model) ? task.hermesSessionId : undefined
   const normalizedSkillNames = normalizeSkillNames(skillNames, task.skillNames ?? [])
   store.update((mutable) => {
     const mutableTask = mutable.tasks.find((item) => item.id === task.id)
@@ -763,7 +764,7 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
   })
   broadcastTaskUpdate(task.id)
 
-  void executeTask(task.id, workspace.path, prompt.trim(), task.hermesSessionId, model, normalizedSkillNames)
+  void executeTask(task.id, workspace.path, prompt.trim(), resumeSessionId, model, normalizedSkillNames)
   res.status(202).json({ ok: true })
 })
 
@@ -1071,6 +1072,11 @@ function resolveRequestedModel(modelId?: string) {
   const models = listModelOptions(settings)
   const requested = modelId || settings.selectedModelId
   return models.find((model) => model.id === requested) ?? selectedModelOption(settings)
+}
+
+function shouldResumeHermesSession(task: Task, model: ModelOption) {
+  if (!task.hermesSessionId) return false
+  return (task.modelId || 'auto') === model.id && (task.provider || '') === (model.provider || '')
 }
 
 function enabledSkillNames() {
