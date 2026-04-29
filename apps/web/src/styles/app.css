@@ -6611,6 +6611,25 @@ summary:focus-visible {
   line-height: 1.5;
 }
 
+.model-config-memory {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: -2px 0 12px;
+  padding: 10px 12px;
+  color: #2f7358;
+  background: #edf8f0;
+  border: 1px solid #bfe2cb;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.model-config-memory svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .model-config-note {
   margin-top: 14px;
   padding: 10px 12px;

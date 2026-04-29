@@ -219,8 +219,12 @@ export function setHermesDefaultModel(modelId: string, provider?: string) {
   }
 
   const raw = fs.readFileSync(hermesConfigPath, 'utf8')
+  const previousConfig = readHermesModelConfig()
   const backupPath = backupHermesConfig(raw)
   let nextRaw = upsertModelConfig(raw, safeModel, safeProvider)
+  if (safeProvider && safeProvider !== normalizeProviderId(previousConfig.provider)) {
+    nextRaw = removeModelConfigFields(nextRaw, ['base_url', 'api_key', 'api_mode'])
+  }
   if (usesHermesNativeProviderConfig(safeProvider)) {
     nextRaw = removeCustomProviderBlocks(nextRaw, [safeProvider])
   }
@@ -270,6 +274,8 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   if (!modelId) throw new Error('请填写模型 ID')
 
   const raw = fs.readFileSync(hermesConfigPath, 'utf8')
+  const previousConfig = readHermesModelConfig()
+  const sameProvider = provider === normalizeProviderId(previousConfig.provider)
   const backupPath = backupHermesConfig(raw)
   const fields: Record<string, string | undefined> = {
     default: modelId,
@@ -279,6 +285,14 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   if (apiKey) fields.api_key = apiKey
   if (apiMode) fields.api_mode = apiMode
   let nextRaw = upsertModelConfigFields(raw, fields)
+  if (!sameProvider) {
+    const fieldsToClear = [
+      !baseUrl && 'base_url',
+      !apiKey && 'api_key',
+      !apiMode && 'api_mode'
+    ].filter((field): field is string => Boolean(field))
+    nextRaw = removeModelConfigFields(nextRaw, fieldsToClear)
+  }
   if (usesHermesNativeProviderConfig(provider)) {
     nextRaw = removeCustomProviderBlocks(nextRaw, [provider])
   }
@@ -309,6 +323,7 @@ function readHermesModelConfig() {
     defaultModel: readYamlScalar(modelBlock, 'default') || readYamlScalar(modelBlock, 'model'),
     provider,
     baseUrl: readYamlScalar(modelBlock, 'base_url'),
+    apiKey: readYamlScalar(modelBlock, 'api_key'),
     apiMode: readYamlScalar(modelBlock, 'api_mode'),
     fallbackProviders: readYamlList(fallbackBlock),
     customProviders: readCustomProviders(raw).filter((customProvider) => {
@@ -641,6 +656,29 @@ function removeCustomProviderBlocks(raw: string, providers: string[]) {
   }
   flush()
 
+  return [...lines.slice(0, start + 1), ...nextBlock, ...lines.slice(end)].join('\n')
+}
+
+function removeModelConfigFields(raw: string, fields: string[]) {
+  const fieldSet = new Set(fields.filter(Boolean))
+  if (!fieldSet.size) return raw
+
+  const lines = raw.replace(/\r/g, '').split('\n')
+  const start = lines.findIndex((line) => line.trim() === 'model:')
+  if (start === -1) return raw
+
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\S/.test(lines[index]) && lines[index].trim()) {
+      end = index
+      break
+    }
+  }
+
+  const nextBlock = lines.slice(start + 1, end).filter((line) => {
+    const match = line.match(/^\s+([A-Za-z0-9_-]+):/)
+    return !match || !fieldSet.has(match[1])
+  })
   return [...lines.slice(0, start + 1), ...nextBlock, ...lines.slice(end)].join('\n')
 }
 

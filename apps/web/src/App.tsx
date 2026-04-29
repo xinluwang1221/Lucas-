@@ -557,6 +557,7 @@ function App() {
     label: 'Hermes 默认模型',
     builtIn: true
   }
+  const rememberedProviderConfig = providerSavedModelConfig(newModelProvider, hermesModel)
 
   const filteredTasks = useMemo(() => {
     const keyword = taskSearch.trim().toLowerCase()
@@ -897,6 +898,23 @@ function App() {
     } finally {
       setHermesModelUpdating(null)
     }
+  }
+
+  function selectNewModelProvider(providerId: string) {
+    const savedConfig = providerSavedModelConfig(providerId, hermesModel)
+    setNewModelProvider(providerId)
+    setNewModelId('')
+    setNewModelLabel('')
+    setNewModelBaseUrl(savedConfig.baseUrl)
+    setNewModelApiKey('')
+    setNewModelApiMode(savedConfig.apiMode || defaultModelApiMode(providerId))
+  }
+
+  function openModelConfigPanel(providerId = hermesModel?.provider || '') {
+    setModelNotice(null)
+    const knownProviderId = modelCatalog.some((provider) => provider.id === providerId) ? providerId : ''
+    selectNewModelProvider(knownProviderId)
+    setModelPanelOpen(true)
   }
 
   function handleUseSkill(skill: Skill) {
@@ -1710,8 +1728,7 @@ function App() {
                       type="button"
                       className="add-model-option"
                       onClick={() => {
-                        setModelNotice(null)
-                        setModelPanelOpen(true)
+                        openModelConfigPanel()
                         setModelMenuOpen(false)
                       }}
                     >
@@ -1920,14 +1937,7 @@ function App() {
               服务商
               <select
                 value={newModelProvider}
-                onChange={(event) => {
-                  setNewModelProvider(event.target.value)
-                  setNewModelId('')
-                  setNewModelLabel('')
-                  setNewModelBaseUrl('')
-                  setNewModelApiKey('')
-                  setNewModelApiMode(event.target.value === 'anthropic' ? 'anthropic_messages' : 'chat_completions')
-                }}
+                onChange={(event) => selectNewModelProvider(event.target.value)}
               >
                 <option value="">选择模型服务商</option>
                 {modelCatalog.map((provider) => (
@@ -1935,6 +1945,12 @@ function App() {
                 ))}
               </select>
             </label>
+            {rememberedProviderConfig.canReuse && (
+              <div className="model-config-memory">
+                <CheckCircle2 size={14} />
+                已记住 {rememberedProviderConfig.label} 的供应商配置。切换这个供应商下的模型时，只需要选择模型；Base URL 和 API 模式会自动带入，Key 留空即可复用。
+              </div>
+            )}
             <label>
               默认模型
               <select
@@ -1969,7 +1985,7 @@ function App() {
               <input
                 value={newModelBaseUrl}
                 onChange={(event) => setNewModelBaseUrl(event.target.value)}
-                placeholder={providerBaseUrlHints[newModelProvider] ?? '非自定义服务通常可留空'}
+                placeholder={rememberedProviderConfig.baseUrl || providerBaseUrlHints[newModelProvider] || '非自定义服务通常可留空'}
               />
             </label>
             <label>
@@ -1978,7 +1994,7 @@ function App() {
                 type="password"
                 value={newModelApiKey}
                 onChange={(event) => setNewModelApiKey(event.target.value)}
-                placeholder="留空则保留 Hermes 当前密钥或登录状态"
+                placeholder={rememberedProviderConfig.canReuse ? '已保存该供应商的 Key 或登录状态，留空即可复用' : '首次配置请填写 Key 或 Plan Key'}
                 autoComplete="off"
               />
             </label>
@@ -2068,10 +2084,7 @@ function App() {
             onRefreshModels={() => void refreshModels()}
             onRefreshModelCatalog={() => void handleRefreshModelCatalog()}
             onAddRule={handleAddSettingsRule}
-            onOpenAddModel={() => {
-              setModelNotice(null)
-              setModelPanelOpen(true)
-            }}
+            onOpenAddModel={() => openModelConfigPanel()}
           />
         </div>
       )}
@@ -4600,6 +4613,32 @@ function hermesProviderId(label: string) {
     'Z.AI / GLM': 'zai'
   }
   return map[label] ?? label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9._:-]/g, '')
+}
+
+function defaultModelApiMode(providerId: string) {
+  return hermesProviderId(providerId) === 'anthropic' ? 'anthropic_messages' : 'chat_completions'
+}
+
+function providerSavedModelConfig(providerId: string, overview: HermesModelOverview | null) {
+  const id = hermesProviderId(providerId)
+  if (!id) {
+    return {
+      label: '',
+      baseUrl: '',
+      apiMode: 'chat_completions',
+      canReuse: false
+    }
+  }
+
+  const currentProviderId = hermesProviderId(overview?.provider ?? '')
+  const provider = overview?.providers.find((item) => hermesProviderId(item.id) === id)
+  const isCurrent = id === currentProviderId
+  return {
+    label: provider?.label || overview?.providerLabel || id,
+    baseUrl: provider?.baseUrl || (isCurrent ? overview?.baseUrl : '') || '',
+    apiMode: provider?.apiMode || (isCurrent ? overview?.apiMode : '') || defaultModelApiMode(id),
+    canReuse: Boolean(provider?.configured || isCurrent)
+  }
 }
 
 function FragmentWithTrace({
