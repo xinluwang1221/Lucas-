@@ -4515,7 +4515,6 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   const fileCount = rows.filter((row) => row.kind === 'file').length
   const searchCount = rows.filter((row) => row.kind === 'search').length
   const errorCount = rows.filter((row) => row.kind === 'error').length
-  const defaultOpen = task.status === 'running'
   const lastRow = rows[rows.length - 1]
   const summaryLabel = task.status === 'running' ? '查看实时过程' : '查看过程记录'
 
@@ -4529,10 +4528,20 @@ function InlineExecutionTrace({ task }: { task: Task }) {
         {task.status === 'running' && <Loader2 size={13} className="spin" />}
       </div>
 
-      <details className="agent-trace-details" open={defaultOpen}>
+      {lastRow && (
+        <div className={`agent-trace-current ${lastRow.kind}`}>
+          <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
+          <div>
+            <strong>{lastRow.title}</strong>
+            {lastRow.detail && <p>{lastRow.detail}</p>}
+          </div>
+        </div>
+      )}
+
+      <details className="agent-trace-details">
         <summary>
           <span>{summaryLabel}</span>
-          <em>{toolCount} 次操作 · {statusLabel(task.status)}</em>
+          <em>{toolCount} 次操作 · {thinkingCount} 条思考 · {statusLabel(task.status)}</em>
           <ChevronDown size={14} />
         </summary>
         <div className="agent-trace-stats">
@@ -4547,15 +4556,6 @@ function InlineExecutionTrace({ task }: { task: Task }) {
           <p className="agent-trace-note">
             已收起 {hiddenCount} 条较早过程，只显示当前轮最近记录。
           </p>
-        )}
-        {lastRow && (
-          <div className={`agent-trace-current ${lastRow.kind}`}>
-            <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
-            <div>
-              <strong>{lastRow.title}</strong>
-              {lastRow.detail && <p>{lastRow.detail}</p>}
-            </div>
-          </div>
         )}
         <div className="agent-trace-lanes">
           {(['thinking', 'search', 'file', 'tool', 'done'] as TraceRow['kind'][]).map((kind) => {
@@ -4597,7 +4597,6 @@ function TaskFocusPanel({
   onArchive: () => void
   onDelete: () => void
 }) {
-  const result = taskResultText(task)
   const references = extractTaskReferences(task).slice(0, 3)
   const isTerminal = task.status === 'completed' || task.status === 'failed' || task.status === 'stopped'
   const title = task.status === 'running'
@@ -4606,10 +4605,10 @@ function TaskFocusPanel({
       ? '这次执行失败'
       : task.status === 'stopped'
         ? '这次执行已停止'
-        : '任务结果'
+        : '任务已完成'
 
   return (
-    <section className={`task-focus-panel ${task.status}`}>
+    <section className={`task-focus-panel ${task.status} ${isTerminal ? 'terminal' : ''}`}>
       <div className="task-focus-head">
         <div>
           <span className={`status-pill compact ${task.status}`}>
@@ -4642,23 +4641,12 @@ function TaskFocusPanel({
         </div>
       </div>
 
-      <div className="task-focus-grid">
-        <div>
-          <span>工作区</span>
-          <strong>{workspace?.name ?? task.workspaceId}</strong>
-        </div>
-        <div>
-          <span>运行时长</span>
-          <strong>{taskElapsedLabel(task)}</strong>
-        </div>
-        <div>
-          <span>Hermes Session</span>
-          <strong>{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '未生成'}</strong>
-        </div>
-        <div>
-          <span>原生记录</span>
-          <strong>{session ? `${session.messageCount} 条消息` : task.hermesSessionId ? '未索引' : '等待生成'}</strong>
-        </div>
+      <div className="task-focus-meta-line">
+        <span><Folder size={13} />{workspace?.name ?? task.workspaceId}</span>
+        <span><Clock3 size={13} />{taskElapsedLabel(task)}</span>
+        <span><Bot size={13} />{task.modelId === 'auto' || !task.modelId ? 'Hermes 默认' : task.modelId}</span>
+        <span title={task.hermesSessionId}><Database size={13} />{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '新会话'}</span>
+        {session && <span>{session.messageCount} 条原生消息</span>}
       </div>
 
       {task.status === 'running' ? (
@@ -4671,17 +4659,7 @@ function TaskFocusPanel({
           <strong>{task.error || 'Hermes 返回失败状态'}</strong>
           <span>可以重新运行，或展开调试信息查看原始日志。</span>
         </div>
-      ) : result ? (
-        <div className="task-result-digest">
-          <span>结果摘要</span>
-          <p>{stringifyPreview(result, 360)}</p>
-        </div>
-      ) : (
-        <div className="task-result-digest empty">
-          <span>结果摘要</span>
-          <p>这次任务没有可展示的正文结果。</p>
-        </div>
-      )}
+      ) : null}
 
       {(task.artifacts.length > 0 || references.length > 0) && (
         <div className="task-focus-support">
@@ -5916,7 +5894,10 @@ function latestUserMessageId(task?: Task) {
 function visibleTaskMessages(task: Task) {
   if (task.status === 'running') return task.messages
   const latestUserMessage = task.messages.slice().reverse().find((message) => message.role === 'user')
-  if (latestUserMessage) return [latestUserMessage]
+  if (latestUserMessage) {
+    const latestUserIndex = task.messages.findIndex((message) => message.id === latestUserMessage.id)
+    return task.messages.slice(Math.max(0, latestUserIndex))
+  }
   if (task.messages.length <= 4) return task.messages
   return task.messages.slice(-4)
 }
