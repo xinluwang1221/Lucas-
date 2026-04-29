@@ -165,7 +165,8 @@ export async function runHermesCompatibilityTest(state: AppState): Promise<Herme
     }
 
     if (result.exitCode !== 0) {
-      throw new Error(`Hermes Bridge 退出码 ${result.exitCode ?? '未知'}：${result.stderr.trim().slice(0, 180) || '无错误输出'}`)
+      const bridgeError = result.error || result.stderr.trim() || '无错误输出'
+      throw new Error(`Hermes Bridge 退出码 ${result.exitCode ?? '未知'}：${bridgeError.slice(0, 180)}`)
     }
     if (!responsePreview) {
       throw new Error('Hermes Bridge 没有返回最终文本。')

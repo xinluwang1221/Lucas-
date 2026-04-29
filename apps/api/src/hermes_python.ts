@@ -13,6 +13,7 @@ export type HermesBridgeEvent = {
 export type HermesBridgeResult = {
   exitCode: number | null
   finalResponse: string
+  error?: string
   sessionId?: string
   stdout: string
   stderr: string
@@ -80,6 +81,7 @@ export function runHermesPythonBridge(params: {
     let stderr = ''
     let lineBuffer = ''
     let finalResponse = ''
+    let bridgeError = ''
     let sessionId = params.resumeSessionId
     const events: HermesBridgeEvent[] = []
 
@@ -107,6 +109,7 @@ export function runHermesPythonBridge(params: {
       resolve({
         exitCode,
         finalResponse,
+        error: bridgeError,
         sessionId,
         stdout,
         stderr,
@@ -119,6 +122,7 @@ export function runHermesPythonBridge(params: {
       resolve({
         exitCode: 1,
         finalResponse,
+        error: bridgeError,
         sessionId,
         stdout,
         stderr,
@@ -134,6 +138,11 @@ export function runHermesPythonBridge(params: {
         if (event.type === 'task.completed') {
           finalResponse = typeof event.finalResponse === 'string' ? event.finalResponse : finalResponse
           sessionId = typeof event.sessionId === 'string' ? event.sessionId : sessionId
+        }
+        if (event.type === 'task.failed') {
+          finalResponse = typeof event.finalResponse === 'string' ? event.finalResponse : finalResponse
+          sessionId = typeof event.sessionId === 'string' ? event.sessionId : sessionId
+          bridgeError = typeof event.error === 'string' ? event.error : bridgeError
         }
         params.onEvent?.(event)
       } catch {

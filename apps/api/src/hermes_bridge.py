@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import contextlib
+import inspect
 import json
 import os
 import sys
@@ -121,11 +122,15 @@ def main():
             route = cli._resolve_turn_agent_config(args.prompt)
             if route["signature"] != cli._active_agent_route_signature:
                 cli.agent = None
+            init_kwargs = {
+                "model_override": route["model"],
+                "runtime_override": route["runtime"],
+                "request_overrides": route.get("request_overrides"),
+            }
+            if "route_label" in inspect.signature(cli._init_agent).parameters:
+                init_kwargs["route_label"] = route.get("label")
             if not cli._init_agent(
-                model_override=route["model"],
-                runtime_override=route["runtime"],
-                route_label=route["label"],
-                request_overrides=route.get("request_overrides"),
+                **init_kwargs
             ):
                 raise RuntimeError("Hermes agent initialization failed")
 
