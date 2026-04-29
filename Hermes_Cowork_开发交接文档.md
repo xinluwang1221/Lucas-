@@ -78,6 +78,75 @@ Hermes 对接：
 - Hermes Python：`/Users/lucas/.hermes/hermes-agent/venv/bin/python`
 - 当前 bridge 复用 Hermes `HermesCLI` 初始化路径，再嵌入 `AIAgent`
 
+## 3.1 系统架构图
+
+Hermes Cowork 的产品边界必须按下面这张图理解：前端可以有多个入口，但后端 Adapter 和 Hermes 本机配置才是真源。不要让某个入口单独维护一份模型、MCP、工作区或任务状态。
+
+```mermaid
+flowchart LR
+  subgraph UI["React 前端 多入口"]
+    Composer["对话输入区\n模型菜单 / 附件 / 发送"]
+    Settings["设置弹窗\n模型 / MCP / 对话流 / 规则"]
+    Sidebar["左侧导航\n任务 / 工作区 / 技能"]
+    RightPanel["右侧任务上下文\n步骤 / 产物 / 过程资源"]
+  end
+
+  subgraph Adapter["Node Adapter 127.0.0.1:8787"]
+    StateApi["/api/state\n任务、消息、工作区"]
+    ModelApi["/api/models\n模型候选、默认模型、fallback"]
+    McpApi["/api/hermes/mcp\nMCP 服务、市场、推荐"]
+    TaskApi["/api/tasks\n创建、继续、停止、流式事件"]
+    FileApi["/api/files\n授权工作区、产物、预览"]
+  end
+
+  subgraph Hermes["本机 Hermes"]
+    Config["~/.hermes/config.yaml\nmodel / mcp / fallback"]
+    Sessions["~/.hermes/sessions\n原生 session 元数据"]
+    Agent["HermesCLI + AIAgent\n真实执行能力"]
+  end
+
+  Composer --> ModelApi
+  Composer --> TaskApi
+  Settings --> ModelApi
+  Settings --> McpApi
+  Sidebar --> StateApi
+  RightPanel --> StateApi
+  RightPanel --> FileApi
+  ModelApi --> Config
+  McpApi --> Config
+  TaskApi --> Agent
+  TaskApi --> Sessions
+  FileApi --> Agent
+```
+
+架构约束：
+
+- 前端多个入口只能消费同一套 API，不允许各自拼静态清单。
+- 写 Hermes 配置只能通过后端 Adapter 做备份、归一化和敏感信息遮蔽。
+- UI 文案可以按场景重组，但状态含义必须来自同一份后端数据。
+- 新增入口时，必须先确认它复用哪个 API、哪个状态字段、哪个后端归一化函数。
+
+## 3.2 多入口一致性契约
+
+凡是同一个能力在两个以上位置出现，都要在开发前先登记“共同真源”。这部分是防止后续重复出现“设置页正确、对话底部错误”这类问题的硬规则。
+
+| 能力 | 前端入口 | 共同真源 | 必须复用的前端逻辑 |
+| --- | --- | --- | --- |
+| 模型候选与选择 | 对话底部模型菜单、设置 > 模型、本次任务模型列表、长期默认模型列表 | `/api/models`、`~/.hermes/config.yaml`、`readHermesModelCatalog()`、`listModelOptions()` | `modelGroupsForProvider()`、`groupModelOptionsForMenu()` |
+| 模型服务配置 | 设置 > 模型、对话底部“配置模型服务” | `/api/models/configure`、`configureHermesModel()` | 同一个 `modelPanelOpen` 配置弹窗 |
+| MCP 服务 | 设置 > MCP、自定义 > Connectors、MCP 市场弹窗 | `/api/hermes/mcp`、Hermes MCP config | 同一套 MCP server 状态、说明、图标和启停逻辑 |
+| 任务运行状态 | 主对话区、右侧任务上下文、左侧最近任务 | `/api/state`、任务事件流、Hermes session 元数据 | `Task`、`executionView`、右侧步骤/产物/资源分层 |
+| 产物与文件 | 主结果、右侧产物、工作区文件、附件入口 | `/api/artifacts`、`/api/workspaces/*/files` | 同一套文件预览、Finder 打开、下载逻辑 |
+| Skills | 技能页、任务输入区预载技能、右侧参考信息 | `/api/skills`、本机 skill 目录 | 同一套 skill 名称、启停和文件查看逻辑 |
+
+开发检查清单：
+
+- 改一个入口前，先用 `rg` 搜索同一能力的其他入口。
+- 改数据结构前，先改后端归一化函数，再让所有入口消费结果。
+- 新增按钮、弹窗、菜单时，必须说明它读哪个 API、写哪个 API。
+- 只允许 UI 层做展示分组，不允许 UI 层维护另一份业务真源。
+- 每次修复“某入口不一致”后，把入口和共同真源补回本文档。
+
 ## 4. 目录结构
 
 ```text
@@ -249,7 +318,7 @@ HC_EVENT\t
 - 对话历史降噪：任务完成后保留最后一次用户提问和最终 Hermes 回复作为主线内容，较早对话收进“较早对话”；最终答案不再折叠进过程记录，也不再只依赖顶部卡片展示。
 - 任务停止：运行中的任务可在对话区 pending 消息和右侧“任务进度”直接停止；后端会向 Hermes 子进程发送 `SIGTERM`，记录 `task.stopped` 事件，并避免子进程退出码把用户主动停止误判为失败。
 - 任务实时流：后端新增 `/api/tasks/:taskId/stream` SSE 事件流；前端选中运行任务时自动订阅该任务快照，实时更新 live response、执行轨迹、工具事件、产物和停止/完成状态，原轮询机制保留为兜底。运行消息和右侧任务总览会显示“连接中 / 实时同步 / 轮询兜底”等状态，帮助用户判断当前是否实时连接 Hermes。
-- 输入框底部模型切换：默认项跟随 Hermes 当前模型，另支持显式选择 Hermes 当前默认模型和用户添加模型；创建任务时把选中模型传给后端。
+- 输入框底部模型切换：默认项跟随 Hermes 当前模型，另支持显式选择当前供应商、fallback 供应商和已配置模型服务下的模型候选；候选必须来自 `/api/models`，不能单独读取旧的本次任务模型清单；创建任务时把选中模型传给后端。
 - 右侧任务上下文：顶部“任务总览”展示状态、模型、工作区、运行时长、Hermes session、思考/工具/文件/产物计数和最近活动；新增 Hermes Session 卡，对齐 Cowork 任务与 Hermes 原生 session 文件；“任务进度”保留五阶段待办；“最近操作”展示最近的工具、搜索、文件和结果事件；参考信息按当前任务展示预载技能、联网/工具来源、当前工作区文件。
 - 左下角账户菜单：点击 Lucas 弹出账户菜单，可进入设置弹窗。
 - 设置弹窗：包含账号、通用、MCP、模型、对话流、外部应用授权、云端运行环境、命令、规则、关于等分类；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
