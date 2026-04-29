@@ -4436,16 +4436,25 @@ summary:focus-visible {
   line-height: 1.55;
 }
 
-.hermes-update-banner em {
+.hermes-update-test-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
   padding: 5px 9px;
   color: #245f48;
   background: rgba(255, 255, 255, 0.68);
   border: 1px solid rgba(36, 95, 72, 0.18);
   border-radius: 999px;
-  font-style: normal;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.hermes-update-test-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .hermes-update-actions {
@@ -4557,6 +4566,128 @@ summary:focus-visible {
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.65;
+}
+
+.hermes-smoke-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-smoke-card.pending {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.hermes-smoke-card.running {
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  color: #245f48;
+  background: #eef8f0;
+  border-color: #b8d4bd;
+}
+
+.hermes-smoke-card.passed {
+  border-color: #a7cdb0;
+}
+
+.hermes-smoke-card.failed {
+  border-color: #ebb7bd;
+  background: #fff8f8;
+}
+
+.hermes-smoke-card strong,
+.hermes-smoke-card span {
+  display: block;
+}
+
+.hermes-smoke-card strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.hermes-smoke-card span {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hermes-smoke-card .settings-add-button {
+  margin-bottom: 0;
+}
+
+.hermes-smoke-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hermes-smoke-head em {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: #245f48;
+  background: #eef8f0;
+  border: 1px solid #b8d4bd;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hermes-smoke-card.failed .hermes-smoke-head em {
+  color: #b9414e;
+  background: #fff0f1;
+  border-color: #ebb7bd;
+}
+
+.hermes-smoke-steps {
+  display: grid;
+  gap: 7px;
+}
+
+.hermes-smoke-steps > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px;
+  background: #f6f4ef;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.hermes-smoke-steps > div.passed svg {
+  color: var(--moss);
+}
+
+.hermes-smoke-steps > div.failed svg {
+  color: #b9414e;
+}
+
+.hermes-smoke-steps time {
+  color: var(--ink-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.hermes-smoke-response {
+  padding: 10px;
+  background: #f6f4ef;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.hermes-smoke-response small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 11px;
 }
 
 .status-pill {
@@ -7118,6 +7249,7 @@ summary:focus-visible {
   .cowork-model-row,
   .fallback-model-summary,
   .fallback-provider-row,
+  .hermes-smoke-card.pending,
   .model-scenario-card {
     grid-template-columns: 1fr;
   }

@@ -10,7 +10,7 @@ import { findChangedArtifacts, takeSnapshot } from './artifacts.js'
 import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgroundServices } from './background.js'
 import { cleanHermesOutput } from './hermes.js'
 import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
-import { readHermesUpdateStatus } from './hermes_update.js'
+import { readHermesUpdateStatus, runHermesCompatibilityTest } from './hermes_update.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
 import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, removeHermesModelProvider, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
@@ -58,6 +58,14 @@ app.get('/api/hermes/runtime', async (_req, res) => {
 app.get('/api/hermes/update-status', async (_req, res) => {
   try {
     res.json(await readHermesUpdateStatus())
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/compatibility-test', async (_req, res) => {
+  try {
+    res.json(await runHermesCompatibilityTest(store.snapshot))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }

@@ -383,3 +383,29 @@ export type HermesUpdateStatus = {
   }
   updatedAt: string
 }
+
+export type HermesCompatibilityTestResult = {
+  id: string
+  status: 'passed' | 'failed'
+  title: string
+  detail: string
+  version: {
+    currentTag: string
+    latestTag?: string
+    verifiedCoworkTag: string
+  }
+  steps: Array<{
+    id: string
+    label: string
+    status: 'passed' | 'failed'
+    detail: string
+    elapsedMs: number
+  }>
+  smokeTask?: {
+    sessionId?: string
+    responsePreview: string
+    eventCount: number
+  }
+  startedAt: string
+  completedAt: string
+}

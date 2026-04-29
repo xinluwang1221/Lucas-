@@ -466,6 +466,32 @@ export type HermesUpdateStatus = {
   updatedAt: string
 }
 
+export type HermesCompatibilityTestResult = {
+  id: string
+  status: 'passed' | 'failed'
+  title: string
+  detail: string
+  version: {
+    currentTag: string
+    latestTag?: string
+    verifiedCoworkTag: string
+  }
+  steps: Array<{
+    id: string
+    label: string
+    status: 'passed' | 'failed'
+    detail: string
+    elapsedMs: number
+  }>
+  smokeTask?: {
+    sessionId?: string
+    responsePreview: string
+    eventCount: number
+  }
+  startedAt: string
+  completedAt: string
+}
+
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
 export async function getState(): Promise<AppState> {
@@ -478,6 +504,12 @@ export async function getHermesRuntime(): Promise<HermesRuntime> {
 
 export async function getHermesUpdateStatus(): Promise<HermesUpdateStatus> {
   return request('/api/hermes/update-status')
+}
+
+export async function runHermesCompatibilityTest(): Promise<HermesCompatibilityTestResult> {
+  return request('/api/hermes/compatibility-test', {
+    method: 'POST'
+  })
 }
 
 export async function getHermesSessions(): Promise<HermesSessionsResponse> {

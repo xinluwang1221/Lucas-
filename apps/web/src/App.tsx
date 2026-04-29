@@ -79,6 +79,7 @@ import {
   HermesModelCatalogProvider,
   HermesModelOverview,
   HermesSessionSummary,
+  HermesCompatibilityTestResult,
   HermesUpdateStatus,
   getState,
   HermesRuntime,
@@ -99,6 +100,7 @@ import {
   revealArtifact,
   revealWorkspace,
   revealWorkspaceFile,
+  runHermesCompatibilityTest,
   pinTask,
   sendTaskMessage,
   searchHermesMcpMarketplace,
@@ -335,6 +337,9 @@ function App() {
   const [hermesUpdate, setHermesUpdate] = useState<HermesUpdateStatus | null>(null)
   const [hermesUpdateLoading, setHermesUpdateLoading] = useState(false)
   const [hermesUpdateError, setHermesUpdateError] = useState<string | null>(null)
+  const [hermesCompatibilityResult, setHermesCompatibilityResult] = useState<HermesCompatibilityTestResult | null>(null)
+  const [hermesCompatibilityRunning, setHermesCompatibilityRunning] = useState(false)
+  const [hermesCompatibilityError, setHermesCompatibilityError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
@@ -1296,6 +1301,19 @@ function App() {
     }
   }
 
+  async function handleRunHermesCompatibilityTest() {
+    setHermesCompatibilityRunning(true)
+    setHermesCompatibilityError(null)
+    try {
+      setHermesCompatibilityResult(await runHermesCompatibilityTest())
+      await refreshHermesUpdateStatus()
+    } catch (cause) {
+      setHermesCompatibilityError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setHermesCompatibilityRunning(false)
+    }
+  }
+
   async function refreshHermesSessions() {
     try {
       const response = await getHermesSessions()
@@ -2097,6 +2115,9 @@ function App() {
             hermesUpdate={hermesUpdate}
             hermesUpdateLoading={hermesUpdateLoading}
             hermesUpdateError={hermesUpdateError}
+            hermesCompatibilityResult={hermesCompatibilityResult}
+            hermesCompatibilityRunning={hermesCompatibilityRunning}
+            hermesCompatibilityError={hermesCompatibilityError}
             selectedModel={selectedModel}
             models={composerModels}
             modelCatalog={modelCatalog}
@@ -2128,6 +2149,7 @@ function App() {
             onTabChange={setSettingsTab}
             onClose={() => setSettingsOpen(false)}
             onRefreshHermesUpdate={() => void refreshHermesUpdateStatus()}
+            onRunHermesCompatibilityTest={() => void handleRunHermesCompatibilityTest()}
             onLanguageChange={setLanguage}
             onThemeChange={setTheme}
             onPrivacyChange={setPrivacyMode}
@@ -3046,6 +3068,9 @@ function SettingsModal({
   hermesUpdate,
   hermesUpdateLoading,
   hermesUpdateError,
+  hermesCompatibilityResult,
+  hermesCompatibilityRunning,
+  hermesCompatibilityError,
   selectedModel,
   models,
   modelCatalog,
@@ -3077,6 +3102,7 @@ function SettingsModal({
   onTabChange,
   onClose,
   onRefreshHermesUpdate,
+  onRunHermesCompatibilityTest,
   onLanguageChange,
   onThemeChange,
   onPrivacyChange,
@@ -3111,6 +3137,9 @@ function SettingsModal({
   hermesUpdate: HermesUpdateStatus | null
   hermesUpdateLoading: boolean
   hermesUpdateError: string | null
+  hermesCompatibilityResult: HermesCompatibilityTestResult | null
+  hermesCompatibilityRunning: boolean
+  hermesCompatibilityError: string | null
   selectedModel: ModelOption
   models: ModelOption[]
   modelCatalog: HermesModelCatalogProvider[]
@@ -3142,6 +3171,7 @@ function SettingsModal({
   onTabChange: (tab: SettingsTab) => void
   onClose: () => void
   onRefreshHermesUpdate: () => void
+  onRunHermesCompatibilityTest: () => void
   onLanguageChange: (value: string) => void
   onThemeChange: (value: string) => void
   onPrivacyChange: (value: boolean) => void
@@ -3830,7 +3860,11 @@ function SettingsModal({
                 status={hermesUpdate}
                 loading={hermesUpdateLoading}
                 error={hermesUpdateError}
+                testResult={hermesCompatibilityResult}
+                testRunning={hermesCompatibilityRunning}
+                testError={hermesCompatibilityError}
                 onRefresh={onRefreshHermesUpdate}
+                onRunTest={onRunHermesCompatibilityTest}
               />
             </SettingsBlock>
           </SettingsSection>
@@ -6753,12 +6787,20 @@ function HermesUpdatePanel({
   status,
   loading,
   error,
-  onRefresh
+  testResult,
+  testRunning,
+  testError,
+  onRefresh,
+  onRunTest
 }: {
   status: HermesUpdateStatus | null
   loading: boolean
   error: string | null
+  testResult: HermesCompatibilityTestResult | null
+  testRunning: boolean
+  testError: string | null
   onRefresh: () => void
+  onRunTest: () => void
 }) {
   if (!status && loading) {
     return (
@@ -6797,7 +6839,10 @@ function HermesUpdatePanel({
           <strong>{status.compatibility.title}</strong>
           <p>{status.compatibility.detail}</p>
         </div>
-        <em>{statusLabel}</em>
+        <button className="hermes-update-test-button" onClick={onRunTest} disabled={testRunning}>
+          {testRunning ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
+          {testRunning ? '复测中' : statusLabel}
+        </button>
       </div>
 
       <div className="hermes-update-actions">
@@ -6812,6 +6857,9 @@ function HermesUpdatePanel({
       </div>
 
       {error && <div className="settings-error-line">{error}</div>}
+      {testError && <div className="settings-error-line">{testError}</div>}
+
+      <HermesCompatibilityResultCard result={testResult} running={testRunning} onRun={onRunTest} />
 
       <div className="hermes-update-grid">
         <div>
@@ -6858,10 +6906,88 @@ function HermesUpdatePanel({
   )
 }
 
+function HermesCompatibilityResultCard({
+  result,
+  running,
+  onRun
+}: {
+  result: HermesCompatibilityTestResult | null
+  running: boolean
+  onRun: () => void
+}) {
+  if (!result && !running) {
+    return (
+      <div className="hermes-smoke-card pending">
+        <div>
+          <strong>自动复测</strong>
+          <span>点击后 Cowork 后端会真实调用 Hermes，检查版本/status、模型 Adapter、MCP Adapter 和一个最小 Bridge 任务。</span>
+        </div>
+        <button className="settings-add-button" onClick={onRun}>
+          <Play size={14} />
+          立即复测
+        </button>
+      </div>
+    )
+  }
+
+  if (running) {
+    return (
+      <div className="hermes-smoke-card running">
+        <Loader2 size={18} className="spin" />
+        <div>
+          <strong>正在自动复测 Hermes</strong>
+          <span>这会启动一个真实 Hermes 小任务，通常需要几十秒。期间请不要关闭 Cowork API。</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!result) return null
+
+  return (
+    <div className={`hermes-smoke-card ${result.status}`}>
+      <div className="hermes-smoke-head">
+        <div>
+          <strong>{result.title}</strong>
+          <span>{result.detail}</span>
+        </div>
+        <em>{result.status === 'passed' ? '可升级后再跑一次' : '先修复再升级'}</em>
+      </div>
+      <div className="hermes-smoke-steps">
+        {result.steps.map((step) => (
+          <div className={step.status} key={step.id}>
+            {step.status === 'passed' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+            <div>
+              <strong>{step.label}</strong>
+              <span>{step.detail}</span>
+            </div>
+            <time>{formatDuration(step.elapsedMs)}</time>
+          </div>
+        ))}
+      </div>
+      {result.smokeTask && (
+        <div className="hermes-smoke-response">
+          <span>小任务返回</span>
+          <strong>{result.smokeTask.responsePreview || '无正文预览'}</strong>
+          <small>{result.smokeTask.eventCount} 个事件{result.smokeTask.sessionId ? ` · ${shortSessionId(result.smokeTask.sessionId)}` : ''}</small>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms} ms`
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${seconds} 秒`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes} 分 ${seconds % 60} 秒`
 }
 
 function sourceLabel(source: Skill['source']) {

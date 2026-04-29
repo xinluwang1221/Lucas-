@@ -1,7 +1,11 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
-import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { HermesUpdateStatus } from './types.js'
+import path from 'node:path'
+import { runHermesPythonBridge } from './hermes_python.js'
+import { readHermesMcpConfig } from './mcp.js'
+import { listModelOptions, readHermesModelOverview } from './models.js'
+import { dataDir, hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
+import { AppState, HermesCompatibilityTestResult, HermesUpdateStatus } from './types.js'
 
 const HERMES_REPO_URL = 'https://github.com/NousResearch/hermes-agent'
 const COWORK_TESTED_HERMES_TAG = process.env.COWORK_TESTED_HERMES_TAG || 'v2026.4.13'
@@ -101,6 +105,94 @@ export async function readHermesUpdateStatus(): Promise<HermesUpdateStatus> {
   }
 }
 
+export async function runHermesCompatibilityTest(state: AppState): Promise<HermesCompatibilityTestResult> {
+  const id = `compat-${Date.now()}`
+  const startedAt = new Date().toISOString()
+  const steps: HermesCompatibilityTestResult['steps'] = []
+  const updateStatus = await readHermesUpdateStatus()
+  let smokeTask: HermesCompatibilityTestResult['smokeTask'] | undefined
+
+  await recordStep(steps, 'hermes-version', 'Hermes 版本与状态', async () => {
+    const [versionText, statusText] = await Promise.all([
+      runHermes(['version']),
+      runHermes(['status'])
+    ])
+    if (!versionText || !statusText) throw new Error('Hermes 没有返回版本或状态。')
+    return firstLine(versionText)
+  })
+
+  await recordStep(steps, 'cowork-models', '模型配置 Adapter', async () => {
+    const overview = readHermesModelOverview(state.modelSettings)
+    const options = listModelOptions(state.modelSettings)
+    if (!overview.defaultModel) throw new Error('没有读取到 Hermes 默认模型。')
+    if (!options.some((model) => model.id === 'auto')) throw new Error('Cowork 模型候选缺少 Hermes 默认项。')
+    return `${overview.providerLabel || overview.provider} · ${overview.defaultModel} · ${options.length} 个可选模型`
+  })
+
+  await recordStep(steps, 'cowork-mcp', 'MCP 配置 Adapter', async () => {
+    const config = readHermesMcpConfig()
+    if (!Array.isArray(config.servers)) throw new Error('MCP 配置结构异常。')
+    const enabledCount = config.servers.filter((server) => server.enabled).length
+    return `读取 ${config.servers.length} 个 MCP 服务，${enabledCount} 个启用`
+  })
+
+  await recordStep(steps, 'hermes-bridge-smoke', '真实 Hermes Bridge 小任务', async () => {
+    const smokeDir = path.join(dataDir, 'compatibility-tests', id)
+    fs.mkdirSync(smokeDir, { recursive: true })
+    fs.writeFileSync(path.join(smokeDir, 'README.md'), '# Hermes Cowork compatibility smoke test\n', 'utf8')
+
+    let childProcess: { kill: (signal?: NodeJS.Signals) => boolean } | undefined
+    const result = await withTimeout(
+      runHermesPythonBridge({
+        taskId: id,
+        cwd: smokeDir,
+        maxTurns: 1,
+        prompt: '这是 Hermes Cowork 兼容性自动复测。请只回复 COWORK_SMOKE_OK，不要调用工具，不要创建文件。',
+        onProcess: (process) => {
+          childProcess = process
+        }
+      }),
+      120000,
+      () => childProcess?.kill('SIGTERM')
+    )
+
+    const responsePreview = result.finalResponse.trim().slice(0, 180)
+    smokeTask = {
+      sessionId: result.sessionId,
+      responsePreview,
+      eventCount: result.events.length
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(`Hermes Bridge 退出码 ${result.exitCode ?? '未知'}：${result.stderr.trim().slice(0, 180) || '无错误输出'}`)
+    }
+    if (!responsePreview) {
+      throw new Error('Hermes Bridge 没有返回最终文本。')
+    }
+    return `已返回 ${result.events.length} 个事件${result.sessionId ? `，Session ${result.sessionId}` : ''}`
+  })
+
+  const failed = steps.filter((step) => step.status === 'failed')
+  const completedAt = new Date().toISOString()
+  return {
+    id,
+    status: failed.length ? 'failed' : 'passed',
+    title: failed.length ? '自动复测未通过' : '自动复测通过',
+    detail: failed.length
+      ? `有 ${failed.length} 项检查失败。先修复失败项，再升级 Hermes。`
+      : 'Hermes 命令、Cowork 后端 Adapter、MCP/模型配置和真实 Bridge 小任务都通过，可以进入升级或升级后验证流程。',
+    version: {
+      currentTag: updateStatus.currentTag,
+      latestTag: updateStatus.latestTag,
+      verifiedCoworkTag: updateStatus.verifiedCoworkTag
+    },
+    steps,
+    smokeTask,
+    startedAt,
+    completedAt
+  }
+}
+
 function buildCompatibility(params: {
   currentTag: string
   latestTag?: string
@@ -175,6 +267,47 @@ function buildCompatibility(params: {
       '更新后用一个小任务验证模型、MCP 和产物区。'
     ]
   }
+}
+
+async function recordStep(
+  steps: HermesCompatibilityTestResult['steps'],
+  id: string,
+  label: string,
+  action: () => Promise<string> | string
+) {
+  const started = Date.now()
+  try {
+    const detail = await action()
+    steps.push({
+      id,
+      label,
+      status: 'passed',
+      detail,
+      elapsedMs: Date.now() - started
+    })
+  } catch (error) {
+    steps.push({
+      id,
+      label,
+      status: 'failed',
+      detail: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - started
+    })
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout: () => void): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      onTimeout()
+      reject(new Error(`超过 ${Math.round(timeoutMs / 1000)} 秒仍未完成`))
+    }, timeoutMs)
+  })
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout)
+  })
 }
 
 function runHermes(args: string[], timeout = 15000) {
