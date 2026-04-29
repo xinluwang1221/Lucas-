@@ -124,7 +124,7 @@ import {
   Workspace,
   WorkspaceFile
 } from './lib/api'
-import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 const emptyState: AppState = {
   workspaces: [],
@@ -296,6 +296,14 @@ const providerBaseUrlHints: Record<string, string> = {
   'minimax-cn': '通常可留空，Hermes 会使用 MiniMax 国内默认地址',
   alibaba: '通常可留空，Hermes 会使用阿里云百炼默认地址',
   'qwen-oauth': '通常可留空，Hermes 会复用本机 Qwen 登录'
+}
+
+function closeOnBackdropMouseDown(onClose: () => void) {
+  return (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose()
+    }
+  }
 }
 
 function App() {
@@ -1850,7 +1858,7 @@ function App() {
       />
 
       {workspacePanelOpen && (
-        <div className="modal-backdrop">
+        <div className="modal-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setWorkspacePanelOpen(false))}>
           <form className="modal" onSubmit={handleAddWorkspace}>
             <h2>添加授权文件夹</h2>
             <p>Hermes Cowork 只会把你显式添加的文件夹作为工作区传给 Hermes。</p>
@@ -1880,7 +1888,9 @@ function App() {
       )}
 
       {modelPanelOpen && (
-        <div className="modal-backdrop model-backdrop">
+        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
+          if (!modelPanelSaving) setModelPanelOpen(false)
+        })}>
           <form className="modal model-config-modal" onSubmit={handleAddModel}>
             <h2>配置模型服务</h2>
             <p>选择中国模型服务商，填入 Key 或 Plan Key 后直接写入 Hermes 本机配置。API Key 只保存在你的 Mac 上，界面不会回显。</p>
@@ -1983,7 +1993,7 @@ function App() {
       )}
 
       {settingsOpen && (
-        <div className="modal-backdrop settings-backdrop">
+        <div className="modal-backdrop settings-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setSettingsOpen(false))}>
           <SettingsModal
             tab={settingsTab}
             language={language}
@@ -2053,13 +2063,13 @@ function App() {
       )}
 
       {preview && (
-        <div className="modal-backdrop">
+        <div className="modal-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setPreview(null))}>
           <PreviewModal preview={preview} onClose={() => setPreview(null)} />
         </div>
       )}
 
       {mcpMarketplaceOpen && (
-        <div className="modal-backdrop model-backdrop">
+        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setMcpMarketplaceOpen(false))}>
           <McpMarketplaceModal
             onClose={() => setMcpMarketplaceOpen(false)}
             onInstalled={handleMcpInstalled}
@@ -2069,7 +2079,9 @@ function App() {
       )}
 
       {editingMcp && (
-        <div className="modal-backdrop model-backdrop">
+        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
+          if (mcpUpdatingId !== editingMcp.id) setEditingMcp(null)
+        })}>
           <ManualMcpModal
             mode="edit"
             initialServer={editingMcp}
@@ -2081,7 +2093,9 @@ function App() {
       )}
 
       {manualMcpOpen && (
-        <div className="modal-backdrop model-backdrop">
+        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
+          if (!mcpUpdatingId) setManualMcpOpen(false)
+        })}>
           <ManualMcpModal
             mode="create"
             isSaving={Boolean(mcpUpdatingId)}
@@ -2092,7 +2106,7 @@ function App() {
       )}
 
       {selectedSkill && (
-        <div className="modal-backdrop">
+        <div className="modal-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setSelectedSkill(null))}>
           <SkillDetailModal
             skill={selectedSkill}
             files={skillFiles}
