@@ -47,6 +47,18 @@ export type WorkspaceFile = {
   modifiedAt: string
 }
 
+export type WorkspaceTreeEntry = WorkspaceFile & {
+  kind: 'directory' | 'file'
+}
+
+export type WorkspaceTree = {
+  workspaceId: string
+  path: string
+  parentPath: string
+  breadcrumbs: Array<{ name: string; path: string }>
+  entries: WorkspaceTreeEntry[]
+}
+
 export type ExecutionView = {
   response: string
   activity: ExecutionActivity[]
@@ -827,6 +839,18 @@ export async function pickWorkspaceDirectory(): Promise<PickedWorkspaceDirectory
   return request('/api/system/pick-directory', { method: 'POST' })
 }
 
+export async function updateWorkspace(workspaceId: string, payload: { name?: string; path?: string }): Promise<Workspace> {
+  return request(`/api/workspaces/${workspaceId}`, {
+    method: 'PATCH',
+    headers: jsonHeaders,
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteWorkspace(workspaceId: string): Promise<{ ok: boolean; removedTaskCount: number }> {
+  return request(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
+}
+
 export async function uploadFile(workspaceId: string, file: File) {
   const form = new FormData()
   form.append('file', file)
@@ -838,6 +862,11 @@ export async function uploadFile(workspaceId: string, file: File) {
 
 export async function listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
   return request(`/api/workspaces/${workspaceId}/files`)
+}
+
+export async function listWorkspaceTree(workspaceId: string, relativePath = ''): Promise<WorkspaceTree> {
+  const query = relativePath ? `?path=${encodeURIComponent(relativePath)}` : ''
+  return request(`/api/workspaces/${workspaceId}/tree${query}`)
 }
 
 export async function revealWorkspace(workspaceId: string) {

@@ -195,7 +195,7 @@ flowchart LR
 实现路线：
 
 1. 已完成：Web 本地版新增 `POST /api/system/pick-directory`，由 Node Adapter 在 macOS 上调用系统目录选择器，返回用户选择的 POSIX 路径；前端只显示“选择文件夹”，不显示手动路径输入。
-2. 下一阶段：保留当前 `/api/workspaces` 作为写入真源，但新增 `PATCH /api/workspaces/:id`、`DELETE /api/workspaces/:id`、`GET /api/workspaces/:id/tree` 和 `GET /api/workspaces/:id/summary`，让工作区页不再复用 flat file list。
+2. 已完成：保留当前 `/api/workspaces` 作为写入真源，并新增 `PATCH /api/workspaces/:id`、`DELETE /api/workspaces/:id`、`GET /api/workspaces/:id/tree`；工作区页开始消费目录树，不再只复用 flat file list。`GET /api/workspaces/:id/summary` 仍作为后续聚合接口。
 3. 部分完成：前端已经让点击工作区进入文件管理页、点击会话进入对话页；下一阶段再把导航状态显式整理成 `activeSurface = workspace | task | custom | settings`。
 4. 任务会话继续复用现有归档/删除 API；如果删除 API 缺少后端覆盖，要补齐 `DELETE /api/tasks/:taskId`，并保证不会碰工作区真实文件。
 5. 客户端化阶段用 Tauri/Electron 原生目录选择替换 AppleScript，并在 macOS sandbox 场景使用安全书签保存目录授权。
@@ -205,6 +205,7 @@ flowchart LR
 - 新建工作区时弹出系统 Finder 选择目录，不要求用户输入路径。
 - 左侧点击工作区显示文件管理页，点击会话显示对话页，不互相跳转。
 - 工作区文件页首屏只展示状态、文件、任务入口和必要操作，不铺后台调试信息。
+- 工作区文件页支持当前目录面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。
 - 会话可以归档和删除，操作后左侧列表即时更新；工作区文件不会被误删。
 - 刷新页面后仍能恢复工作区列表、当前工作区和活跃会话。
 
@@ -378,6 +379,7 @@ HC_EVENT\t
 - 定时任务页：接入真实后台服务状态，展示 Cowork API 后台、每日 MCP 推荐 LaunchAgent、日志目录、下一次日报生成时间，并可手动生成 MCP 推荐日报。
 - 工作区页：点击左侧工作区进入，展示该授权目录的文件管理、最近会话、最近产物和可执行入口；项目页/搜索页只作为高级管理和跨工作区检索入口。
 - 工作区第一阶段已落地：左侧工作区以目录树展示，工作区下挂活跃会话；点击工作区进入文件管理页，点击会话进入对话页；“授权文件夹”通过本机 API 调 macOS Finder 选择目录，不再展示手动路径输入表单。
+- 工作区第二阶段已落地：后端新增目录树、重命名、重新授权和移除工作区 API；文件管理页接入面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。移除工作区只删除 Cowork 记录和该工作区会话索引，不删除真实文件；`.DS_Store`、`.gitkeep` 等系统占位文件默认不展示。
 - 调度页：根据真实 MCP 连接器和已启用 lark skills 汇总网页浏览器、飞书办公、数据与文件三类能力，并可跳转 Connectors 或 MCP 管理。
 - 任务模板页：补充中文办公模板，覆盖文件整理、文档生成、飞书办公、数据分析、网页调研，并支持分类筛选。
 - 自定义页：按 Cowork 产品参考图拆成 `Skills / Connectors` 二级结构。Skills 读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；Connectors 读取真实 Hermes MCP 服务，展示已安装/启用数量、配置路径、服务说明、传输方式和配置状态，并提供“从市场添加”和“打开 MCP 管理”入口。
@@ -491,7 +493,10 @@ GET /api/state
 ```http
 GET /api/workspaces
 POST /api/workspaces
+PATCH /api/workspaces/:workspaceId
+DELETE /api/workspaces/:workspaceId
 GET /api/workspaces/:workspaceId/files
+GET /api/workspaces/:workspaceId/tree?path=...
 POST /api/workspaces/:workspaceId/files
 GET /api/workspaces/:workspaceId/files/preview?path=...
 POST /api/workspaces/:workspaceId/files/reveal
@@ -575,6 +580,7 @@ POST /api/models/fallbacks
 - MCP 市场新增“每日推荐 / 搜索市场”切换；每日推荐内容来自推荐日报，搜索市场仍走 GitHub 搜索。
 - 左侧任务区下一阶段从 Recents 风格升级为“工作区目录 + 会话”结构；最近任务可以作为辅助入口，但不能取代工作区目录。
 - 左侧栏工作区卡下一阶段改为工作区目录行：点击进入文件管理页，行内菜单承载打开目录、重命名、重新授权和移除工作区。
+- 工作区管理第二阶段已补齐：后端支持工作区目录树读取、重命名、重新授权和移除；前端文件管理页支持面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送，并隐藏 `.DS_Store`、`.gitkeep` 等无决策价值文件。
 - 左侧最近任务升级为任务卡：展示状态、更新时间、结果/产物提示；运行中和失败任务有更明确底色；完成任务可一键继续追问，失败/停止任务可一键重新运行，非运行任务可直接归档。
 - 工作区首页规划已调整为文件管理页：文件列表、目录导航、预览和作为上下文发送是主角；最近任务、产物和常用 Skill 只作为辅助信息，避免把后台统计铺满界面。
 - 工作区文件页已做第一版：顶部只显示可工作状态和行动入口；主区域展示工作区文件，支持作为上下文、预览、Finder 定位；右侧只在有内容时展示会话和产物。

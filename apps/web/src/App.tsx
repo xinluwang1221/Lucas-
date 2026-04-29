@@ -29,6 +29,7 @@ import {
   MessageSquarePlus,
   PanelRight,
   Palette,
+  Pencil,
   Plug,
   Play,
   Plus,
@@ -61,6 +62,7 @@ import {
   deleteHermesModelProvider,
   deleteModel,
   deleteTask,
+  deleteWorkspace,
   ExecutionEvent,
   getBackgroundStatus,
   getHermesMcpConfig,
@@ -89,6 +91,7 @@ import {
   listSkillFiles,
   listModels,
   listWorkspaceFiles,
+  listWorkspaceTree,
   listSkills,
   Message,
   ModelOption,
@@ -127,9 +130,12 @@ import {
   toggleSkill,
   uninstallBackgroundServices,
   updateHermesMcpServer,
+  updateWorkspace,
   uploadSkill,
   Workspace,
-  WorkspaceFile
+  WorkspaceFile,
+  WorkspaceTree,
+  WorkspaceTreeEntry
 } from './lib/api'
 import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
@@ -328,6 +334,10 @@ function App() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
+  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTree | null>(null)
+  const [workspaceTreePath, setWorkspaceTreePath] = useState('')
+  const [workspaceFileQuery, setWorkspaceFileQuery] = useState('')
+  const [workspaceUpdatingId, setWorkspaceUpdatingId] = useState<string | null>(null)
   const [taskSearch, setTaskSearch] = useState('')
   const [taskScope, setTaskScope] = useState<'active' | 'archived' | 'all'>('active')
   const [taskWorkspaceScope, setTaskWorkspaceScope] = useState<'current' | 'all'>('current')
@@ -712,6 +722,18 @@ function App() {
       .then(setWorkspaceFiles)
       .catch(() => setWorkspaceFiles([]))
   }, [selectedWorkspaceId, state.artifacts.length])
+
+  useEffect(() => {
+    setWorkspaceTreePath('')
+    setWorkspaceFileQuery('')
+  }, [selectedWorkspaceId])
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) return
+    void listWorkspaceTree(selectedWorkspaceId, workspaceTreePath)
+      .then(setWorkspaceTree)
+      .catch(() => setWorkspaceTree(null))
+  }, [selectedWorkspaceId, workspaceTreePath, state.artifacts.length])
 
   useEffect(() => {
     void refreshRuntime()
@@ -1172,6 +1194,67 @@ function App() {
     }
   }
 
+  async function handleRenameWorkspace(workspace: Workspace) {
+    const name = window.prompt('重命名工作区', workspace.name)?.trim()
+    if (!name || name === workspace.name) return
+    setWorkspaceUpdatingId(workspace.id)
+    setError(null)
+    try {
+      await updateWorkspace(workspace.id, { name })
+      await refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setWorkspaceUpdatingId(null)
+    }
+  }
+
+  async function handleReauthorizeWorkspace(workspace: Workspace) {
+    if (workspacePicking) return
+    setWorkspacePicking(true)
+    setWorkspaceUpdatingId(workspace.id)
+    setError(null)
+    try {
+      const picked = await pickWorkspaceDirectory()
+      await updateWorkspace(workspace.id, { path: picked.path, name: workspace.name || picked.name })
+      setSelectedWorkspaceId(workspace.id)
+      setSelectedTaskId(null)
+      setWorkspaceTreePath('')
+      setViewMode('projects')
+      await refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      if (!message.includes('取消')) setError(message)
+    } finally {
+      setWorkspacePicking(false)
+      setWorkspaceUpdatingId(null)
+    }
+  }
+
+  async function handleRemoveWorkspace(workspace: Workspace) {
+    if (workspace.id === 'default') {
+      setError('默认工作区不能移除。你可以重新授权它到新的文件夹。')
+      return
+    }
+    const workspaceTaskCount = state.tasks.filter((task) => task.workspaceId === workspace.id).length
+    const confirmed = window.confirm(`移除工作区“${workspace.name}”？这只会移除 Cowork 中的工作区和 ${workspaceTaskCount} 个会话记录，不会删除真实文件。`)
+    if (!confirmed) return
+    setWorkspaceUpdatingId(workspace.id)
+    setError(null)
+    try {
+      await deleteWorkspace(workspace.id)
+      const fallbackWorkspaceId = state.workspaces.find((item) => item.id !== workspace.id)?.id ?? 'default'
+      setSelectedWorkspaceId(fallbackWorkspaceId)
+      setSelectedTaskId(null)
+      setViewMode('projects')
+      await refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setWorkspaceUpdatingId(null)
+    }
+  }
+
   async function handleToggleTag(task: Task, tag: string) {
     setError(null)
     const currentTags = task.tags ?? []
@@ -1291,8 +1374,10 @@ function App() {
     if (!selectedWorkspaceId) return
     try {
       setWorkspaceFiles(await listWorkspaceFiles(selectedWorkspaceId))
+      setWorkspaceTree(await listWorkspaceTree(selectedWorkspaceId, workspaceTreePath))
     } catch {
       setWorkspaceFiles([])
+      setWorkspaceTree(null)
     }
   }
 
@@ -1443,6 +1528,10 @@ function App() {
                   setError(null)
                   void revealWorkspace(group.workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
                 }}
+                onRename={() => void handleRenameWorkspace(group.workspace)}
+                onReauthorize={() => void handleReauthorizeWorkspace(group.workspace)}
+                onRemove={() => void handleRemoveWorkspace(group.workspace)}
+                updating={workspaceUpdatingId === group.workspace.id}
               />
             ))}
             {!sidebarWorkspaceGroups.length && (
@@ -1626,6 +1715,9 @@ function App() {
             tasks={state.tasks}
             artifacts={state.artifacts}
             workspaceFiles={workspaceFiles}
+            workspaceTree={workspaceTree}
+            workspacePath={workspaceTreePath}
+            workspaceQuery={workspaceFileQuery}
             selectedWorkspaceId={selectedWorkspaceId}
             onSelect={(workspace) => {
               setSelectedWorkspaceId(workspace.id)
@@ -1655,12 +1747,17 @@ function App() {
             }}
             onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
             onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
+            onOpenFolder={(path) => setWorkspaceTreePath(path)}
+            onWorkspaceQueryChange={setWorkspaceFileQuery}
             onUploadClick={() => fileInputRef.current?.click()}
             onAdd={() => void handleAuthorizeWorkspace()}
             onReveal={(workspace) => {
               setError(null)
               void revealWorkspace(workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
             }}
+            onRename={(workspace) => void handleRenameWorkspace(workspace)}
+            onReauthorize={(workspace) => void handleReauthorizeWorkspace(workspace)}
+            onRemove={(workspace) => void handleRemoveWorkspace(workspace)}
           />
         ) : viewMode === 'dispatch' ? (
           <DispatchView
@@ -2605,6 +2702,9 @@ function ProjectsView({
   tasks,
   artifacts,
   workspaceFiles,
+  workspaceTree,
+  workspacePath,
+  workspaceQuery,
   selectedWorkspaceId,
   onSelect,
   onOpenTask,
@@ -2612,14 +2712,22 @@ function ProjectsView({
   onUseFile,
   onPreviewFile,
   onRevealFile,
+  onOpenFolder,
+  onWorkspaceQueryChange,
   onUploadClick,
   onAdd,
-  onReveal
+  onReveal,
+  onRename,
+  onReauthorize,
+  onRemove
 }: {
   workspaces: Workspace[]
   tasks: Task[]
   artifacts: Artifact[]
   workspaceFiles: WorkspaceFile[]
+  workspaceTree: WorkspaceTree | null
+  workspacePath: string
+  workspaceQuery: string
   selectedWorkspaceId: string
   onSelect: (workspace: Workspace) => void
   onOpenTask: (task: Task) => void
@@ -2627,9 +2735,14 @@ function ProjectsView({
   onUseFile: (file: WorkspaceFile) => void
   onPreviewFile: (file: WorkspaceFile) => void
   onRevealFile: (file: WorkspaceFile) => void
+  onOpenFolder: (path: string) => void
+  onWorkspaceQueryChange: (query: string) => void
   onUploadClick: () => void
   onAdd: () => void
   onReveal: (workspace: Workspace) => void
+  onRename: (workspace: Workspace) => void
+  onReauthorize: (workspace: Workspace) => void
+  onRemove: (workspace: Workspace) => void
 }) {
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0]
   const workspaceTasks = selectedWorkspace ? tasks.filter((task) => task.workspaceId === selectedWorkspace.id && !task.archivedAt) : []
@@ -2644,6 +2757,7 @@ function ProjectsView({
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 6)
     : []
+  const switchableWorkspaces = workspaces.filter((workspace) => workspace.id !== selectedWorkspace?.id)
   const failed = workspaceTasks.filter((task) => task.status === 'failed' || task.status === 'stopped').length
 
   return (
@@ -2661,10 +2775,28 @@ function ProjectsView({
               打开目录
             </button>
           )}
+          {selectedWorkspace && (
+            <button className="ghost-button" onClick={() => onRename(selectedWorkspace)}>
+              <Pencil size={15} />
+              重命名
+            </button>
+          )}
+          {selectedWorkspace && (
+            <button className="ghost-button" onClick={() => onReauthorize(selectedWorkspace)}>
+              <RefreshCw size={15} />
+              重新授权
+            </button>
+          )}
           <button className="send-button" onClick={onAdd}>
             <FolderPlus size={16} />
             授权文件夹
           </button>
+          {selectedWorkspace?.id !== 'default' && (
+            <button className="ghost-button danger-lite" onClick={() => onRemove(selectedWorkspace)}>
+              <Trash2 size={15} />
+              移除
+            </button>
+          )}
         </div>
       </header>
 
@@ -2703,8 +2835,13 @@ function ProjectsView({
                   上传
                 </button>
               </div>
-              <WorkspaceFiles
-                files={workspaceFiles}
+              <WorkspaceBrowser
+                tree={workspaceTree}
+                fallbackFiles={workspaceFiles}
+                currentPath={workspacePath}
+                query={workspaceQuery}
+                onQueryChange={onWorkspaceQueryChange}
+                onOpenFolder={onOpenFolder}
                 onUseFile={onUseFile}
                 onPreviewFile={onPreviewFile}
                 onRevealFile={onRevealFile}
@@ -2765,38 +2902,40 @@ function ProjectsView({
         <EmptyWorkspaceBlock title="还没有工作区" detail="选择一个文件夹授权给 Hermes，之后这里会显示文件管理页。" />
       )}
 
-      <section className="workspace-switcher-section">
-        <div className="workspace-section-head">
-          <div>
-            <h2>其他工作区</h2>
-            <p>点击工作区可以切换文件管理范围。</p>
+      {switchableWorkspaces.length > 0 && (
+        <section className="workspace-switcher-section">
+          <div className="workspace-section-head">
+            <div>
+              <h2>其他工作区</h2>
+              <p>点击工作区可以切换文件管理范围。</p>
+            </div>
           </div>
-        </div>
-        <div className="project-directory-list compact">
-          {workspaces.map((workspace) => {
-            const workspaceTaskCount = tasks.filter((task) => task.workspaceId === workspace.id && !task.archivedAt).length
-            return (
-              <article
-                className={workspace.id === selectedWorkspace?.id ? 'project-directory-card active' : 'project-directory-card'}
-                key={workspace.id}
-                onClick={() => onSelect(workspace)}
-              >
-                <Folder size={18} />
-                <div>
-                  <strong>{workspace.name}</strong>
-                  <span>{workspaceTaskCount} 个会话</span>
-                </div>
-                <div className="project-card-actions">
-                  <button className="settings-link-button" onClick={(event) => {
-                    event.stopPropagation()
-                    onReveal(workspace)
-                  }}>打开目录</button>
-                </div>
-              </article>
-            )
-          })}
-        </div>
-      </section>
+          <div className="project-directory-list compact">
+            {switchableWorkspaces.map((workspace) => {
+              const workspaceTaskCount = tasks.filter((task) => task.workspaceId === workspace.id && !task.archivedAt).length
+              return (
+                <article
+                  className="project-directory-card"
+                  key={workspace.id}
+                  onClick={() => onSelect(workspace)}
+                >
+                  <Folder size={18} />
+                  <div>
+                    <strong>{workspace.name}</strong>
+                    <span>{workspaceTaskCount} 个会话</span>
+                  </div>
+                  <div className="project-card-actions">
+                    <button className="settings-link-button" onClick={(event) => {
+                      event.stopPropagation()
+                      onReveal(workspace)
+                    }}>打开目录</button>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </section>
+      )}
     </section>
   )
 }
@@ -5260,7 +5399,11 @@ function SidebarWorkspaceNode({
   onOpenTask,
   onArchiveTask,
   onDeleteTask,
-  onReveal
+  onReveal,
+  onRename,
+  onReauthorize,
+  onRemove,
+  updating
 }: {
   workspace: Workspace
   tasks: Task[]
@@ -5271,6 +5414,10 @@ function SidebarWorkspaceNode({
   onArchiveTask: (task: Task) => void
   onDeleteTask: (task: Task) => void
   onReveal: () => void
+  onRename: () => void
+  onReauthorize: () => void
+  onRemove: () => void
+  updating: boolean
 }) {
   const runningCount = tasks.filter((task) => task.status === 'running').length
 
@@ -5286,6 +5433,15 @@ function SidebarWorkspaceNode({
         </button>
         <button type="button" className="workspace-tree-action" title="在 Finder 中打开" onClick={onReveal}>
           <FolderOpen size={13} />
+        </button>
+        <button type="button" className="workspace-tree-action" title="重命名工作区" onClick={onRename}>
+          <Pencil size={12} />
+        </button>
+        <button type="button" className="workspace-tree-action" title="重新选择授权文件夹" onClick={onReauthorize} disabled={updating}>
+          {updating ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />}
+        </button>
+        <button type="button" className="workspace-tree-action danger" title="移除工作区记录" onClick={onRemove} disabled={workspace.id === 'default'}>
+          <Trash2 size={12} />
         </button>
       </div>
       <div className="workspace-session-list">
@@ -6297,6 +6453,120 @@ function WorkspaceFiles({
       ))}
     </div>
   )
+}
+
+function WorkspaceBrowser({
+  tree,
+  fallbackFiles,
+  currentPath,
+  query,
+  onQueryChange,
+  onOpenFolder,
+  onUseFile,
+  onPreviewFile,
+  onRevealFile
+}: {
+  tree: WorkspaceTree | null
+  fallbackFiles: WorkspaceFile[]
+  currentPath: string
+  query: string
+  onQueryChange: (query: string) => void
+  onOpenFolder: (path: string) => void
+  onUseFile: (file: WorkspaceFile) => void
+  onPreviewFile: (file: WorkspaceFile) => void
+  onRevealFile: (file: WorkspaceFile) => void
+}) {
+  const entries: WorkspaceTreeEntry[] = tree?.entries ?? fallbackFiles.map((file) => ({ ...file, kind: 'file' as const }))
+  const keyword = query.trim().toLowerCase()
+  const visibleEntries = keyword
+    ? entries.filter((entry) => `${entry.name} ${entry.relativePath} ${entry.type}`.toLowerCase().includes(keyword))
+    : entries
+
+  return (
+    <div className="workspace-browser">
+      <div className="workspace-browser-toolbar">
+        <div className="workspace-breadcrumbs">
+          {(tree?.breadcrumbs ?? [{ name: currentPath ? '当前目录' : '根目录', path: currentPath }]).map((crumb, index, items) => (
+            <button
+              type="button"
+              key={`${crumb.path}-${index}`}
+              className={index === items.length - 1 ? 'active' : ''}
+              onClick={() => onOpenFolder(crumb.path)}
+            >
+              {index === 0 ? <Folder size={13} /> : null}
+              {crumb.name}
+            </button>
+          ))}
+        </div>
+        <label className="workspace-file-search">
+          <Search size={14} />
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索当前目录" />
+        </label>
+      </div>
+
+      {visibleEntries.length ? (
+        <div className="workspace-browser-list">
+          {visibleEntries.map((entry) => {
+            const file = workspaceEntryToFile(entry)
+            const isDirectory = entry.kind === 'directory'
+            return (
+              <div className={`workspace-browser-row ${entry.kind}`} key={`${entry.kind}:${entry.relativePath}`} title={entry.relativePath}>
+                <button
+                  type="button"
+                  className="workspace-browser-main"
+                  onClick={() => isDirectory ? onOpenFolder(entry.relativePath) : onPreviewFile(file)}
+                >
+                  {isDirectory ? <Folder size={17} /> : <FileText size={17} />}
+                  <span>
+                    <strong>{entry.name}</strong>
+                    <em>{isDirectory ? '文件夹' : `${entry.type || 'file'} · ${formatBytes(entry.size)}`} · {formatTime(entry.modifiedAt)}</em>
+                  </span>
+                </button>
+                {isDirectory ? (
+                  <>
+                    <button type="button" title="进入文件夹" onClick={() => onOpenFolder(entry.relativePath)}>
+                      <ChevronDown size={14} />
+                    </button>
+                    <button type="button" title="在 Finder 中显示" onClick={() => onRevealFile(file)}>
+                      <FolderOpen size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" title="作为上下文发送给 Hermes" onClick={() => onUseFile(file)}>
+                      <Plus size={14} />
+                    </button>
+                    <button type="button" title="预览文本文件" onClick={() => onPreviewFile(file)}>
+                      <FileText size={14} />
+                    </button>
+                    <button type="button" title="在 Finder 中显示" onClick={() => onRevealFile(file)}>
+                      <FolderOpen size={14} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <EmptyWorkspaceBlock
+          title={query.trim() ? '没有匹配文件' : '这个目录暂无文件'}
+          detail={query.trim() ? '换一个关键词，或回到根目录继续查找。' : '上传文件，或在 Finder 中放入资料后刷新页面。'}
+        />
+      )}
+    </div>
+  )
+}
+
+function workspaceEntryToFile(entry: WorkspaceTreeEntry): WorkspaceFile {
+  return {
+    name: entry.name,
+    relativePath: entry.relativePath,
+    path: entry.path,
+    type: entry.type,
+    size: entry.size,
+    modifiedAt: entry.modifiedAt
+  }
 }
 
 function latestUserMessageId(task?: Task) {

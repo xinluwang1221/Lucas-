@@ -663,6 +663,27 @@ app.get('/api/workspaces/:workspaceId/files', (req, res) => {
   res.json(listWorkspaceFiles(workspace.path))
 })
 
+app.get('/api/workspaces/:workspaceId/tree', (req, res) => {
+  const workspace = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
+  const relativePath = normalizeRelativePath(String(req.query.path ?? ''))
+  if (!workspace || !fs.existsSync(workspace.path)) {
+    res.status(404).json({ error: 'workspace not found' })
+    return
+  }
+
+  try {
+    const targetPath = ensureInsideWorkspace(path.join(workspace.path, relativePath), workspace.path)
+    if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isDirectory()) {
+      res.status(404).json({ error: 'directory not found' })
+      return
+    }
+
+    res.json(listWorkspaceDirectory(workspace.id, workspace.path, relativePath, targetPath))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
 app.get('/api/workspaces/:workspaceId/files/preview', (req, res) => {
   const workspace = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
   const relativePath = String(req.query.path ?? '')
@@ -707,6 +728,72 @@ app.post('/api/workspaces', (req, res) => {
     state.workspaces.push(workspace)
   })
   res.status(201).json(workspace)
+})
+
+app.patch('/api/workspaces/:workspaceId', (req, res) => {
+  const { name, path: workspacePath } = req.body as { name?: string; path?: string }
+  let updated = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
+  if (!updated) {
+    res.status(404).json({ error: 'workspace not found' })
+    return
+  }
+
+  const nextName = typeof name === 'string' ? name.trim() : undefined
+  const nextPath = typeof workspacePath === 'string' && workspacePath.trim()
+    ? path.resolve(workspacePath.trim())
+    : undefined
+
+  if (!nextName && !nextPath) {
+    res.status(400).json({ error: 'name or path is required' })
+    return
+  }
+
+  if (nextPath && (!fs.existsSync(nextPath) || !fs.statSync(nextPath).isDirectory())) {
+    res.status(400).json({ error: 'workspace path must be an existing directory' })
+    return
+  }
+
+  store.update((state) => {
+    const workspace = state.workspaces.find((item) => item.id === req.params.workspaceId)
+    if (!workspace) return
+    if (nextName) workspace.name = nextName
+    if (nextPath) workspace.path = nextPath
+    updated = workspace
+  })
+  res.json(updated)
+})
+
+app.delete('/api/workspaces/:workspaceId', (req, res) => {
+  const workspaceId = req.params.workspaceId
+  if (workspaceId === 'default') {
+    res.status(400).json({ error: 'default workspace cannot be removed' })
+    return
+  }
+
+  const state = store.snapshot
+  const workspace = state.workspaces.find((item) => item.id === workspaceId)
+  if (!workspace) {
+    res.status(404).json({ error: 'workspace not found' })
+    return
+  }
+
+  const taskIds = state.tasks.filter((task) => task.workspaceId === workspaceId).map((task) => task.id)
+  for (const taskId of taskIds) {
+    const child = runningTasks.get(taskId)
+    if (child) {
+      child.kill('SIGTERM')
+      runningTasks.delete(taskId)
+    }
+  }
+
+  store.update((nextState) => {
+    nextState.workspaces = nextState.workspaces.filter((item) => item.id !== workspaceId)
+    nextState.tasks = nextState.tasks.filter((task) => task.workspaceId !== workspaceId)
+    nextState.messages = nextState.messages.filter((message) => !taskIds.includes(message.taskId))
+    nextState.artifacts = nextState.artifacts.filter((artifact) => artifact.workspaceId !== workspaceId)
+  })
+
+  res.json({ ok: true, removedTaskCount: taskIds.length })
 })
 
 app.get('/api/tasks', (_req, res) => {
@@ -2201,6 +2288,55 @@ function normalizeHermesDate(value: unknown) {
   const text = String(value)
   const parsed = new Date(text.endsWith('Z') || /[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`)
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined
+}
+
+function normalizeRelativePath(value: string) {
+  const normalized = value.replace(/\\/g, '/').replace(/^\/+/, '').trim()
+  if (!normalized || normalized === '.') return ''
+  return normalized
+}
+
+function listWorkspaceDirectory(workspaceId: string, rootPath: string, relativePath: string, targetPath: string) {
+  const ignored = new Set(['node_modules', '.git', '.venv', '__pycache__', '.DS_Store', '.gitkeep'])
+  const entries = fs
+    .readdirSync(targetPath, { withFileTypes: true })
+    .filter((entry) => !ignored.has(entry.name) && !entry.isSymbolicLink())
+    .map((entry) => {
+      const fullPath = path.join(targetPath, entry.name)
+      const stat = fs.statSync(fullPath)
+      const entryRelativePath = path.relative(rootPath, fullPath)
+      const isDirectory = entry.isDirectory()
+      return {
+        name: entry.name,
+        relativePath: entryRelativePath,
+        path: fullPath,
+        kind: isDirectory ? 'directory' : 'file',
+        type: isDirectory ? 'folder' : path.extname(entry.name).replace('.', '') || 'file',
+        size: isDirectory ? 0 : stat.size,
+        modifiedAt: stat.mtime.toISOString()
+      }
+    })
+    .sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name, 'zh-Hans-CN')
+    })
+
+  const parts = relativePath ? relativePath.split('/').filter(Boolean) : []
+  const breadcrumbs = [{ name: '根目录', path: '' }]
+  for (let index = 0; index < parts.length; index += 1) {
+    breadcrumbs.push({
+      name: parts[index],
+      path: parts.slice(0, index + 1).join('/')
+    })
+  }
+
+  return {
+    workspaceId,
+    path: relativePath,
+    parentPath: parts.length > 0 ? parts.slice(0, -1).join('/') : '',
+    breadcrumbs,
+    entries
+  }
 }
 
 function pickDirectoryWithFinder(): Promise<{ name: string; path: string }> {
