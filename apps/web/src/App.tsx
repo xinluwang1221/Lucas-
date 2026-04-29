@@ -67,6 +67,7 @@ import {
   getHermesMcpRecommendations,
   getHermesRuntime,
   getHermesSessions,
+  getHermesUpdateStatus,
   getHermesMcpServeStatus,
   HermesMcpConfig,
   HermesMcpInstallResult,
@@ -78,6 +79,7 @@ import {
   HermesModelCatalogProvider,
   HermesModelOverview,
   HermesSessionSummary,
+  HermesUpdateStatus,
   getState,
   HermesRuntime,
   installBackgroundServices,
@@ -330,6 +332,9 @@ function App() {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [uploadNotice, setUploadNotice] = useState<string | null>(null)
   const [runtime, setRuntime] = useState<HermesRuntime | null>(null)
+  const [hermesUpdate, setHermesUpdate] = useState<HermesUpdateStatus | null>(null)
+  const [hermesUpdateLoading, setHermesUpdateLoading] = useState(false)
+  const [hermesUpdateError, setHermesUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
@@ -693,6 +698,7 @@ function App() {
 
   useEffect(() => {
     void refreshRuntime()
+    void refreshHermesUpdateStatus()
     void refreshHermesSessions()
     void refreshHermesMcp()
     void refreshMcpServeStatus()
@@ -1275,6 +1281,18 @@ function App() {
       setRuntime(await getHermesRuntime())
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
+
+  async function refreshHermesUpdateStatus() {
+    setHermesUpdateLoading(true)
+    setHermesUpdateError(null)
+    try {
+      setHermesUpdate(await getHermesUpdateStatus())
+    } catch (cause) {
+      setHermesUpdateError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setHermesUpdateLoading(false)
     }
   }
 
@@ -2076,6 +2094,9 @@ function App() {
             theme={theme}
             privacyMode={privacyMode}
             runtime={runtime}
+            hermesUpdate={hermesUpdate}
+            hermesUpdateLoading={hermesUpdateLoading}
+            hermesUpdateError={hermesUpdateError}
             selectedModel={selectedModel}
             models={composerModels}
             modelCatalog={modelCatalog}
@@ -2106,6 +2127,7 @@ function App() {
             workspaceCount={state.workspaces.length}
             onTabChange={setSettingsTab}
             onClose={() => setSettingsOpen(false)}
+            onRefreshHermesUpdate={() => void refreshHermesUpdateStatus()}
             onLanguageChange={setLanguage}
             onThemeChange={setTheme}
             onPrivacyChange={setPrivacyMode}
@@ -3021,6 +3043,9 @@ function SettingsModal({
   theme,
   privacyMode,
   runtime,
+  hermesUpdate,
+  hermesUpdateLoading,
+  hermesUpdateError,
   selectedModel,
   models,
   modelCatalog,
@@ -3051,6 +3076,7 @@ function SettingsModal({
   workspaceCount,
   onTabChange,
   onClose,
+  onRefreshHermesUpdate,
   onLanguageChange,
   onThemeChange,
   onPrivacyChange,
@@ -3082,6 +3108,9 @@ function SettingsModal({
   theme: string
   privacyMode: boolean
   runtime: HermesRuntime | null
+  hermesUpdate: HermesUpdateStatus | null
+  hermesUpdateLoading: boolean
+  hermesUpdateError: string | null
   selectedModel: ModelOption
   models: ModelOption[]
   modelCatalog: HermesModelCatalogProvider[]
@@ -3112,6 +3141,7 @@ function SettingsModal({
   workspaceCount: number
   onTabChange: (tab: SettingsTab) => void
   onClose: () => void
+  onRefreshHermesUpdate: () => void
   onLanguageChange: (value: string) => void
   onThemeChange: (value: string) => void
   onPrivacyChange: (value: boolean) => void
@@ -3795,6 +3825,14 @@ function SettingsModal({
               ['定位', 'Hermes 本机前端'],
               ['版本', '0.1.0']
             ]} />
+            <SettingsBlock title="Hermes 后台更新">
+              <HermesUpdatePanel
+                status={hermesUpdate}
+                loading={hermesUpdateLoading}
+                error={hermesUpdateError}
+                onRefresh={onRefreshHermesUpdate}
+              />
+            </SettingsBlock>
           </SettingsSection>
         )}
       </section>
@@ -6707,6 +6745,115 @@ function RuntimePanel({ runtime }: { runtime: HermesRuntime | null }) {
       </details>
 
       <p className="runtime-updated">更新于 {formatTime(runtime.updatedAt)}</p>
+    </div>
+  )
+}
+
+function HermesUpdatePanel({
+  status,
+  loading,
+  error,
+  onRefresh
+}: {
+  status: HermesUpdateStatus | null
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+}) {
+  if (!status && loading) {
+    return (
+      <div className="hermes-update-empty">
+        <Loader2 size={16} className="spin" />
+        正在检查 Hermes 和 GitHub 版本...
+      </div>
+    )
+  }
+
+  if (!status) {
+    return (
+      <div className="hermes-update-empty">
+        <span>{error || '还没有读取 Hermes 更新状态。'}</span>
+        <button className="settings-add-button" onClick={onRefresh}>
+          <RefreshCw size={14} />
+          检查更新
+        </button>
+      </div>
+    )
+  }
+
+  const statusClass = `hermes-update-banner ${status.compatibility.status}`
+  const statusLabel = {
+    verified: '可继续使用',
+    'needs-review': '升级前需复测',
+    blocked: '暂不建议升级',
+    unknown: '需要检查'
+  }[status.compatibility.status]
+
+  return (
+    <div className="hermes-update-panel">
+      <div className={statusClass}>
+        <div>
+          <span>兼容性判断</span>
+          <strong>{status.compatibility.title}</strong>
+          <p>{status.compatibility.detail}</p>
+        </div>
+        <em>{statusLabel}</em>
+      </div>
+
+      <div className="hermes-update-actions">
+        <button className="settings-add-button" onClick={onRefresh} disabled={loading}>
+          {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+          检查 GitHub 更新
+        </button>
+        <a className="settings-link-button" href={status.repoUrl} target="_blank" rel="noreferrer">
+          <ExternalLink size={13} />
+          打开 Hermes GitHub
+        </a>
+      </div>
+
+      {error && <div className="settings-error-line">{error}</div>}
+
+      <div className="hermes-update-grid">
+        <div>
+          <span>本机 Hermes</span>
+          <strong>{status.currentTag || '未知'}</strong>
+          <small title={status.currentVersion}>{status.currentVersion}</small>
+        </div>
+        <div>
+          <span>GitHub 最新</span>
+          <strong>{status.latestTag || '未读取到'}</strong>
+          <small>{status.updateAvailable ? '有可用更新' : '当前无需更新'}</small>
+        </div>
+        <div>
+          <span>Cowork 验证基线</span>
+          <strong>{status.verifiedCoworkTag}</strong>
+          <small>超过该版本需要复测</small>
+        </div>
+        <div>
+          <span>本机仓库</span>
+          <strong>{status.branch || '未知分支'}</strong>
+          <small>{status.workingTreeDirty ? '有未提交改动' : status.commitsBehind ? `落后 ${status.commitsBehind} 个提交` : '工作树干净'}</small>
+        </div>
+      </div>
+
+      <div className="hermes-update-checks">
+        {status.checks.map((check) => (
+          <div className={check.ok ? 'ok' : 'failed'} key={check.id}>
+            {check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+            <div>
+              <strong>{check.label}</strong>
+              <span title={check.detail}>{check.detail}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hermes-update-notes">
+        <strong>升级前建议</strong>
+        <ul>
+          {status.compatibility.notes.map((note) => <li key={note}>{note}</li>)}
+        </ul>
+      </div>
     </div>
   )
 }

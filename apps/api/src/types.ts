@@ -349,3 +349,37 @@ export type BackgroundServiceStatus = {
   }
   logsDir: string
 }
+
+export type HermesUpdateStatus = {
+  repoPath: string
+  repoUrl: string
+  remoteUrl: string
+  branch: string
+  currentVersion: string
+  currentTag: string
+  currentCommit: string
+  latestTag?: string
+  latestCommit?: string
+  commitsBehind?: number
+  updateAvailable: boolean
+  workingTreeDirty: boolean
+  verifiedCoworkTag: string
+  compatibility: {
+    status: 'verified' | 'needs-review' | 'blocked' | 'unknown'
+    title: string
+    detail: string
+    notes: string[]
+  }
+  checks: Array<{
+    id: string
+    label: string
+    ok: boolean
+    detail: string
+  }>
+  commands: {
+    check: string
+    update: string
+    rollback: string
+  }
+  updatedAt: string
+}

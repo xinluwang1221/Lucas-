@@ -4376,6 +4376,189 @@ summary:focus-visible {
   line-height: 1.45;
 }
 
+.hermes-update-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.hermes-update-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.hermes-update-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: #eef5ef;
+  border: 1px solid #b8d4bd;
+  border-radius: 8px;
+}
+
+.hermes-update-banner.needs-review {
+  background: #fff6e6;
+  border-color: #e6c57e;
+}
+
+.hermes-update-banner.blocked {
+  background: #fff0f1;
+  border-color: #ebb7bd;
+}
+
+.hermes-update-banner span,
+.hermes-update-grid span {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.hermes-update-banner strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.hermes-update-banner p {
+  max-width: 720px;
+  margin: 7px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hermes-update-banner em {
+  padding: 5px 9px;
+  color: #245f48;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(36, 95, 72, 0.18);
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hermes-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hermes-update-actions .settings-add-button {
+  margin-bottom: 0;
+}
+
+.hermes-update-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hermes-update-grid div {
+  min-width: 0;
+  padding: 10px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-update-grid strong,
+.hermes-update-grid small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hermes-update-grid strong {
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.hermes-update-grid small {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.hermes-update-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hermes-update-checks > div {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-update-checks .ok svg {
+  color: var(--moss);
+}
+
+.hermes-update-checks .failed svg {
+  color: #b9414e;
+}
+
+.hermes-update-checks strong,
+.hermes-update-checks span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hermes-update-checks strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.hermes-update-checks span {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.hermes-update-notes {
+  padding: 12px;
+  background: #f6f4ef;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-update-notes strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.hermes-update-notes ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -6871,6 +7054,8 @@ summary:focus-visible {
   .model-health-grid,
   .model-ability-grid,
   .model-impact-grid,
+  .hermes-update-grid,
+  .hermes-update-checks,
   .dispatch-grid,
   .schedule-grid,
   .workspace-boundary-panel,
@@ -6950,6 +7135,8 @@ summary:focus-visible {
   .model-impact-grid,
   .model-scenario-grid,
   .model-credential-grid,
+  .hermes-update-grid,
+  .hermes-update-checks,
   .dispatch-grid,
   .schedule-grid,
   .workspace-boundary-panel,

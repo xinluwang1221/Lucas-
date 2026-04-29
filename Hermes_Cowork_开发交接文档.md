@@ -272,6 +272,13 @@ HC_EVENT\t
 - 维护 Cowork 本地模型选项和当前选中模型。
 - `Hermes 默认模型 · <当前模型>` 表示不传 `--model`，完全跟随 Hermes 当前 `config.yaml` 与路由。
 
+`apps/api/src/hermes_update.ts`
+
+- Hermes 是外部开源 runtime，Cowork 不直接复制或改写 Hermes 源码；Cowork 后端负责做 Adapter 和治理层。
+- 读取本机 Hermes 版本、当前 tag/commit、GitHub 最新 tag、落后提交数、工作树是否有未提交改动。
+- 维护 Cowork 已验证 Hermes 基线 tag，给前端返回“可继续使用 / 升级前需复测 / 暂不建议升级”的兼容性判断。
+- 更新区域只做检测和升级前守卫，不自动运行 `hermes update`；真正升级前必须先备份 Hermes 配置并跑模型、MCP、session、流式事件的 smoke test。
+
 `apps/api/src/mcp.ts`
 
 - 只读解析 Hermes 的 `/Users/lucas/.hermes/config.yaml`。
@@ -322,6 +329,7 @@ HC_EVENT\t
 - 右侧任务上下文：顶部“任务总览”展示状态、模型、工作区、运行时长、Hermes session、思考/工具/文件/产物计数和最近活动；新增 Hermes Session 卡，对齐 Cowork 任务与 Hermes 原生 session 文件；“任务进度”保留五阶段待办；“最近操作”展示最近的工具、搜索、文件和结果事件；参考信息按当前任务展示预载技能、联网/工具来源、当前工作区文件。
 - 左下角账户菜单：点击 Lucas 弹出账户菜单，可进入设置弹窗。
 - 设置弹窗：包含账号、通用、MCP、模型、对话流、外部应用授权、云端运行环境、命令、规则、关于等分类；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
+- 关于页新增 Hermes 后台更新区：读取本机 Hermes 版本、GitHub 最新 tag、Cowork 已验证基线、工作树状态和基础检查结果，先做升级风险判断，不直接自动升级。
 - 设置弹窗已补响应式与内部滚动规则：桌面下固定弹窗高度、面板独立滚动；窄窗口下侧栏折为顶部网格，模型/MCP/定时任务等卡片栅格自动降列，避免内容撑出屏幕。
 - 界面语言规范：Hermes Cowork 的按钮、标题、状态、表头、空状态和说明文案默认使用简体中文；GitHub、MCP、Hermes、OpenAI 等品牌/协议名、配置键、命令行片段和第三方返回内容可保留原文。
 - 输入框键盘操作：`Enter` 发送，`Shift + Enter` 换行；点击“新建任务”和模板卡片后会自动聚焦输入框。
@@ -378,6 +386,7 @@ Hermes 运行时：
 
 ```http
 GET /api/hermes/runtime
+GET /api/hermes/update-status
 GET /api/hermes/mcp
 GET /api/hermes/mcp/marketplace?q=...
 GET /api/hermes/mcp/recommendations
