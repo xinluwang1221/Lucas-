@@ -121,6 +121,15 @@ export type HermesModelCatalogProvider = {
   source: 'hermes'
 }
 
+export type HermesModelCatalogRefreshSource = {
+  provider: string
+  label: string
+  url: string
+  ok: boolean
+  addedModels: string[]
+  message: string
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string

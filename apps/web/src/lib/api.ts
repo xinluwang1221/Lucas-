@@ -137,6 +137,15 @@ export type HermesModelCatalogProvider = {
   source: 'hermes'
 }
 
+export type HermesModelCatalogRefreshSource = {
+  provider: string
+  label: string
+  url: string
+  ok: boolean
+  addedModels: string[]
+  message: string
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string
@@ -156,6 +165,10 @@ export type ModelListResponse = {
   models: ModelOption[]
   hermes: HermesModelOverview
   catalog: HermesModelCatalogProvider[]
+  catalogRefresh?: {
+    sources: HermesModelCatalogRefreshSource[]
+    updatedAt: string
+  }
 }
 
 export type HermesModelConfigureRequest = {
@@ -519,6 +532,12 @@ export async function setHermesMcpServerEnabled(serverId: string, enabled: boole
 
 export async function listModels(): Promise<ModelListResponse> {
   return request('/api/models')
+}
+
+export async function refreshModelCatalog(): Promise<ModelListResponse> {
+  return request('/api/models/catalog/refresh', {
+    method: 'POST'
+  })
 }
 
 export async function selectModel(modelId: string) {

@@ -88,6 +88,7 @@ import {
   previewArtifact,
   previewWorkspaceFile,
   readSkillFile,
+  refreshModelCatalog,
   refreshHermesMcpRecommendationsWithAi,
   removeHermesMcpServer,
   revealArtifact,
@@ -283,11 +284,15 @@ const defaultSettingsPrefs: SettingsPrefs = {
 }
 
 const providerBaseUrlHints: Record<string, string> = {
-  custom: '例如 https://api.example.com/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
   xiaomi: '例如 https://token-plan-cn.xiaomimimo.com/v1',
-  gemini: '通常可留空，Hermes 会使用 provider 默认地址',
-  anthropic: '通常可留空，Hermes 会使用 Anthropic 默认地址'
+  deepseek: '通常可留空，Hermes 会使用 DeepSeek 默认地址',
+  zai: '通常可留空，Hermes 会使用智谱 GLM 默认地址',
+  'kimi-coding': '通常可留空，Hermes 会使用 Moonshot 默认地址',
+  'kimi-coding-cn': '通常可留空，Hermes 会使用 Moonshot 国内默认地址',
+  minimax: '通常可留空，Hermes 会使用 MiniMax 默认地址',
+  'minimax-cn': '通常可留空，Hermes 会使用 MiniMax 国内默认地址',
+  alibaba: '通常可留空，Hermes 会使用阿里云百炼默认地址',
+  'qwen-oauth': '通常可留空，Hermes 会复用本机 Qwen 登录'
 }
 
 function App() {
@@ -359,6 +364,7 @@ function App() {
   const [newModelApiKey, setNewModelApiKey] = useState('')
   const [newModelApiMode, setNewModelApiMode] = useState('chat_completions')
   const [modelPanelSaving, setModelPanelSaving] = useState(false)
+  const [modelCatalogRefreshing, setModelCatalogRefreshing] = useState(false)
   const [modelNotice, setModelNotice] = useState<string | null>(null)
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
@@ -395,6 +401,27 @@ function App() {
     setSelectedModelId(nextModels.selectedModelId)
     setHermesModel(nextModels.hermes)
     setModelCatalog(nextModels.catalog ?? [])
+  }
+
+  async function handleRefreshModelCatalog() {
+    setModelCatalogRefreshing(true)
+    setHermesModelError(null)
+    setModelNotice(null)
+    try {
+      const response = await refreshModelCatalog()
+      setModels(response.models)
+      setSelectedModelId(response.selectedModelId)
+      setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
+      const sourceSummary = response.catalogRefresh?.sources
+        ?.map((source) => `${source.label}${source.ok ? `：${source.addedModels.length} 个模型` : '：刷新失败'}`)
+        .join('；')
+      setModelNotice(sourceSummary ? `模型目录已刷新。${sourceSummary}` : '模型目录已刷新')
+    } catch (cause) {
+      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setModelCatalogRefreshing(false)
+    }
   }
 
   const refreshHermesMcp = async () => {
@@ -1793,7 +1820,14 @@ function App() {
         <div className="modal-backdrop model-backdrop">
           <form className="modal model-config-modal" onSubmit={handleAddModel}>
             <h2>配置模型服务</h2>
-            <p>这里直接写入 Hermes 本机配置。API Key 只保存在你的 Mac 上，界面不会回显。</p>
+            <p>选择中国模型服务商，填入 Key 或 Plan Key 后直接写入 Hermes 本机配置。API Key 只保存在你的 Mac 上，界面不会回显。</p>
+            <div className="model-catalog-refresh-line">
+              <span>模型列表来自 Hermes 目录，并可从供应商官网补充新版本。</span>
+              <button type="button" className="settings-add-button" onClick={() => void handleRefreshModelCatalog()} disabled={modelCatalogRefreshing}>
+                {modelCatalogRefreshing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                刷新官网模型
+              </button>
+            </div>
             {modelNotice && <div className="modal-inline-error">{modelNotice}</div>}
             <label>
               服务商
@@ -1809,7 +1843,6 @@ function App() {
                 }}
               >
                 <option value="">选择模型服务商</option>
-                <option value="custom">Custom endpoint</option>
                 {modelCatalog.map((provider) => (
                   <option key={provider.id} value={provider.id}>{provider.label}</option>
                 ))}
@@ -1840,7 +1873,7 @@ function App() {
                     setNewModelId(event.target.value)
                     setNewModelLabel(event.target.value)
                   }}
-                  placeholder="例如 gpt-5.4 或 claude-sonnet-4.5"
+                  placeholder="例如 mimo-v2.5-pro 或 kimi-k2.5"
                 />
               </label>
             )}
@@ -1901,6 +1934,7 @@ function App() {
             hermesModel={hermesModel}
             hermesModelUpdating={hermesModelUpdating}
             hermesModelError={hermesModelError}
+            modelCatalogRefreshing={modelCatalogRefreshing}
             prefs={settingsPrefs}
             hermesMcp={hermesMcp}
             mcpError={mcpError}
@@ -1943,6 +1977,7 @@ function App() {
             onSetHermesDefaultModel={(modelId, provider) => void handleSetHermesDefaultModel(modelId, provider)}
             onSetHermesFallbackProviders={(providers) => void handleSetHermesFallbackProviders(providers)}
             onRefreshModels={() => void refreshModels()}
+            onRefreshModelCatalog={() => void handleRefreshModelCatalog()}
             onAddRule={handleAddSettingsRule}
             onOpenAddModel={() => {
               setModelNotice(null)
@@ -2841,6 +2876,7 @@ function SettingsModal({
   hermesModel,
   hermesModelUpdating,
   hermesModelError,
+  modelCatalogRefreshing,
   prefs,
   hermesMcp,
   mcpError,
@@ -2883,6 +2919,7 @@ function SettingsModal({
   onSetHermesDefaultModel,
   onSetHermesFallbackProviders,
   onRefreshModels,
+  onRefreshModelCatalog,
   onAddRule,
   onOpenAddModel
 }: {
@@ -2898,6 +2935,7 @@ function SettingsModal({
   hermesModel: HermesModelOverview | null
   hermesModelUpdating: string | null
   hermesModelError: string | null
+  modelCatalogRefreshing: boolean
   prefs: SettingsPrefs
   hermesMcp: HermesMcpConfig | null
   mcpError: string | null
@@ -2940,6 +2978,7 @@ function SettingsModal({
   onSetHermesDefaultModel: (modelId: string, provider?: string) => void
   onSetHermesFallbackProviders: (providers: string[]) => void
   onRefreshModels: () => void
+  onRefreshModelCatalog: () => void
   onAddRule: (rule: string) => void
   onOpenAddModel: () => void
 }) {
@@ -3222,9 +3261,15 @@ function SettingsModal({
                   <strong>{hermesModel?.defaultModel || '未配置'}</strong>
                   <p>{hermesModel?.providerLabel || 'Hermes 自动选择'} · {hermesModel?.apiMode || '自动 API 模式'}</p>
                 </div>
-                <button className="icon-button" title="刷新模型状态" onClick={onRefreshModels}>
-                  <RefreshCw size={14} />
-                </button>
+                <div className="model-summary-actions">
+                  <button className="settings-add-button" onClick={onRefreshModelCatalog} disabled={modelCatalogRefreshing}>
+                    {modelCatalogRefreshing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                    刷新官网模型
+                  </button>
+                  <button className="icon-button" title="刷新模型状态" onClick={onRefreshModels}>
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
               </div>
               {hermesModelError && <div className="settings-error-line">{hermesModelError}</div>}
               <div className="model-ability-grid">
@@ -3271,7 +3316,7 @@ function SettingsModal({
               <p className="settings-section-copy">这里会写回 Hermes `config.yaml`。适合你决定以后所有 Hermes 新任务都使用某个模型。</p>
               <div className="settings-info-banner">
                 <Info size={15} />
-                模型候选来自 Hermes 内置目录，当前读取到 {modelCatalog.length || '0'} 个 Hermes provider；列表会随 Hermes 升级更新。
+                供应商只展示中国大模型服务。模型候选来自 Hermes 内置目录，并可点击“刷新官网模型”从公开官网补充新版本；当前读取到 {modelCatalog.length || '0'} 个供应商。
               </div>
               <div className="model-provider-list compact">
                 {modelProvidersForView.slice(0, 5).map((provider) => (

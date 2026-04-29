@@ -5839,6 +5839,18 @@ summary:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+.model-summary-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.model-summary-actions .settings-add-button {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
 .model-user-summary span,
 .model-user-summary p,
 .model-ability-card span,
@@ -6552,6 +6564,26 @@ summary:focus-visible {
 
 .model-config-modal {
   width: min(620px, calc(100vw - 48px));
+}
+
+.model-catalog-refresh-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  color: var(--ink-soft);
+  background: #f4f5f2;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-catalog-refresh-line .settings-add-button {
+  margin-bottom: 0;
+  white-space: nowrap;
 }
 
 .modal-inline-error {

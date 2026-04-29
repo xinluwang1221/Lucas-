@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
-import { configureHermesModel, listModelOptions, normalizeModelId, readHermesModelCatalog, readHermesModelOverview, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
+import { configureHermesModel, listModelOptions, normalizeModelId, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
@@ -292,6 +292,25 @@ app.get('/api/models', (_req, res) => {
     hermes: readHermesModelOverview(settings),
     catalog: readHermesModelCatalog()
   })
+})
+
+app.post('/api/models/catalog/refresh', async (_req, res) => {
+  try {
+    const refreshResult = await refreshHermesModelCatalog()
+    const settings = store.snapshot.modelSettings
+    res.json({
+      selectedModelId: settings.selectedModelId,
+      models: listModelOptions(settings),
+      hermes: readHermesModelOverview(settings),
+      catalog: refreshResult.catalog,
+      catalogRefresh: {
+        sources: refreshResult.sources,
+        updatedAt: refreshResult.updatedAt
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.post('/api/models/select', (req, res) => {

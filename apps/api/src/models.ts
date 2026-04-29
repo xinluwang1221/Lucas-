@@ -1,14 +1,27 @@
 import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { HermesModelCatalogProvider, HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
+import path from 'node:path'
+import { dataDir, hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
+import { HermesModelCatalogProvider, HermesModelCatalogRefreshSource, HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
 
 const hermesConfigPath = '/Users/lucas/.hermes/config.yaml'
 const hermesEnvPath = '/Users/lucas/.hermes/.env'
+const modelCatalogSupplementsPath = path.join(dataDir, 'model-catalog-supplements.json')
+const chineseModelProviderIds = new Set([
+  'xiaomi',
+  'deepseek',
+  'zai',
+  'kimi-coding',
+  'kimi-coding-cn',
+  'minimax',
+  'minimax-cn',
+  'alibaba',
+  'qwen-oauth'
+])
 
 const providerModels: Record<string, { label: string; models: string[] }> = {
   custom: { label: 'Custom endpoint', models: [] },
-  xiaomi: { label: 'Xiaomi MiMo', models: ['mimo-v2-pro', 'mimo-v2.5-pro', 'mimo-v2-omni', 'mimo-v2-flash'] },
+  xiaomi: { label: 'Xiaomi MiMo', models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'] },
   minimax: { label: 'MiniMax', models: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'] },
   anthropic: { label: 'Anthropic', models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'] },
   'openai-codex': { label: 'OpenAI Codex', models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.3-codex-spark'] },
@@ -19,6 +32,7 @@ const providerModels: Record<string, { label: string; models: string[] }> = {
   gemini: { label: 'Google Gemini', models: ['gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-pro', 'gemini-2.5-flash'] },
   xai: { label: 'xAI', models: ['grok-4.20-0309-reasoning', 'grok-4-fast-reasoning', 'grok-code-fast-1'] },
   deepseek: { label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  'qwen-oauth': { label: 'Qwen OAuth', models: ['qwen3-coder-plus', 'qwen3.5-plus', 'qwen3-coder-next'] },
   qwen: { label: 'Qwen OAuth', models: ['qwen3-coder-plus', 'qwen3.5-plus', 'qwen3-coder-next'] },
   copilot: { label: 'GitHub Copilot', models: ['gpt-5.4', 'gpt-5.4-mini', 'claude-sonnet-4.6', 'gemini-2.5-pro'] }
 }
@@ -139,34 +153,62 @@ print(json.dumps(items, ensure_ascii=False))
   }
 }
 
+export async function refreshHermesModelCatalog() {
+  const sources = await fetchOfficialModelCatalogSupplements()
+  const savedSupplements = readSavedModelSupplements()
+  let changed = false
+
+  for (const source of sources) {
+    if (!source.ok || source.addedModels.length === 0) continue
+    const current = savedSupplements[source.provider] ?? []
+    const next = uniqueStrings([...source.addedModels, ...current])
+    if (next.length !== current.length) {
+      savedSupplements[source.provider] = next
+      changed = true
+    }
+  }
+
+  if (changed) writeSavedModelSupplements(savedSupplements)
+  catalogCache = null
+
+  return {
+    catalog: readHermesModelCatalog(),
+    sources,
+    updatedAt: new Date().toISOString()
+  }
+}
+
 function mergeHermesCatalogSupplements(catalog: HermesModelCatalogProvider[]) {
   const providers = new Map<string, HermesModelCatalogProvider>()
+  const savedSupplements = readSavedModelSupplements()
 
   for (const provider of catalog) {
     const id = normalizeProviderId(provider.id)
     const supplement = providerModels[id]
+    const savedModels = savedSupplements[id] ?? []
     providers.set(id, {
       ...provider,
       id,
       label: provider.label || supplement?.label || id,
       description: provider.description || supplement?.label || provider.label || id,
-      models: uniqueStrings([...(supplement?.models ?? []), ...(provider.models ?? [])]),
+      models: uniqueStrings([...(supplement?.models ?? []), ...savedModels, ...(provider.models ?? [])]),
       source: provider.source || 'hermes'
     })
   }
 
   for (const [id, preset] of Object.entries(providerModels)) {
     if (providers.has(id)) continue
+    if (id !== 'custom' && !chineseModelProviderIds.has(id)) continue
     providers.set(id, {
       id,
       label: preset.label,
       description: preset.label,
-      models: uniqueStrings(preset.models),
+      models: uniqueStrings([...(savedSupplements[id] ?? []), ...preset.models]),
       source: 'hermes'
     })
   }
 
-  return [...providers.values()]
+  return [...providers.values()].filter((provider) => isChineseModelProvider(provider.id))
 }
 
 export function setHermesDefaultModel(modelId: string, provider?: string) {
@@ -270,7 +312,7 @@ function buildHermesProviders(
     credentialSummary: credentialSummary(currentProvider, credentials) || '当前 Hermes model 配置'
   })
 
-  for (const credential of credentials.filter((item) => item.configured)) {
+  for (const credential of credentials.filter((item) => item.configured && shouldShowModelProvider(item.id, currentProvider))) {
     const preset = hermesProviderPreset(credential.id)
     addProvider({
       id: credential.id,
@@ -298,7 +340,7 @@ function buildHermesProviders(
 
   for (const model of customModelOptions) {
     const providerId = normalizeProviderId(model.provider ?? 'custom')
-    if (!providers.has(providerId)) {
+    if (!providers.has(providerId) && shouldShowModelProvider(providerId, currentProvider)) {
       const preset = hermesProviderPreset(providerId)
       addProvider({
         id: providerId,
@@ -317,6 +359,15 @@ function buildHermesProviders(
     if (a.configured !== b.configured) return a.configured ? -1 : 1
     return a.label.localeCompare(b.label)
   })
+}
+
+function isChineseModelProvider(provider: string) {
+  return chineseModelProviderIds.has(normalizeProviderId(provider))
+}
+
+function shouldShowModelProvider(provider: string, currentProvider = '') {
+  const normalized = normalizeProviderId(provider)
+  return isChineseModelProvider(normalized) || normalized === normalizeProviderId(currentProvider) || normalized.startsWith('custom:')
 }
 
 function parseHermesStatusCredentials(raw: string): HermesModelCredential[] {
@@ -549,6 +600,85 @@ function normalizeCredentialLabel(label: string) {
   if (normalized.includes('qwen')) return 'qwen'
   if (normalized.includes('github') || normalized.includes('copilot')) return 'copilot'
   return normalizeProviderId(label)
+}
+
+async function fetchOfficialModelCatalogSupplements(): Promise<HermesModelCatalogRefreshSource[]> {
+  const sources: HermesModelCatalogRefreshSource[] = []
+  sources.push(await fetchXiaomiOfficialModels())
+  return sources
+}
+
+async function fetchXiaomiOfficialModels(): Promise<HermesModelCatalogRefreshSource> {
+  const url = 'https://mimo.mi.com/'
+  try {
+    const response = await fetchWithTimeout(url, 8000)
+    if (!response.ok) {
+      return {
+        provider: 'xiaomi',
+        label: 'Xiaomi MiMo',
+        url,
+        ok: false,
+        addedModels: [],
+        message: `官网返回 ${response.status}`
+      }
+    }
+    const html = await response.text()
+    const matches = [...html.matchAll(/Xiaomi\s+MiMo-?(V[0-9.]+(?:-(?:Pro|Omni|Flash))?)/gi)]
+    const models = uniqueStrings(matches
+      .map((match) => `mimo-${match[1].toLowerCase()}`)
+      .filter((model) => !model.includes('tts') && !model.includes('asr'))
+    )
+    return {
+      provider: 'xiaomi',
+      label: 'Xiaomi MiMo',
+      url,
+      ok: true,
+      addedModels: models,
+      message: models.length ? `从官网发现 ${models.length} 个模型` : '官网暂未解析到可用于对话的模型'
+    }
+  } catch (error) {
+    return {
+      provider: 'xiaomi',
+      label: 'Xiaomi MiMo',
+      url,
+      ok: false,
+      addedModels: [],
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Hermes-Cowork/0.1 model-catalog-refresh'
+      }
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function readSavedModelSupplements(): Record<string, string[]> {
+  try {
+    const raw = fs.readFileSync(modelCatalogSupplementsPath, 'utf8')
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return Object.fromEntries(Object.entries(parsed).map(([provider, models]) => [
+      normalizeProviderId(provider),
+      Array.isArray(models) ? uniqueStrings(models.map(String)) : []
+    ]))
+  } catch {
+    return {}
+  }
+}
+
+function writeSavedModelSupplements(supplements: Record<string, string[]>) {
+  fs.mkdirSync(dataDir, { recursive: true })
+  fs.writeFileSync(modelCatalogSupplementsPath, `${JSON.stringify(supplements, null, 2)}\n`, 'utf8')
 }
 
 function normalizeProviderId(value: string) {
