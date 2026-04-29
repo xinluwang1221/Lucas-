@@ -389,6 +389,7 @@ Hermes 运行时：
 GET /api/hermes/runtime
 GET /api/hermes/update-status
 POST /api/hermes/compatibility-test
+POST /api/hermes/update
 GET /api/hermes/mcp
 GET /api/hermes/mcp/marketplace?q=...
 GET /api/hermes/mcp/recommendations
@@ -405,6 +406,14 @@ PATCH /api/hermes/mcp/:serverId
 PATCH /api/hermes/mcp/:serverId/tools
 DELETE /api/hermes/mcp/:serverId
 ```
+
+Hermes 自动更新流程：
+
+- `POST /api/hermes/update` 不会直接盲目升级；后端会先读取当前版本状态，并执行一次真实兼容性复测。
+- 前测通过后，Cowork 会把 `~/.hermes/config.yaml`、`~/.hermes/.env`、`~/.hermes/auth.json` 中存在的文件备份到 `data/hermes-update-backups/<update-id>/`。
+- 备份完成后才调用 Hermes 官方命令 `hermes update`。
+- 更新命令成功后，Cowork 会再次执行兼容性复测，覆盖 Hermes 命令、模型配置 Adapter、MCP 配置 Adapter 和真实 Bridge 小任务。
+- 如果前测失败、本机 Hermes 工作树有风险、更新命令失败或后测失败，接口会返回失败阶段和备份目录，不继续隐藏错误。
 
 全量状态：
 

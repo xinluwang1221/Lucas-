@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { runHermesPythonBridge } from './hermes_python.js'
 import { readHermesMcpConfig } from './mcp.js'
 import { listModelOptions, readHermesModelOverview } from './models.js'
 import { dataDir, hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { AppState, HermesCompatibilityTestResult, HermesUpdateStatus } from './types.js'
+import { AppState, HermesAutoUpdateResult, HermesCompatibilityTestResult, HermesUpdateStatus } from './types.js'
 
 const HERMES_REPO_URL = 'https://github.com/NousResearch/hermes-agent'
 const COWORK_TESTED_HERMES_TAG = process.env.COWORK_TESTED_HERMES_TAG || 'v2026.4.13'
@@ -193,6 +194,135 @@ export async function runHermesCompatibilityTest(state: AppState): Promise<Herme
   }
 }
 
+export async function runHermesAutoUpdate(state: AppState): Promise<HermesAutoUpdateResult> {
+  const id = `hermes-update-${Date.now()}`
+  const startedAt = new Date().toISOString()
+  let stage: HermesAutoUpdateResult['stage'] = 'precheck'
+  const command = 'hermes update'
+  const before = await readHermesUpdateStatus()
+  const preTest = await runHermesCompatibilityTest(state)
+  const backupFiles: string[] = []
+
+  const finish = (result: Partial<HermesAutoUpdateResult> & Pick<HermesAutoUpdateResult, 'status' | 'title' | 'detail'>): HermesAutoUpdateResult => ({
+    id,
+    stage,
+    backupFiles,
+    command,
+    stdout: '',
+    stderr: '',
+    exitCode: null,
+    before,
+    preTest,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    ...result
+  })
+
+  if (before.compatibility.status === 'blocked') {
+    return finish({
+      status: 'failed',
+      title: '自动更新已停止',
+      detail: before.compatibility.detail,
+      stage: 'precheck'
+    })
+  }
+
+  if (preTest.status !== 'passed') {
+    return finish({
+      status: 'failed',
+      title: '前置复测未通过',
+      detail: 'Cowork 没有执行 Hermes 更新。请先修复自动复测失败项，再重新触发自动更新。',
+      stage: 'precheck'
+    })
+  }
+
+  if (!before.updateAvailable) {
+    return finish({
+      status: 'passed',
+      title: '当前无需更新',
+      detail: 'Cowork 已完成前置复测，本机 Hermes 没有检测到可用更新，因此没有执行 hermes update。',
+      stage: 'completed'
+    })
+  }
+
+  stage = 'backup'
+  const backupDir = path.join(dataDir, 'hermes-update-backups', id)
+  fs.mkdirSync(backupDir, { recursive: true })
+  for (const filePath of hermesBackupSources()) {
+    const copied = copyIfExists(filePath, backupDir)
+    if (copied) backupFiles.push(copied)
+  }
+  fs.writeFileSync(
+    path.join(backupDir, 'metadata.json'),
+    JSON.stringify({
+      id,
+      createdAt: new Date().toISOString(),
+      hermes: {
+        repoPath: before.repoPath,
+        currentTag: before.currentTag,
+        currentCommit: before.currentCommit,
+        latestTag: before.latestTag,
+        latestCommit: before.latestCommit
+      },
+      cowork: {
+        verifiedHermesTag: before.verifiedCoworkTag
+      },
+      copiedFiles: backupFiles
+    }, null, 2),
+    'utf8'
+  )
+
+  stage = 'update'
+  const updateResult = await runHermesUpdateCommand()
+  const stdout = previewOutput(updateResult.stdout)
+  const stderr = previewOutput(updateResult.stderr)
+
+  if (updateResult.exitCode !== 0) {
+    return finish({
+      status: 'failed',
+      title: 'Hermes 更新命令失败',
+      detail: 'Cowork 已完成配置备份，但 hermes update 没有成功结束。请查看命令输出，必要时用备份目录恢复配置。',
+      stage,
+      backupDir,
+      stdout,
+      stderr,
+      exitCode: updateResult.exitCode
+    })
+  }
+
+  stage = 'postcheck'
+  const after = await readHermesUpdateStatus()
+  const postTest = await runHermesCompatibilityTest(state)
+  if (postTest.status !== 'passed') {
+    return finish({
+      status: 'failed',
+      title: '已更新，但升级后复测未通过',
+      detail: 'Hermes 更新命令已成功返回，但 Cowork 的升级后复测发现异常。请先不要继续升级其他电脑，按失败项修复或回滚。',
+      stage,
+      backupDir,
+      stdout,
+      stderr,
+      exitCode: updateResult.exitCode,
+      after,
+      postTest
+    })
+  }
+
+  stage = 'completed'
+  return finish({
+    status: 'passed',
+    title: 'Hermes 已自动更新并复测通过',
+    detail: 'Cowork 已备份 Hermes 本机配置，执行 hermes update，并在升级后完成模型、MCP 与真实 Bridge 小任务复测。',
+    stage,
+    backupDir,
+    stdout,
+    stderr,
+    exitCode: updateResult.exitCode,
+    after,
+    postTest
+  })
+}
+
 function buildCompatibility(params: {
   currentTag: string
   latestTag?: string
@@ -318,6 +448,21 @@ function runGit(args: string[], timeout = 15000) {
   return runCommand('git', args, hermesAgentDir, timeout)
 }
 
+function runHermesUpdateCommand(timeout = 600000) {
+  return new Promise<{ stdout: string; stderr: string; exitCode: number | null }>((resolve) => {
+    execFile(hermesBin, ['update'], { cwd: hermesAgentDir, timeout }, (error, stdout, stderr) => {
+      const code = error
+        ? Number.isInteger((error as { code?: unknown }).code) ? Number((error as { code?: unknown }).code) : null
+        : 0
+      resolve({
+        stdout: String(stdout).trim(),
+        stderr: error ? `${error.message}\n${stderr}`.trim() : String(stderr).trim(),
+        exitCode: code
+      })
+    })
+  })
+}
+
 function runCommand(command: string, args: string[], cwd: string, timeout: number) {
   return new Promise<string>((resolve, reject) => {
     execFile(command, args, { cwd, timeout }, (error, stdout, stderr) => {
@@ -328,6 +473,27 @@ function runCommand(command: string, args: string[], cwd: string, timeout: numbe
       resolve(String(stdout).trim())
     })
   })
+}
+
+function hermesBackupSources() {
+  const hermesHome = path.join(os.homedir(), '.hermes')
+  return [
+    path.join(hermesHome, 'config.yaml'),
+    path.join(hermesHome, '.env'),
+    path.join(hermesHome, 'auth.json')
+  ]
+}
+
+function copyIfExists(filePath: string, backupDir: string) {
+  if (!fs.existsSync(filePath)) return ''
+  const target = path.join(backupDir, path.basename(filePath))
+  fs.copyFileSync(filePath, target)
+  return target
+}
+
+function previewOutput(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 3000 ? `${trimmed.slice(0, 3000)}\n...` : trimmed
 }
 
 async function settle(promise: Promise<string>): Promise<{ ok: true; value: string } | { ok: false; error: string }> {

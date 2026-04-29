@@ -79,6 +79,7 @@ import {
   HermesModelCatalogProvider,
   HermesModelOverview,
   HermesSessionSummary,
+  HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
   HermesUpdateStatus,
   getState,
@@ -100,6 +101,7 @@ import {
   revealArtifact,
   revealWorkspace,
   revealWorkspaceFile,
+  runHermesAutoUpdate,
   runHermesCompatibilityTest,
   pinTask,
   sendTaskMessage,
@@ -340,6 +342,9 @@ function App() {
   const [hermesCompatibilityResult, setHermesCompatibilityResult] = useState<HermesCompatibilityTestResult | null>(null)
   const [hermesCompatibilityRunning, setHermesCompatibilityRunning] = useState(false)
   const [hermesCompatibilityError, setHermesCompatibilityError] = useState<string | null>(null)
+  const [hermesAutoUpdateResult, setHermesAutoUpdateResult] = useState<HermesAutoUpdateResult | null>(null)
+  const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
+  const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
@@ -1314,6 +1319,21 @@ function App() {
     }
   }
 
+  async function handleRunHermesAutoUpdate() {
+    setHermesAutoUpdating(true)
+    setHermesAutoUpdateError(null)
+    try {
+      const result = await runHermesAutoUpdate()
+      setHermesAutoUpdateResult(result)
+      setHermesCompatibilityResult(result.postTest ?? result.preTest)
+      await refreshHermesUpdateStatus()
+    } catch (cause) {
+      setHermesAutoUpdateError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setHermesAutoUpdating(false)
+    }
+  }
+
   async function refreshHermesSessions() {
     try {
       const response = await getHermesSessions()
@@ -2118,6 +2138,9 @@ function App() {
             hermesCompatibilityResult={hermesCompatibilityResult}
             hermesCompatibilityRunning={hermesCompatibilityRunning}
             hermesCompatibilityError={hermesCompatibilityError}
+            hermesAutoUpdateResult={hermesAutoUpdateResult}
+            hermesAutoUpdating={hermesAutoUpdating}
+            hermesAutoUpdateError={hermesAutoUpdateError}
             selectedModel={selectedModel}
             models={composerModels}
             modelCatalog={modelCatalog}
@@ -2150,6 +2173,7 @@ function App() {
             onClose={() => setSettingsOpen(false)}
             onRefreshHermesUpdate={() => void refreshHermesUpdateStatus()}
             onRunHermesCompatibilityTest={() => void handleRunHermesCompatibilityTest()}
+            onRunHermesAutoUpdate={() => void handleRunHermesAutoUpdate()}
             onLanguageChange={setLanguage}
             onThemeChange={setTheme}
             onPrivacyChange={setPrivacyMode}
@@ -3071,6 +3095,9 @@ function SettingsModal({
   hermesCompatibilityResult,
   hermesCompatibilityRunning,
   hermesCompatibilityError,
+  hermesAutoUpdateResult,
+  hermesAutoUpdating,
+  hermesAutoUpdateError,
   selectedModel,
   models,
   modelCatalog,
@@ -3103,6 +3130,7 @@ function SettingsModal({
   onClose,
   onRefreshHermesUpdate,
   onRunHermesCompatibilityTest,
+  onRunHermesAutoUpdate,
   onLanguageChange,
   onThemeChange,
   onPrivacyChange,
@@ -3140,6 +3168,9 @@ function SettingsModal({
   hermesCompatibilityResult: HermesCompatibilityTestResult | null
   hermesCompatibilityRunning: boolean
   hermesCompatibilityError: string | null
+  hermesAutoUpdateResult: HermesAutoUpdateResult | null
+  hermesAutoUpdating: boolean
+  hermesAutoUpdateError: string | null
   selectedModel: ModelOption
   models: ModelOption[]
   modelCatalog: HermesModelCatalogProvider[]
@@ -3172,6 +3203,7 @@ function SettingsModal({
   onClose: () => void
   onRefreshHermesUpdate: () => void
   onRunHermesCompatibilityTest: () => void
+  onRunHermesAutoUpdate: () => void
   onLanguageChange: (value: string) => void
   onThemeChange: (value: string) => void
   onPrivacyChange: (value: boolean) => void
@@ -3863,8 +3895,12 @@ function SettingsModal({
                 testResult={hermesCompatibilityResult}
                 testRunning={hermesCompatibilityRunning}
                 testError={hermesCompatibilityError}
+                autoUpdateResult={hermesAutoUpdateResult}
+                autoUpdating={hermesAutoUpdating}
+                autoUpdateError={hermesAutoUpdateError}
                 onRefresh={onRefreshHermesUpdate}
                 onRunTest={onRunHermesCompatibilityTest}
+                onRunAutoUpdate={onRunHermesAutoUpdate}
               />
             </SettingsBlock>
           </SettingsSection>
@@ -6790,8 +6826,12 @@ function HermesUpdatePanel({
   testResult,
   testRunning,
   testError,
+  autoUpdateResult,
+  autoUpdating,
+  autoUpdateError,
   onRefresh,
-  onRunTest
+  onRunTest,
+  onRunAutoUpdate
 }: {
   status: HermesUpdateStatus | null
   loading: boolean
@@ -6799,8 +6839,12 @@ function HermesUpdatePanel({
   testResult: HermesCompatibilityTestResult | null
   testRunning: boolean
   testError: string | null
+  autoUpdateResult: HermesAutoUpdateResult | null
+  autoUpdating: boolean
+  autoUpdateError: string | null
   onRefresh: () => void
   onRunTest: () => void
+  onRunAutoUpdate: () => void
 }) {
   if (!status && loading) {
     return (
@@ -6830,6 +6874,12 @@ function HermesUpdatePanel({
     blocked: '暂不建议升级',
     unknown: '需要检查'
   }[status.compatibility.status]
+  const canAutoUpdate = Boolean(status.updateAvailable && testResult?.status === 'passed' && status.compatibility.status !== 'blocked')
+  const autoUpdateHint = status.updateAvailable
+    ? canAutoUpdate
+      ? '前测已通过。点击后会自动备份、执行 hermes update，并在升级后复测。'
+      : '先完成自动复测，通过后才能进入自动更新。'
+    : '当前没有检测到 Hermes 可用更新。'
 
   return (
     <div className="hermes-update-panel">
@@ -6858,8 +6908,26 @@ function HermesUpdatePanel({
 
       {error && <div className="settings-error-line">{error}</div>}
       {testError && <div className="settings-error-line">{testError}</div>}
+      {autoUpdateError && <div className="settings-error-line">{autoUpdateError}</div>}
 
       <HermesCompatibilityResultCard result={testResult} running={testRunning} onRun={onRunTest} />
+
+      <div className={`hermes-auto-update-gate ${canAutoUpdate ? 'ready' : ''}`}>
+        <div>
+          <strong>自动更新</strong>
+          <span>{autoUpdateHint}</span>
+        </div>
+        <button
+          className="hermes-auto-update-button"
+          onClick={onRunAutoUpdate}
+          disabled={!canAutoUpdate || autoUpdating || testRunning}
+        >
+          {autoUpdating ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+          {autoUpdating ? '正在更新' : '自动更新 Hermes'}
+        </button>
+      </div>
+
+      <HermesAutoUpdateResultCard result={autoUpdateResult} running={autoUpdating} />
 
       <div className="hermes-update-grid">
         <div>
@@ -6972,6 +7040,78 @@ function HermesCompatibilityResultCard({
           <small>{result.smokeTask.eventCount} 个事件{result.smokeTask.sessionId ? ` · ${shortSessionId(result.smokeTask.sessionId)}` : ''}</small>
         </div>
       )}
+    </div>
+  )
+}
+
+function HermesAutoUpdateResultCard({
+  result,
+  running
+}: {
+  result: HermesAutoUpdateResult | null
+  running: boolean
+}) {
+  if (!result && !running) return null
+
+  if (running) {
+    return (
+      <div className="hermes-auto-update-card running">
+        <Loader2 size={18} className="spin" />
+        <div>
+          <strong>正在执行自动更新</strong>
+          <span>Cowork 会按顺序完成前测、备份、Hermes 更新和升级后复测。这个过程可能需要几分钟。</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!result) return null
+  const afterLabel = result.after?.currentTag || result.after?.currentVersion || '未完成'
+  const backupLabel = result.backupDir ? result.backupDir.replace(/^.*\/hermes-update-backups\//, 'data/hermes-update-backups/') : '未创建备份'
+
+  return (
+    <div className={`hermes-auto-update-card ${result.status}`}>
+      <div className="hermes-auto-update-head">
+        <div>
+          <strong>{result.title}</strong>
+          <span>{result.detail}</span>
+        </div>
+        <em>{result.status === 'passed' ? '已完成' : '需要处理'}</em>
+      </div>
+      <div className="hermes-auto-update-summary">
+        <div>
+          <span>更新前</span>
+          <strong>{result.before.currentTag || result.before.currentVersion}</strong>
+        </div>
+        <div>
+          <span>更新后</span>
+          <strong>{afterLabel}</strong>
+        </div>
+        <div>
+          <span>前置复测</span>
+          <strong>{result.preTest.status === 'passed' ? '通过' : '失败'}</strong>
+        </div>
+        <div>
+          <span>升级后复测</span>
+          <strong>{result.postTest ? (result.postTest.status === 'passed' ? '通过' : '失败') : '未执行'}</strong>
+        </div>
+      </div>
+      <div className="hermes-auto-update-backup">
+        <Archive size={15} />
+        <div>
+          <strong>配置备份</strong>
+          <span title={result.backupDir || ''}>{backupLabel}</span>
+          <small>{result.backupFiles.length ? `${result.backupFiles.length} 个文件已备份` : '没有找到需要备份的配置文件'}</small>
+        </div>
+      </div>
+      {(result.stdout || result.stderr) && (
+        <details className="hermes-update-log">
+          <summary>查看 hermes update 输出</summary>
+          {result.stdout && <pre>{result.stdout}</pre>}
+          {result.stderr && <pre>{result.stderr}</pre>}
+        </details>
+      )}
+      <small className="hermes-auto-update-time">完成于 {formatTime(result.completedAt)}</small>
     </div>
   )
 }

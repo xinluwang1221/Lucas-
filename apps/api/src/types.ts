@@ -409,3 +409,23 @@ export type HermesCompatibilityTestResult = {
   startedAt: string
   completedAt: string
 }
+
+export type HermesAutoUpdateResult = {
+  id: string
+  status: 'passed' | 'failed'
+  title: string
+  detail: string
+  stage: 'precheck' | 'backup' | 'update' | 'postcheck' | 'completed'
+  backupDir?: string
+  backupFiles: string[]
+  command: string
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  before: HermesUpdateStatus
+  after?: HermesUpdateStatus
+  preTest: HermesCompatibilityTestResult
+  postTest?: HermesCompatibilityTestResult
+  startedAt: string
+  completedAt: string
+}

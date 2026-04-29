@@ -492,6 +492,26 @@ export type HermesCompatibilityTestResult = {
   completedAt: string
 }
 
+export type HermesAutoUpdateResult = {
+  id: string
+  status: 'passed' | 'failed'
+  title: string
+  detail: string
+  stage: 'precheck' | 'backup' | 'update' | 'postcheck' | 'completed'
+  backupDir?: string
+  backupFiles: string[]
+  command: string
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  before: HermesUpdateStatus
+  after?: HermesUpdateStatus
+  preTest: HermesCompatibilityTestResult
+  postTest?: HermesCompatibilityTestResult
+  startedAt: string
+  completedAt: string
+}
+
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
 export async function getState(): Promise<AppState> {
@@ -508,6 +528,12 @@ export async function getHermesUpdateStatus(): Promise<HermesUpdateStatus> {
 
 export async function runHermesCompatibilityTest(): Promise<HermesCompatibilityTestResult> {
   return request('/api/hermes/compatibility-test', {
+    method: 'POST'
+  })
+}
+
+export async function runHermesAutoUpdate(): Promise<HermesAutoUpdateResult> {
+  return request('/api/hermes/update', {
     method: 'POST'
   })
 }
