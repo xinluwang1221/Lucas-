@@ -5,6 +5,11 @@ export type Workspace = {
   createdAt: string
 }
 
+export type PickedWorkspaceDirectory = {
+  name: string
+  path: string
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787'
 
 function apiUrl(path: string) {
@@ -816,6 +821,10 @@ export async function addWorkspace(name: string, path: string): Promise<Workspac
     headers: jsonHeaders,
     body: JSON.stringify({ name, path })
   })
+}
+
+export async function pickWorkspaceDirectory(): Promise<PickedWorkspaceDirectory> {
+  return request('/api/system/pick-directory', { method: 'POST' })
 }
 
 export async function uploadFile(workspaceId: string, file: File) {

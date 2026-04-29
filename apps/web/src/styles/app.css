@@ -222,6 +222,139 @@ summary:focus-visible {
   font-style: normal;
 }
 
+.workspace-tree-section {
+  min-height: 0;
+}
+
+.workspace-tree-list {
+  display: grid;
+  gap: 6px;
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.workspace-tree-node {
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.workspace-tree-node.active {
+  background: rgba(49, 92, 66, 0.08);
+}
+
+.workspace-tree-row,
+.workspace-session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.workspace-tree-main,
+.workspace-session-main {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 6px;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.workspace-tree-main:hover,
+.workspace-session-main:hover,
+.workspace-session-row.active .workspace-session-main {
+  background: rgba(255, 253, 247, 0.58);
+}
+
+.workspace-tree-main svg {
+  color: var(--moss);
+}
+
+.workspace-tree-main strong,
+.workspace-tree-main em,
+.workspace-session-main strong,
+.workspace-session-main em {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tree-main strong {
+  font-size: 12px;
+}
+
+.workspace-tree-main em,
+.workspace-session-main em {
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.workspace-tree-action,
+.workspace-session-actions button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--ink-soft);
+  background: transparent;
+  border-radius: 6px;
+}
+
+.workspace-tree-action:hover,
+.workspace-session-actions button:hover {
+  color: var(--ink);
+  background: rgba(255, 253, 247, 0.58);
+}
+
+.workspace-session-list {
+  display: grid;
+  gap: 2px;
+  margin: 3px 0 2px 12px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(49, 92, 66, 0.18);
+}
+
+.workspace-session-list > p {
+  margin: 5px 0 5px 24px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.workspace-session-main {
+  grid-template-columns: 16px minmax(0, 1fr);
+  min-height: 30px;
+  padding-right: 4px;
+}
+
+.workspace-session-main svg {
+  color: var(--amber);
+}
+
+.workspace-session-main strong {
+  font-size: 11px;
+}
+
+.workspace-session-actions {
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+}
+
+.workspace-session-row:hover .workspace-session-actions,
+.workspace-session-row.active .workspace-session-actions {
+  opacity: 1;
+}
+
 .sidebar-section {
   display: flex;
   flex-direction: column;
@@ -1505,6 +1638,10 @@ summary:focus-visible {
   max-width: 1120px;
 }
 
+.workspace-file-page {
+  max-width: 1180px;
+}
+
 .workspace-home-head {
   align-items: flex-start;
 }
@@ -1538,6 +1675,69 @@ summary:focus-visible {
   background: linear-gradient(135deg, rgba(49, 92, 66, 0.1), rgba(255, 253, 247, 0.92));
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+
+.workspace-status-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 22px;
+  padding: 16px;
+  background: rgba(255, 253, 247, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.workspace-status-panel > div:first-child {
+  min-width: 0;
+}
+
+.workspace-status-panel strong,
+.workspace-status-panel p {
+  display: block;
+  margin: 8px 0 0;
+}
+
+.workspace-status-panel strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.workspace-status-panel p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workspace-status-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.workspace-file-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+
+.workspace-browser-panel {
+  min-height: 460px;
+}
+
+.workspace-side-column {
+  display: grid;
+  gap: 14px;
+}
+
+.workspace-side-column .workspace-section {
+  margin-top: 0;
+}
+
+.workspace-task-list.compact {
+  gap: 7px;
 }
 
 .workspace-boundary-panel > div:first-child {

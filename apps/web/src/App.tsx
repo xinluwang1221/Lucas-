@@ -104,6 +104,7 @@ import {
   runHermesAutoUpdate,
   runHermesCompatibilityTest,
   pinTask,
+  pickWorkspaceDirectory,
   sendTaskMessage,
   searchHermesMcpMarketplace,
   setHermesMcpServerEnabled,
@@ -323,9 +324,7 @@ function App() {
   const [taskStreamStatus, setTaskStreamStatus] = useState<TaskStreamStatus>('idle')
   const [taskStreamUpdatedAt, setTaskStreamUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false)
-  const [newWorkspaceName, setNewWorkspaceName] = useState('')
-  const [newWorkspacePath, setNewWorkspacePath] = useState('')
+  const [workspacePicking, setWorkspacePicking] = useState(false)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
@@ -603,6 +602,17 @@ function App() {
       .slice(0, 12)
   }, [state.tasks])
 
+  const sidebarWorkspaceGroups = useMemo(() => {
+    return state.workspaces.map((workspace) => ({
+      workspace,
+      tasks: state.tasks
+        .filter((task) => task.workspaceId === workspace.id && !task.archivedAt)
+        .slice()
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 8)
+    }))
+  }, [state.workspaces, state.tasks])
+
   const taskGroups = useMemo(() => {
     return state.workspaces
       .map((workspace) => ({
@@ -627,9 +637,6 @@ function App() {
   const selectedHermesSession = selectedTask?.hermesSessionId
     ? hermesSessions.find((session) => session.id === selectedTask.hermesSessionId)
     : undefined
-  const currentWorkspaceTaskCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && !task.archivedAt).length
-  const currentWorkspaceRunningCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && task.status === 'running').length
-
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId
   }, [selectedTaskId])
@@ -1146,6 +1153,25 @@ function App() {
     }
   }
 
+  async function handleAuthorizeWorkspace() {
+    if (workspacePicking) return
+    setWorkspacePicking(true)
+    setError(null)
+    try {
+      const picked = await pickWorkspaceDirectory()
+      const workspace = await addWorkspace(picked.name, picked.path)
+      setSelectedWorkspaceId(workspace.id)
+      setSelectedTaskId(null)
+      setViewMode('projects')
+      await refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      if (!message.includes('取消')) setError(message)
+    } finally {
+      setWorkspacePicking(false)
+    }
+  }
+
   async function handleToggleTag(task: Task, tag: string) {
     setError(null)
     const currentTags = task.tags ?? []
@@ -1154,22 +1180,6 @@ function App() {
       : [...currentTags, tag]
     try {
       await setTaskTags(task.id, nextTags)
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleAddWorkspace(event: FormEvent) {
-    event.preventDefault()
-    if (!newWorkspaceName.trim() || !newWorkspacePath.trim()) return
-    setError(null)
-    try {
-      const workspace = await addWorkspace(newWorkspaceName.trim(), newWorkspacePath.trim())
-      setSelectedWorkspaceId(workspace.id)
-      setWorkspacePanelOpen(false)
-      setNewWorkspaceName('')
-      setNewWorkspacePath('')
       await refresh()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -1396,17 +1406,50 @@ function App() {
           新建任务
         </button>
 
-        <button
-          className="sidebar-workspace-card"
-          onClick={() => setViewMode('projects')}
-        >
-          <Folder size={16} />
-          <span>
-            <strong>{selectedWorkspace?.name ?? '未选择工作区'}</strong>
-            <em>{currentWorkspaceRunningCount ? `${currentWorkspaceRunningCount} 个运行中` : `${currentWorkspaceTaskCount} 个任务`}</em>
-          </span>
-          <ChevronDown size={14} />
-        </button>
+        <div className="sidebar-section workspace-tree-section">
+          <div className="section-title">
+            <span>工作区</span>
+            <button
+              className="icon-button"
+              title="选择文件夹授权为工作区"
+              onClick={() => void handleAuthorizeWorkspace()}
+              disabled={workspacePicking}
+            >
+              {workspacePicking ? <Loader2 size={15} className="spin" /> : <FolderPlus size={15} />}
+            </button>
+          </div>
+          <div className="workspace-tree-list">
+            {sidebarWorkspaceGroups.map((group) => (
+              <SidebarWorkspaceNode
+                key={group.workspace.id}
+                workspace={group.workspace}
+                tasks={group.tasks}
+                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
+                activeTaskId={selectedTaskId ?? null}
+                onOpenWorkspace={() => {
+                  setSelectedWorkspaceId(group.workspace.id)
+                  setSelectedTaskId(null)
+                  setViewMode('projects')
+                }}
+                onOpenTask={(task) => {
+                  setSelectedWorkspaceId(task.workspaceId)
+                  setSelectedTaskId(task.id)
+                  setViewMode('tasks')
+                }}
+                onArchiveTask={(task) => void handleArchiveTask(task)}
+                onDeleteTask={(task) => void handleDeleteTask(task)}
+                onReveal={() => {
+                  setSelectedWorkspaceId(group.workspace.id)
+                  setError(null)
+                  void revealWorkspace(group.workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+                }}
+              />
+            ))}
+            {!sidebarWorkspaceGroups.length && (
+              <p className="empty-copy">先选择一个文件夹授权给 Hermes。</p>
+            )}
+          </div>
+        </div>
 
         <div className="sidebar-nav-group">
           <button
@@ -1423,14 +1466,6 @@ function App() {
           >
             <Clock3 size={17} />
             定时任务
-          </button>
-
-          <button
-            className={viewMode === 'projects' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => setViewMode('projects')}
-          >
-            <Folder size={17} />
-            工作区
           </button>
 
           <button
@@ -1458,13 +1493,13 @@ function App() {
             }}
           >
             <Hammer size={17} />
-            自定义
+            技能
           </button>
         </div>
 
         <div className="sidebar-section tasks-section">
           <div className="section-title">
-            <span>最近任务</span>
+            <span>最近</span>
           </div>
           <div className="recent-task-list">
             {state.tasks.length === 0 && <p className="empty-copy">还没有最近任务。</p>}
@@ -1591,9 +1626,12 @@ function App() {
             tasks={state.tasks}
             artifacts={state.artifacts}
             workspaceFiles={workspaceFiles}
-            examples={examples}
             selectedWorkspaceId={selectedWorkspaceId}
-            onSelect={(workspace) => setSelectedWorkspaceId(workspace.id)}
+            onSelect={(workspace) => {
+              setSelectedWorkspaceId(workspace.id)
+              setSelectedTaskId(null)
+              setViewMode('projects')
+            }}
             onOpenTask={(task) => {
               setSelectedWorkspaceId(task.workspaceId)
               setSelectedTaskId(task.id)
@@ -1606,7 +1644,19 @@ function App() {
               setViewMode('tasks')
               window.setTimeout(() => focusComposer(), 0)
             }}
-            onAdd={() => setWorkspacePanelOpen(true)}
+            onUseFile={(file) => {
+              setPrompt((current) => {
+                const prefix = current.trim() ? `${current.trim()}\n\n` : ''
+                return `${prefix}请使用当前工作区文件「${file.relativePath}」作为上下文。`
+              })
+              setSelectedTaskId(null)
+              setViewMode('tasks')
+              window.setTimeout(() => focusComposer(), 0)
+            }}
+            onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
+            onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
+            onUploadClick={() => fileInputRef.current?.click()}
+            onAdd={() => void handleAuthorizeWorkspace()}
             onReveal={(workspace) => {
               setError(null)
               void revealWorkspace(workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
@@ -1985,36 +2035,6 @@ function App() {
           event.currentTarget.value = ''
         }}
       />
-
-      {workspacePanelOpen && (
-        <div className="modal-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setWorkspacePanelOpen(false))}>
-          <form className="modal" onSubmit={handleAddWorkspace}>
-            <h2>添加授权文件夹</h2>
-            <p>Hermes Cowork 只会把你显式添加的文件夹作为工作区传给 Hermes。</p>
-            <label>
-              名称
-              <input value={newWorkspaceName} onChange={(event) => setNewWorkspaceName(event.target.value)} />
-            </label>
-            <label>
-              本机路径
-              <input
-                value={newWorkspacePath}
-                onChange={(event) => setNewWorkspacePath(event.target.value)}
-                placeholder="/Users/lucas/Documents/..."
-              />
-            </label>
-            <div className="modal-actions">
-              <button type="button" className="ghost-button" onClick={() => setWorkspacePanelOpen(false)}>
-                取消
-              </button>
-              <button className="send-button">
-                <FolderPlus size={16} />
-                添加
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {modelPanelOpen && (
         <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
@@ -2585,11 +2605,14 @@ function ProjectsView({
   tasks,
   artifacts,
   workspaceFiles,
-  examples,
   selectedWorkspaceId,
   onSelect,
   onOpenTask,
   onUsePrompt,
+  onUseFile,
+  onPreviewFile,
+  onRevealFile,
+  onUploadClick,
   onAdd,
   onReveal
 }: {
@@ -2597,11 +2620,14 @@ function ProjectsView({
   tasks: Task[]
   artifacts: Artifact[]
   workspaceFiles: WorkspaceFile[]
-  examples: Example[]
   selectedWorkspaceId: string
   onSelect: (workspace: Workspace) => void
   onOpenTask: (task: Task) => void
   onUsePrompt: (workspace: Workspace, prompt: string) => void
+  onUseFile: (file: WorkspaceFile) => void
+  onPreviewFile: (file: WorkspaceFile) => void
+  onRevealFile: (file: WorkspaceFile) => void
+  onUploadClick: () => void
   onAdd: () => void
   onReveal: (workspace: Workspace) => void
 }) {
@@ -2618,20 +2644,15 @@ function ProjectsView({
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, 6)
     : []
-  const running = workspaceTasks.filter((task) => task.status === 'running').length
-  const completed = workspaceTasks.filter((task) => task.status === 'completed').length
   const failed = workspaceTasks.filter((task) => task.status === 'failed' || task.status === 'stopped').length
-  const activeExamples = examples.slice(0, 6)
-  const workspaceSkillNames = uniqueCompact(workspaceTasks.flatMap((task) => task.skillNames ?? [])).slice(0, 8)
-  const keyFiles = workspaceFiles.slice(0, 6)
 
   return (
-    <section className="product-page workspace-home">
+    <section className="product-page workspace-home workspace-file-page">
       <header className="product-page-head workspace-home-head">
         <div>
-          <span className="page-kicker">授权工作区</span>
+          <span className="page-kicker">工作区</span>
           <h1>{selectedWorkspace?.name ?? '工作区'}</h1>
-          <p>{selectedWorkspace?.path ?? '选择一个 Hermes 可以工作的本机文件夹。'}</p>
+          <p>{selectedWorkspace ? '已授权的本机文件夹。这里管理文件、会话和 Hermes 的工作边界。' : '选择一个文件夹，作为 Hermes 可以工作的本机空间。'}</p>
         </div>
         <div className="workspace-head-actions">
           {selectedWorkspace && (
@@ -2641,129 +2662,114 @@ function ProjectsView({
             </button>
           )}
           <button className="send-button" onClick={onAdd}>
-            <Plus size={16} />
-            新建工作区
+            <FolderPlus size={16} />
+            授权文件夹
           </button>
         </div>
       </header>
 
       {selectedWorkspace ? (
         <>
-          <section className="workspace-boundary-panel">
+          <section className="workspace-status-panel">
             <div>
-              <span>Hermes 工作边界</span>
-              <strong>只在当前授权目录内读取、写入和沉淀产物</strong>
-              <p>{selectedWorkspace.path}</p>
+              <span className="status-pill compact completed">
+                <CheckCircle2 size={14} />
+                可工作
+              </span>
+              <strong>Hermes 只会在这个授权文件夹内读取、写入和保存产物。</strong>
+              <p>需要处理文件时，从下方选择文件作为上下文，或直接新建对话。</p>
             </div>
-            <div className="workspace-stat-grid">
-              <WorkspaceStat label="任务" value={`${workspaceTasks.length}`} />
-              <WorkspaceStat label="运行中" value={`${running}`} />
-              <WorkspaceStat label="已完成" value={`${completed}`} />
-              <WorkspaceStat label="需处理" value={`${failed}`} />
+            <div className="workspace-status-actions">
+              <button className="ghost-button" onClick={() => onUsePrompt(selectedWorkspace, '')}>
+                <MessageSquarePlus size={15} />
+                新建对话
+              </button>
+              <button className="ghost-button" onClick={onUploadClick}>
+                <Upload size={15} />
+                上传文件
+              </button>
             </div>
           </section>
 
-          <section className="workspace-section">
-            <div className="workspace-section-head">
-              <div>
-                <h2>开始工作</h2>
-                <p>选择一个常用场景，Hermes 会带着当前工作区上下文执行。</p>
-              </div>
-            </div>
-            <div className="workspace-template-grid">
-              {activeExamples.map((item) => (
-                <button key={item.title} onClick={() => onUsePrompt(selectedWorkspace, item.prompt)}>
-                  <TemplateIcon name={item.icon} />
-                  <strong>{item.title}</strong>
-                  <span>{item.detail}</span>
+          <div className="workspace-file-grid">
+            <section className="workspace-section workspace-browser-panel">
+              <div className="workspace-section-head">
+                <div>
+                  <h2>文件</h2>
+                  <p>选择文件预览、定位，或作为下一次任务上下文。</p>
+                </div>
+                <button className="mini-button" onClick={onUploadClick}>
+                  <Upload size={13} />
+                  上传
                 </button>
-              ))}
-            </div>
-          </section>
-
-          <div className="workspace-home-grid">
-            <section className="workspace-section">
-              <div className="workspace-section-head">
-                <div>
-                  <h2>最近任务</h2>
-                  <p>继续推进、重试失败任务，或回到刚完成的结果。</p>
-                </div>
               </div>
-              {recentTasks.length ? (
-                <div className="workspace-task-list">
-                  {recentTasks.map((task) => (
-                    <button className={`workspace-task-card ${task.status}`} key={task.id} onClick={() => onOpenTask(task)}>
-                      <StatusIcon status={task.status} />
-                      <div>
-                        <strong>{task.title}</strong>
-                        <span>{statusLabel(task.status)} · {formatTime(task.updatedAt)} · {task.artifacts.length ? `${task.artifacts.length} 个产物` : '暂无产物'}</span>
-                      </div>
-                      <ChevronDown size={14} />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <EmptyWorkspaceBlock title="暂无任务" detail="从上方选择一个场景，开始这个工作区的第一项任务。" />
-              )}
+              <WorkspaceFiles
+                files={workspaceFiles}
+                onUseFile={onUseFile}
+                onPreviewFile={onPreviewFile}
+                onRevealFile={onRevealFile}
+              />
             </section>
 
-            <section className="workspace-section">
-              <div className="workspace-section-head">
-                <div>
-                  <h2>产出物</h2>
-                  <p>这里沉淀 Hermes 在本工作区生成的文档、表格和报告。</p>
+            <aside className="workspace-side-column">
+              <section className="workspace-section">
+                <div className="workspace-section-head">
+                  <div>
+                    <h2>会话</h2>
+                    <p>{failed ? `${failed} 个会话需要处理。` : '从这里回到这个工作区里的任务。'}</p>
+                  </div>
                 </div>
-              </div>
-              {workspaceArtifacts.length ? (
-                <div className="workspace-artifact-list">
-                  {workspaceArtifacts.map((artifact) => (
-                    <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
-                      <FileArchive size={16} />
-                      <div>
-                        <strong>{artifact.name}</strong>
-                        <span>{artifact.relativePath} · {formatBytes(artifact.size)}</span>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <EmptyWorkspaceBlock title="暂无产出物" detail="任务完成后，生成的文件会在这里集中出现。" />
+                {recentTasks.length ? (
+                  <div className="workspace-task-list compact">
+                    {recentTasks.map((task) => (
+                      <button className={`workspace-task-card ${task.status}`} key={task.id} onClick={() => onOpenTask(task)}>
+                        <StatusIcon status={task.status} />
+                        <div>
+                          <strong>{task.title}</strong>
+                          <span>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</span>
+                        </div>
+                        <ChevronDown size={14} />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyWorkspaceBlock title="暂无会话" detail="点“新建对话”，让 Hermes 在这个工作区开始工作。" />
+                )}
+              </section>
+
+              {workspaceArtifacts.length > 0 && (
+                <section className="workspace-section">
+                  <div className="workspace-section-head">
+                    <div>
+                      <h2>产物</h2>
+                      <p>这个工作区里已经生成的文件。</p>
+                    </div>
+                  </div>
+                  <div className="workspace-artifact-list">
+                    {workspaceArtifacts.map((artifact) => (
+                      <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
+                        <FileArchive size={16} />
+                        <div>
+                          <strong>{artifact.name}</strong>
+                          <span>{formatBytes(artifact.size)}</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </section>
               )}
-            </section>
+            </aside>
           </div>
-
-          <section className="workspace-section workspace-context-section">
-            <div className="workspace-section-head">
-              <div>
-                <h2>工作区上下文</h2>
-                <p>这些是 Hermes 在这个工作区最常接触的能力和文件线索。</p>
-              </div>
-            </div>
-            <div className="workspace-context-grid">
-              <WorkspaceContextGroup
-                title="常用 Skill"
-                emptyText="还没有从任务中沉淀出常用 Skill。"
-                items={workspaceSkillNames}
-                icon={<BookOpen size={14} />}
-              />
-              <WorkspaceContextGroup
-                title="关键文件"
-                emptyText="当前工作区还没有可展示文件。"
-                items={keyFiles.map((file) => file.relativePath)}
-                icon={<FileText size={14} />}
-              />
-            </div>
-          </section>
         </>
       ) : (
-        <EmptyWorkspaceBlock title="还没有工作区" detail="先新建一个授权工作区，让 Hermes 知道可以在哪里工作。" />
+        <EmptyWorkspaceBlock title="还没有工作区" detail="选择一个文件夹授权给 Hermes，之后这里会显示文件管理页。" />
       )}
 
       <section className="workspace-switcher-section">
         <div className="workspace-section-head">
           <div>
-            <h2>切换工作区</h2>
-            <p>不同工作区对应不同任务边界和产出沉淀。</p>
+            <h2>其他工作区</h2>
+            <p>点击工作区可以切换文件管理范围。</p>
           </div>
         </div>
         <div className="project-directory-list compact">
@@ -2773,15 +2779,18 @@ function ProjectsView({
               <article
                 className={workspace.id === selectedWorkspace?.id ? 'project-directory-card active' : 'project-directory-card'}
                 key={workspace.id}
+                onClick={() => onSelect(workspace)}
               >
                 <Folder size={18} />
                 <div>
                   <strong>{workspace.name}</strong>
-                  <span>{workspace.path}</span>
+                  <span>{workspaceTaskCount} 个会话</span>
                 </div>
                 <div className="project-card-actions">
-                  <em>{workspaceTaskCount} 个任务</em>
-                  <button className="settings-link-button" onClick={() => onSelect(workspace)}>切换</button>
+                  <button className="settings-link-button" onClick={(event) => {
+                    event.stopPropagation()
+                    onReveal(workspace)
+                  }}>打开目录</button>
                 </div>
               </article>
             )
@@ -5242,6 +5251,72 @@ function StatusIcon({ status }: { status: Task['status'] }) {
   return <Circle size={15} />
 }
 
+function SidebarWorkspaceNode({
+  workspace,
+  tasks,
+  activeWorkspace,
+  activeTaskId,
+  onOpenWorkspace,
+  onOpenTask,
+  onArchiveTask,
+  onDeleteTask,
+  onReveal
+}: {
+  workspace: Workspace
+  tasks: Task[]
+  activeWorkspace: boolean
+  activeTaskId: string | null
+  onOpenWorkspace: () => void
+  onOpenTask: (task: Task) => void
+  onArchiveTask: (task: Task) => void
+  onDeleteTask: (task: Task) => void
+  onReveal: () => void
+}) {
+  const runningCount = tasks.filter((task) => task.status === 'running').length
+
+  return (
+    <div className={['workspace-tree-node', activeWorkspace ? 'active' : ''].filter(Boolean).join(' ')}>
+      <div className="workspace-tree-row">
+        <button type="button" className="workspace-tree-main" onClick={onOpenWorkspace} title={workspace.path}>
+          {activeWorkspace ? <FolderOpen size={15} /> : <Folder size={15} />}
+          <span>
+            <strong>{workspace.name}</strong>
+            <em>{runningCount ? `${runningCount} 个运行中` : `${tasks.length} 个会话`}</em>
+          </span>
+        </button>
+        <button type="button" className="workspace-tree-action" title="在 Finder 中打开" onClick={onReveal}>
+          <FolderOpen size={13} />
+        </button>
+      </div>
+      <div className="workspace-session-list">
+        {tasks.length ? (
+          tasks.map((task) => (
+            <div className={['workspace-session-row', task.id === activeTaskId ? 'active' : '', task.status].filter(Boolean).join(' ')} key={task.id}>
+              <button type="button" className="workspace-session-main" onClick={() => onOpenTask(task)}>
+                <StatusIcon status={task.status} />
+                <span>
+                  <strong>{task.title}</strong>
+                  <em>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</em>
+                </span>
+              </button>
+              <div className="workspace-session-actions">
+                <button type="button" title="归档会话" onClick={() => onArchiveTask(task)}>
+                  <Archive size={12} />
+                </button>
+                <button type="button" title="删除会话记录" onClick={() => onDeleteTask(task)}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p>暂无会话</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function SidebarRecentTaskRow({
   task,
   active,
@@ -6200,7 +6275,7 @@ function WorkspaceFiles({
 
   return (
     <div className="workspace-file-list">
-      {files.slice(0, 12).map((file) => (
+      {files.map((file) => (
         <div className="workspace-file" key={file.path} title={file.relativePath}>
           <FileText size={15} />
           <div>

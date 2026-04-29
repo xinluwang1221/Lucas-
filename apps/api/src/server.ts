@@ -643,6 +643,16 @@ app.get('/api/workspaces', (_req, res) => {
   res.json(store.snapshot.workspaces)
 })
 
+app.post('/api/system/pick-directory', async (_req, res) => {
+  try {
+    const directory = await pickDirectoryWithFinder()
+    res.json(directory)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    res.status(message.includes('取消') ? 400 : 500).json({ error: message })
+  }
+})
+
 app.get('/api/workspaces/:workspaceId/files', (req, res) => {
   const workspace = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
   if (!workspace || !fs.existsSync(workspace.path)) {
@@ -2191,6 +2201,44 @@ function normalizeHermesDate(value: unknown) {
   const text = String(value)
   const parsed = new Date(text.endsWith('Z') || /[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`)
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined
+}
+
+function pickDirectoryWithFinder(): Promise<{ name: string; path: string }> {
+  if (process.platform !== 'darwin') {
+    return Promise.reject(new Error('当前只支持在 macOS 上通过 Finder 选择工作区。'))
+  }
+
+  return new Promise((resolve, reject) => {
+    execFile(
+      'osascript',
+      ['-e', 'POSIX path of (choose folder with prompt "选择 Hermes Cowork 工作区")'],
+      { timeout: 5 * 60 * 1000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const text = `${stderr || ''}\n${error.message || ''}`
+          reject(new Error(/cancel/i.test(text) ? '已取消选择文件夹。' : `无法打开 Finder 目录选择器：${text.trim()}`))
+          return
+        }
+
+        const selectedPath = stdout.trim()
+        if (!selectedPath) {
+          reject(new Error('没有选择文件夹。'))
+          return
+        }
+
+        const resolved = path.resolve(selectedPath)
+        if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+          reject(new Error('选择的路径不是可用文件夹。'))
+          return
+        }
+
+        resolve({
+          name: path.basename(resolved) || resolved,
+          path: resolved
+        })
+      }
+    )
+  })
 }
 
 function listWorkspaceFiles(rootPath: string) {

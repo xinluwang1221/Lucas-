@@ -194,9 +194,9 @@ flowchart LR
 
 实现路线：
 
-1. Web 本地版先新增 `POST /api/system/pick-directory`，由 Node Adapter 在 macOS 上调用系统目录选择器，返回用户选择的 POSIX 路径；前端只显示“选择文件夹”，不显示手动路径输入。
-2. 保留当前 `/api/workspaces` 作为写入真源，但新增 `PATCH /api/workspaces/:id`、`DELETE /api/workspaces/:id`、`GET /api/workspaces/:id/tree` 和 `GET /api/workspaces/:id/summary`，让工作区页不再复用 flat file list。
-3. 前端增加 `activeSurface = workspace | task | custom | settings` 的导航状态。点击工作区时清空 `selectedTaskId` 并展示 `WorkspaceFileManagerPage`；点击会话时展示对话页。
+1. 已完成：Web 本地版新增 `POST /api/system/pick-directory`，由 Node Adapter 在 macOS 上调用系统目录选择器，返回用户选择的 POSIX 路径；前端只显示“选择文件夹”，不显示手动路径输入。
+2. 下一阶段：保留当前 `/api/workspaces` 作为写入真源，但新增 `PATCH /api/workspaces/:id`、`DELETE /api/workspaces/:id`、`GET /api/workspaces/:id/tree` 和 `GET /api/workspaces/:id/summary`，让工作区页不再复用 flat file list。
+3. 部分完成：前端已经让点击工作区进入文件管理页、点击会话进入对话页；下一阶段再把导航状态显式整理成 `activeSurface = workspace | task | custom | settings`。
 4. 任务会话继续复用现有归档/删除 API；如果删除 API 缺少后端覆盖，要补齐 `DELETE /api/tasks/:taskId`，并保证不会碰工作区真实文件。
 5. 客户端化阶段用 Tauri/Electron 原生目录选择替换 AppleScript，并在 macOS sandbox 场景使用安全书签保存目录授权。
 
@@ -377,6 +377,7 @@ HC_EVENT\t
 - 搜索页：支持搜索任务标题、prompt、错误、Hermes session、执行结果、技能名和标签。
 - 定时任务页：接入真实后台服务状态，展示 Cowork API 后台、每日 MCP 推荐 LaunchAgent、日志目录、下一次日报生成时间，并可手动生成 MCP 推荐日报。
 - 工作区页：点击左侧工作区进入，展示该授权目录的文件管理、最近会话、最近产物和可执行入口；项目页/搜索页只作为高级管理和跨工作区检索入口。
+- 工作区第一阶段已落地：左侧工作区以目录树展示，工作区下挂活跃会话；点击工作区进入文件管理页，点击会话进入对话页；“授权文件夹”通过本机 API 调 macOS Finder 选择目录，不再展示手动路径输入表单。
 - 调度页：根据真实 MCP 连接器和已启用 lark skills 汇总网页浏览器、飞书办公、数据与文件三类能力，并可跳转 Connectors 或 MCP 管理。
 - 任务模板页：补充中文办公模板，覆盖文件整理、文档生成、飞书办公、数据分析、网页调研，并支持分类筛选。
 - 自定义页：按 Cowork 产品参考图拆成 `Skills / Connectors` 二级结构。Skills 读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；Connectors 读取真实 Hermes MCP 服务，展示已安装/启用数量、配置路径、服务说明、传输方式和配置状态，并提供“从市场添加”和“打开 MCP 管理”入口。
@@ -576,6 +577,7 @@ POST /api/models/fallbacks
 - 左侧栏工作区卡下一阶段改为工作区目录行：点击进入文件管理页，行内菜单承载打开目录、重命名、重新授权和移除工作区。
 - 左侧最近任务升级为任务卡：展示状态、更新时间、结果/产物提示；运行中和失败任务有更明确底色；完成任务可一键继续追问，失败/停止任务可一键重新运行，非运行任务可直接归档。
 - 工作区首页规划已调整为文件管理页：文件列表、目录导航、预览和作为上下文发送是主角；最近任务、产物和常用 Skill 只作为辅助信息，避免把后台统计铺满界面。
+- 工作区文件页已做第一版：顶部只显示可工作状态和行动入口；主区域展示工作区文件，支持作为上下文、预览、Finder 定位；右侧只在有内容时展示会话和产物。
 - 新建任务首页已按录屏调整为标题 + 任务模板卡片 + 底部输入框。
 - 主任务区已改为“主线答案优先”：完成任务只显示轻量状态条，最终回答保留在对话正文；当前对话保留最后一次用户提问和最终回复，其余历史折叠；失败/停止任务提供重试和继续入口。
 - Hermes Session 覆盖已推进：后端读取 `~/.hermes/sessions` 原生 session 元数据；前端在主结果卡和右侧 Session 卡展示原生消息数、模型、更新时间和 Cowork 任务关联状态。
@@ -844,7 +846,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 ## 12. 已知限制
 
 - 当前不是 macOS 原生客户端，还是本地 Web。
-- 工作区授权目前仍是手动输入路径；下一阶段要改成左侧“+ 授权工作区”触发 macOS Finder 目录选择，并隐藏手动路径输入。
+- 工作区授权已改为左侧“+ / 授权文件夹”触发 macOS Finder 目录选择；当前仍是本地 Web + Node Adapter 方案，未来打包成客户端后要替换为 Tauri/Electron 原生授权和安全书签。
 - 文件预览只覆盖文本类和小型无扩展文本文件。
 - docx/pptx/xlsx/pdf 还没有高保真预览。
 - 任务状态存在 `data/state.json`，大规模数据不适合长期使用。
