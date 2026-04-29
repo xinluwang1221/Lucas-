@@ -237,6 +237,29 @@ export function setHermesFallbackProviders(providers: string[]) {
   return { ok: true, backupPath }
 }
 
+export function removeHermesModelProvider(providerId: string) {
+  const safeProvider = normalizeProviderId(providerId)
+  if (!safeProvider) throw new Error('模型服务商不合法')
+
+  const config = readHermesModelConfig()
+  if (safeProvider === normalizeProviderId(config.provider)) {
+    throw new Error('当前默认模型服务不能删除，请先切换默认模型')
+  }
+
+  const raw = fs.readFileSync(hermesConfigPath, 'utf8')
+  const backupPath = backupHermesConfig(raw)
+  const filteredFallbacks = config.fallbackProviders.filter((provider) => normalizeProviderId(provider) !== safeProvider)
+  let nextRaw = removeCustomProviderBlocks(raw, [safeProvider])
+  nextRaw = upsertRootYamlList(nextRaw, 'fallback_providers', filteredFallbacks)
+  fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
+  try {
+    fs.chmodSync(hermesConfigPath, 0o600)
+  } catch {
+    // macOS may already enforce permissions; failing chmod should not block config.
+  }
+  return { ok: true, backupPath }
+}
+
 export function configureHermesModel(request: HermesModelConfigureRequest) {
   const provider = normalizeProviderId(request.provider)
   const modelId = normalizeModelValue(request.modelId)

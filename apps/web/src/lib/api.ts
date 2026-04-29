@@ -575,6 +575,12 @@ export async function addModel(model: Pick<ModelOption, 'id' | 'label' | 'provid
   })
 }
 
+export async function deleteModel(modelId: string): Promise<ModelListResponse> {
+  return request(`/api/models/${encodeURIComponent(modelId)}`, {
+    method: 'DELETE'
+  })
+}
+
 export async function setHermesDefaultModel(modelId: string, provider?: string): Promise<ModelListResponse> {
   return request('/api/models/hermes-default', {
     method: 'POST',
@@ -588,6 +594,12 @@ export async function configureHermesModel(requestBody: HermesModelConfigureRequ
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify(requestBody)
+  })
+}
+
+export async function deleteHermesModelProvider(providerId: string): Promise<ModelListResponse> {
+  return request(`/api/models/providers/${encodeURIComponent(providerId)}`, {
+    method: 'DELETE'
   })
 }
 

@@ -5985,19 +5985,34 @@ summary:focus-visible {
 
 .cowork-model-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 6px;
   background: #fffdf7;
   border: 1px solid var(--line);
   border-radius: 7px;
-  text-align: left;
 }
 
 .cowork-model-row.active {
   border-color: #86c49f;
   background: #f0fff6;
+}
+
+.cowork-model-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 6px;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.cowork-model-select:hover:not(:disabled) {
+  background: rgba(49, 92, 66, 0.07);
 }
 
 .cowork-model-row strong,
@@ -6017,6 +6032,26 @@ summary:focus-visible {
   font-weight: 700;
 }
 
+.model-delete-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #c54856;
+  background: #f2e6e7;
+  border-radius: 7px;
+}
+
+.model-delete-button:hover:not(:disabled) {
+  color: #a9293a;
+  background: #f8dfe1;
+}
+
+.model-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .model-provider-card {
   padding: 12px;
   background: #fffdf7;
@@ -6032,6 +6067,7 @@ summary:focus-visible {
 .model-provider-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 14px;
 }
 
@@ -6046,6 +6082,13 @@ summary:focus-visible {
   font-size: 12px;
   font-style: normal;
   font-weight: 700;
+}
+
+.model-provider-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .model-provider-meta {

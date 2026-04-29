@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
-import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
+import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, removeHermesModelProvider, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
@@ -353,6 +353,37 @@ app.post('/api/models', (req, res) => {
   res.status(201).json(model)
 })
 
+app.delete('/api/models/:modelId', (req, res) => {
+  const modelId = normalizeModelId(req.params.modelId)
+  if (!modelId || modelId === 'auto') {
+    res.status(400).json({ error: '只能删除用户添加的本次任务模型选项' })
+    return
+  }
+
+  let removed = false
+  store.update((state) => {
+    const nextModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
+    removed = nextModels.length !== state.modelSettings.customModels.length
+    state.modelSettings.customModels = nextModels
+    if (state.modelSettings.selectedModelId === modelId) {
+      state.modelSettings.selectedModelId = 'auto'
+    }
+  })
+
+  if (!removed) {
+    res.status(404).json({ error: 'model not found' })
+    return
+  }
+
+  const settings = store.snapshot.modelSettings
+  res.json({
+    selectedModelId: settings.selectedModelId,
+    models: listModelOptions(settings),
+    hermes: readHermesModelOverview(settings),
+    catalog: readHermesModelCatalog()
+  })
+})
+
 app.post('/api/models/hermes-default', (req, res) => {
   try {
     const { modelId, provider } = req.body as { modelId?: unknown; provider?: unknown }
@@ -404,6 +435,26 @@ app.post('/api/models/configure', (req, res) => {
     })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.delete('/api/models/providers/:providerId', (req, res) => {
+  try {
+    removeHermesModelProvider(req.params.providerId)
+    store.update((state) => {
+      state.modelSettings.selectedModelId = 'auto'
+      state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.provider !== req.params.providerId)
+    })
+    const settings = store.snapshot.modelSettings
+    res.json({
+      selectedModelId: settings.selectedModelId,
+      models: listModelOptions(settings),
+      hermes: readHermesModelOverview(settings),
+      catalog: readHermesModelCatalog()
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    res.status(message.includes('当前默认') ? 409 : 500).json({ error: message })
   }
 })
 

@@ -58,6 +58,8 @@ import {
   configureHermesModel,
   configureHermesMcpServer,
   createTask,
+  deleteHermesModelProvider,
+  deleteModel,
   deleteTask,
   ExecutionEvent,
   getBackgroundStatus,
@@ -815,6 +817,28 @@ function App() {
     }
   }
 
+  async function handleDeleteModel(model: ModelOption) {
+    if (model.builtIn) return
+    const ok = window.confirm(`删除本次任务模型选项“${model.label}”？这不会删除 Hermes 的默认模型配置。`)
+    if (!ok) return
+    setHermesModelUpdating(`delete-model:${model.id}`)
+    setHermesModelError(null)
+    setModelNotice(null)
+    try {
+      const response = await deleteModel(model.id)
+      setModels(response.models)
+      setSelectedModelId(response.selectedModelId)
+      setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
+      setModelMenuOpen(false)
+      setModelNotice(`已删除本次任务模型选项：${model.label}`)
+    } catch (cause) {
+      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setHermesModelUpdating(null)
+    }
+  }
+
   async function handleSetHermesFallbackProviders(providers: string[]) {
     setHermesModelUpdating('fallbacks')
     setHermesModelError(null)
@@ -828,6 +852,26 @@ function App() {
     } catch (error) {
       const cause = error instanceof Error ? error : new Error(String(error))
       setHermesModelError(cause.message)
+    } finally {
+      setHermesModelUpdating(null)
+    }
+  }
+
+  async function handleDeleteHermesModelProvider(providerId: string, label: string) {
+    const ok = window.confirm(`删除 Hermes 模型服务“${label}”的 Cowork 可管理配置？如果它是当前默认模型，请先切换默认模型。`)
+    if (!ok) return
+    setHermesModelUpdating(`delete-provider:${providerId}`)
+    setHermesModelError(null)
+    setModelNotice(null)
+    try {
+      const response = await deleteHermesModelProvider(providerId)
+      setModels(response.models)
+      setSelectedModelId(response.selectedModelId)
+      setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
+      setModelNotice(`已移除模型服务配置：${label}`)
+    } catch (cause) {
+      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setHermesModelUpdating(null)
     }
@@ -1993,8 +2037,10 @@ function App() {
             onToggleMcpServe={(enabled) => void handleToggleMcpServe(enabled)}
             onRefreshMcpServe={() => void refreshMcpServeStatus()}
             onSelectModel={(model) => void handleSelectModel(model)}
+            onDeleteModel={(model) => void handleDeleteModel(model)}
             onSetHermesDefaultModel={(modelId, provider) => void handleSetHermesDefaultModel(modelId, provider)}
             onSetHermesFallbackProviders={(providers) => void handleSetHermesFallbackProviders(providers)}
+            onDeleteHermesModelProvider={(providerId, label) => void handleDeleteHermesModelProvider(providerId, label)}
             onRefreshModels={() => void refreshModels()}
             onRefreshModelCatalog={() => void handleRefreshModelCatalog()}
             onAddRule={handleAddSettingsRule}
@@ -2935,8 +2981,10 @@ function SettingsModal({
   onToggleMcpServe,
   onRefreshMcpServe,
   onSelectModel,
+  onDeleteModel,
   onSetHermesDefaultModel,
   onSetHermesFallbackProviders,
+  onDeleteHermesModelProvider,
   onRefreshModels,
   onRefreshModelCatalog,
   onAddRule,
@@ -2994,8 +3042,10 @@ function SettingsModal({
   onToggleMcpServe: (enabled: boolean) => void
   onRefreshMcpServe: () => void
   onSelectModel: (model: ModelOption) => void
+  onDeleteModel: (model: ModelOption) => void
   onSetHermesDefaultModel: (modelId: string, provider?: string) => void
   onSetHermesFallbackProviders: (providers: string[]) => void
+  onDeleteHermesModelProvider: (providerId: string, label: string) => void
   onRefreshModels: () => void
   onRefreshModelCatalog: () => void
   onAddRule: (rule: string) => void
@@ -3311,18 +3361,32 @@ function SettingsModal({
               <p className="settings-section-copy">选择“使用 Hermes 默认”时，Cowork 不传模型参数，完全跟随 Hermes 当前配置。</p>
               <div className="cowork-model-list simplified">
                 {models.map((model) => (
-                  <button
+                  <div
                     className={model.id === selectedModelId ? 'cowork-model-row active' : 'cowork-model-row'}
                     key={model.id}
-                    onClick={() => onSelectModel(model)}
-                    disabled={model.id === selectedModelId}
                   >
-                    <div>
-                      <strong>{model.label}</strong>
-                      <span>{model.description ?? model.provider ?? model.id}</span>
-                    </div>
-                    <em>{model.id === selectedModelId ? '当前使用' : '选择'}</em>
-                  </button>
+                    <button
+                      className="cowork-model-select"
+                      onClick={() => onSelectModel(model)}
+                      disabled={model.id === selectedModelId || hermesModelUpdating === `delete-model:${model.id}`}
+                    >
+                      <div>
+                        <strong>{model.label}</strong>
+                        <span>{model.description ?? model.provider ?? model.id}</span>
+                      </div>
+                      <em>{model.id === selectedModelId ? '当前使用' : '选择'}</em>
+                    </button>
+                    {!model.builtIn && (
+                      <button
+                        className="model-delete-button"
+                        onClick={() => onDeleteModel(model)}
+                        disabled={Boolean(hermesModelUpdating)}
+                        title="删除这个本次任务模型选项"
+                      >
+                        {hermesModelUpdating === `delete-model:${model.id}` ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
               <button className="settings-add-button" onClick={onOpenAddModel}>
@@ -3335,33 +3399,48 @@ function SettingsModal({
               <p className="settings-section-copy">这里会写回 Hermes `config.yaml`。适合你决定以后所有 Hermes 新任务都使用某个模型。</p>
               <div className="settings-info-banner">
                 <Info size={15} />
-                供应商只展示中国大模型服务。模型候选来自 Hermes 内置目录，并可点击“刷新官网模型”从公开官网补充新版本；当前读取到 {modelCatalog.length || '0'} 个供应商。
+                供应商只展示中国大模型服务。模型候选来自 Hermes 内置目录，并可点击“刷新官网模型”从公开官网补充新版本；当前读取到 {modelCatalog.length || '0'} 个供应商。当前默认服务需要先切换，才能删除。
               </div>
               <div className="model-provider-list compact">
-                {modelProvidersForView.slice(0, 5).map((provider) => (
-                  <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
-                    <div className="model-provider-head">
-                      <div>
-                        <strong>{provider.label}</strong>
-                        <span>{provider.credentialSummary || (provider.configured ? '已配置' : '未配置')}</span>
+                {modelProvidersForView.slice(0, 5).map((provider) => {
+                  const providerCanDelete = !provider.isCurrent && (provider.source === 'config' || provider.source === 'custom')
+                  return (
+                    <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
+                      <div className="model-provider-head">
+                        <div>
+                          <strong>{provider.label}</strong>
+                          <span>{provider.credentialSummary || (provider.configured ? '已配置' : '未配置')}</span>
+                        </div>
+                        <div className="model-provider-actions">
+                          <em>{provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
+                          {providerCanDelete && (
+                            <button
+                              className="model-delete-button"
+                              onClick={() => onDeleteHermesModelProvider(provider.id, provider.label)}
+                              disabled={Boolean(hermesModelUpdating)}
+                              title="删除这个 Hermes 模型服务配置"
+                            >
+                              {hermesModelUpdating === `delete-provider:${provider.id}` ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <em>{provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
+                      <div className="model-chip-list">
+                        {provider.models.length ? provider.models.slice(0, 6).map((modelId) => (
+                          <button
+                            key={modelId}
+                            disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
+                            onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
+                          >
+                            {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
+                            {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
+                            {modelId}
+                          </button>
+                        )) : <span className="model-chip-empty">暂无可选模型</span>}
+                      </div>
                     </div>
-                    <div className="model-chip-list">
-                      {provider.models.length ? provider.models.slice(0, 6).map((modelId) => (
-                        <button
-                          key={modelId}
-                          disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
-                          onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
-                        >
-                          {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
-                          {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
-                          {modelId}
-                        </button>
-                      )) : <span className="model-chip-empty">暂无可选模型</span>}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </SettingsBlock>
 
