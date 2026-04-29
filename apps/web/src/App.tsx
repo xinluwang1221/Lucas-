@@ -1310,7 +1310,11 @@ function App() {
     setHermesCompatibilityRunning(true)
     setHermesCompatibilityError(null)
     try {
-      setHermesCompatibilityResult(await runHermesCompatibilityTest())
+      const result = await runHermesCompatibilityTest()
+      setHermesCompatibilityResult(result)
+      if (result.status === 'passed') {
+        setHermesAutoUpdateResult(null)
+      }
       await refreshHermesUpdateStatus()
     } catch (cause) {
       setHermesCompatibilityError(cause instanceof Error ? cause.message : String(cause))
@@ -6870,27 +6874,39 @@ function HermesUpdatePanel({
     )
   }
 
-  const statusClass = `hermes-update-banner ${status.compatibility.status}`
+  const manualTestSupersedesAutoUpdate = Boolean(
+    autoUpdateResult &&
+    testResult?.status === 'passed' &&
+    Date.parse(testResult.completedAt) > Date.parse(autoUpdateResult.completedAt)
+  )
+  const visibleAutoUpdateResult = manualTestSupersedesAutoUpdate ? null : autoUpdateResult
+  const displayStatus = testResult?.status === 'passed' && !status.updateAvailable ? 'verified' : status.compatibility.status
+  const statusClass = `hermes-update-banner ${displayStatus}`
   const statusLabel = {
     verified: '可继续使用',
     'needs-review': '升级前需复测',
     blocked: '暂不建议升级',
     unknown: '需要检查'
-  }[status.compatibility.status]
-  const statusIcon = status.compatibility.status === 'blocked'
+  }[displayStatus]
+  const statusIcon = displayStatus === 'blocked'
     ? <XCircle size={18} />
-    : status.compatibility.status === 'verified'
+    : displayStatus === 'verified'
       ? <CheckCircle2 size={18} />
       : <RefreshCw size={18} />
   const headline = status.updateAvailable
     ? `发现 Hermes 新版本 ${status.latestTag || ''}`.trim()
-    : status.compatibility.status === 'blocked'
-      ? 'Hermes 已更新，但环境需要整理'
-      : 'Hermes 当前可继续使用'
+    : displayStatus === 'verified'
+      ? '当前很好，无需操作'
+      : displayStatus === 'blocked'
+        ? '暂不建议更新 Hermes'
+        : status.compatibility.title
+  const decisionDetail = displayStatus === 'verified' && !status.updateAvailable
+    ? '当前 Hermes 后端可用，也没有需要升级的版本。技术诊断信息已收起，日常使用不用处理这里。'
+    : status.compatibility.detail
   const versionText = status.latestTag && status.latestTag !== status.currentTag
     ? `${status.currentTag || '未知'} → ${status.latestTag}`
     : `${status.currentTag || status.currentVersion || '未知版本'}`
-  const canAutoUpdate = Boolean(status.updateAvailable && testResult?.status === 'passed' && status.compatibility.status !== 'blocked')
+  const canAutoUpdate = Boolean(status.updateAvailable && testResult?.status === 'passed' && displayStatus !== 'blocked')
   const autoUpdateHint = canAutoUpdate
     ? '前测已通过，Cowork 会自动备份、更新并复测。'
     : status.updateAvailable
@@ -6904,11 +6920,11 @@ function HermesUpdatePanel({
         <div className="hermes-update-summary-copy">
           <span>Hermes 后台更新</span>
           <strong>{headline}</strong>
-          <p>{status.compatibility.detail}</p>
+          <p>{decisionDetail}</p>
           <div className="hermes-update-version-strip">
             <span>当前 {versionText}</span>
             <span>{status.updateAvailable ? '有可用更新' : '无需更新'}</span>
-            {status.workingTreeDirty && <span>本机仓库有改动</span>}
+            <span>{displayStatus === 'verified' ? '无需操作' : statusLabel}</span>
           </div>
         </div>
       </div>
@@ -6945,7 +6961,7 @@ function HermesUpdatePanel({
 
       <div className="hermes-update-result-stack">
         <HermesCompatibilityResultCard result={testResult} running={testRunning} onRun={onRunTest} />
-        <HermesAutoUpdateResultCard result={autoUpdateResult} running={autoUpdating} />
+        <HermesAutoUpdateResultCard result={visibleAutoUpdateResult} running={autoUpdating} />
       </div>
 
       <details className="hermes-update-diagnostics">

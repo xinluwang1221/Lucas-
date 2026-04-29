@@ -335,6 +335,7 @@ function buildCompatibility(params: {
   const latestBeyondVerified = params.latestTag
     ? compareHermesTags(params.latestTag, COWORK_TESTED_HERMES_TAG) > 0
     : false
+  const currentBeyondVerified = compareHermesTags(params.currentTag, COWORK_TESTED_HERMES_TAG) > 0
 
   if (!params.checksOk) {
     return {
@@ -349,20 +350,20 @@ function buildCompatibility(params: {
     }
   }
 
-  if (params.workingTreeDirty) {
+  if (params.workingTreeDirty && params.updateAvailable) {
     return {
       status: 'blocked',
-      title: '本机 Hermes 有未提交改动',
-      detail: '升级可能覆盖本机改动。请先备份或清理 Hermes 工作树，再考虑更新。',
+      title: '先处理本机改动，再更新 Hermes',
+      detail: '当前有新版本，但 Hermes 项目目录里还有本机改动。为了避免更新覆盖这些改动，先交给维护者备份或清理，再继续升级。',
       notes: [
-        'Cowork 会继续使用当前 Hermes。',
-        '不要在工作树未清理时运行 hermes update。',
-        '如确实需要升级，先记录当前 commit 和配置文件。'
+        '当前 Cowork 会继续使用现有 Hermes。',
+        '暂时不要运行自动更新。',
+        '清理本机改动后重新检查更新并运行复测。'
       ]
     }
   }
 
-  if (latestBeyondVerified) {
+  if (params.updateAvailable && latestBeyondVerified) {
     return {
       status: 'needs-review',
       title: '有新版本，但需要兼容性复测',
@@ -388,14 +389,29 @@ function buildCompatibility(params: {
     }
   }
 
+  if (currentBeyondVerified) {
+    return {
+      status: 'needs-review',
+      title: '当前 Hermes 是新版，建议复测一次',
+      detail: '本机 Hermes 已经高于 Cowork 的旧验证基线。没有可用更新，但建议运行一次复测；复测通过后，这里会显示“当前很好，无需操作”。',
+      notes: [
+        '点击“运行复测”。',
+        '复测通过后可继续正常使用。',
+        '如果复测失败，再按失败项处理。'
+      ]
+    }
+  }
+
   return {
     status: 'verified',
-    title: '当前版本在 Cowork 验证范围内',
-    detail: '本机 Hermes 没有检测到需要立刻升级的版本差异，可以继续使用。',
+    title: '当前很好，无需操作',
+    detail: params.workingTreeDirty
+      ? '当前没有可用更新，Hermes 也能继续使用。本机仓库改动属于维护信息，已收进诊断详情；等下次真的要升级时再处理。'
+      : '本机 Hermes 没有检测到需要立刻升级的版本差异，可以继续使用。',
     notes: [
-      '保持 Cowork 和 Hermes 都在本机运行。',
-      '大版本更新前仍建议先备份 Hermes 配置。',
-      '更新后用一个小任务验证模型、MCP 和产物区。'
+      '当前不用做任何处理。',
+      '需要升级时再运行复测。',
+      '技术诊断信息仅用于后续维护排查。'
     ]
   }
 }
