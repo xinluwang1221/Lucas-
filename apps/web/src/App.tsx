@@ -389,6 +389,9 @@ function App() {
   const skillFileInputRef = useRef<HTMLInputElement | null>(null)
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
+  const conversationRef = useRef<HTMLElement | null>(null)
+  const conversationEndRef = useRef<HTMLDivElement | null>(null)
+  const conversationFollowRef = useRef(true)
   const dragDepthRef = useRef(0)
   const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
   const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
@@ -619,6 +622,24 @@ function App() {
   }, [selectedWorkspaceId])
 
   useEffect(() => {
+    conversationFollowRef.current = true
+    scrollConversationToBottom()
+  }, [selectedTaskId])
+
+  useEffect(() => {
+    if (!selectedTask || !conversationFollowRef.current) return
+    scrollConversationToBottom()
+  }, [
+    selectedTask?.id,
+    selectedTask?.status,
+    selectedTask?.updatedAt,
+    selectedTask?.liveResponse?.length,
+    selectedTask?.events?.length,
+    selectedTask?.messages.length,
+    selectedTask?.artifacts.length
+  ])
+
+  useEffect(() => {
     void refresh().catch((cause) => setError(cause.message))
     const interval = window.setInterval(() => {
       void refresh().catch(() => undefined)
@@ -704,6 +725,18 @@ function App() {
       input.focus()
       input.setSelectionRange(input.value.length, input.value.length)
     })
+  }
+
+  function scrollConversationToBottom() {
+    window.requestAnimationFrame(() => {
+      conversationEndRef.current?.scrollIntoView({ block: 'end' })
+    })
+  }
+
+  function handleConversationScroll() {
+    const element = conversationRef.current
+    if (!element) return
+    conversationFollowRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 180
   }
 
   async function submitPrompt() {
@@ -1588,7 +1621,7 @@ function App() {
           />
         )}
 
-        <section className="conversation">
+        <section className="conversation" ref={conversationRef} onScroll={handleConversationScroll}>
           {!selectedTask && (
             <div className="welcome-panel">
               <h2><span>Hermes</span> Cowork</h2>
@@ -1642,7 +1675,7 @@ function App() {
           ))}
 
           {selectedTask?.status === 'running' && (
-            <article className="message assistant pending">
+            <article className="message assistant pending streaming-message">
               <div className="message-meta message-meta-action">
                 <div>
                   Hermes
@@ -1662,13 +1695,14 @@ function App() {
               {selectedTask.liveResponse ? (
                 <div className="message-body live-output">{selectedTask.liveResponse}</div>
               ) : (
-                <div className="pending-line">
+                <div className="running-inline-status">
                   <Loader2 size={16} className="spin" />
                   Hermes 正在授权工作区内执行任务...
                 </div>
               )}
             </article>
           )}
+          <div className="conversation-bottom" ref={conversationEndRef} />
         </section>
 
         <form className="composer" onSubmit={handleSubmit}>
