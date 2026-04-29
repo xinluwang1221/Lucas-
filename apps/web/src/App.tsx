@@ -652,6 +652,11 @@ function App() {
     void refreshModels().catch(() => undefined)
   }, [])
 
+  useEffect(() => {
+    if (!settingsOpen || settingsTab !== 'models') return
+    void refreshModels().catch(() => undefined)
+  }, [settingsOpen, settingsTab])
+
   function focusComposer() {
     window.requestAnimationFrame(() => {
       const input = promptInputRef.current
@@ -2987,7 +2992,7 @@ function SettingsModal({
   const [ruleDraft, setRuleDraft] = useState('')
   const [expandedMcpId, setExpandedMcpId] = useState<string | null>(null)
   const mcpServers = hermesMcp?.servers ?? []
-  const modelProvidersForView = hermesModel?.providers ?? []
+  const modelProvidersForView = dedupeModelProvidersForView(hermesModel?.providers ?? [])
   const modelCredentialsForView = hermesModel?.credentials ?? []
   const fallbackProviderIds = hermesModel?.fallbackProviders ?? []
   const fallbackProviderSet = new Set(fallbackProviderIds)
@@ -4333,6 +4338,28 @@ function Toggle({
       <span />
     </button>
   )
+}
+
+function dedupeModelProvidersForView(providers: HermesModelOverview['providers']) {
+  const byId = new Map<string, HermesModelOverview['providers'][number]>()
+  for (const provider of providers) {
+    const key = provider.id.startsWith('custom:') ? provider.id.replace(/^custom:/, '') : provider.id
+    const existing = byId.get(key)
+    if (!existing) {
+      byId.set(key, { ...provider, id: key })
+      continue
+    }
+    byId.set(key, {
+      ...existing,
+      configured: existing.configured || provider.configured,
+      isCurrent: existing.isCurrent || provider.isCurrent,
+      baseUrl: provider.baseUrl || existing.baseUrl,
+      apiMode: provider.apiMode || existing.apiMode,
+      models: [...new Set([...existing.models, ...provider.models])],
+      credentialSummary: [...new Set([existing.credentialSummary, provider.credentialSummary].filter(Boolean))].join('；')
+    })
+  }
+  return [...byId.values()]
 }
 
 function InfoGrid({ items }: { items: Array<[string, string]> }) {
