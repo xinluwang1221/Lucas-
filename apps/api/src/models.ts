@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { hermesAgentDir, hermesBin } from './paths.js'
-import { HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
+import { HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
 
 const hermesConfigPath = '/Users/lucas/.hermes/config.yaml'
 const hermesEnvPath = '/Users/lucas/.hermes/.env'
@@ -107,6 +107,34 @@ export function setHermesFallbackProviders(providers: string[]) {
   const backupPath = backupHermesConfig(raw)
   const nextRaw = upsertRootYamlList(raw, 'fallback_providers', safeProviders)
   fs.writeFileSync(hermesConfigPath, nextRaw, 'utf8')
+  return { ok: true, backupPath }
+}
+
+export function configureHermesModel(request: HermesModelConfigureRequest) {
+  const provider = normalizeProviderId(request.provider)
+  const modelId = normalizeModelValue(request.modelId)
+  const baseUrl = normalizeModelValue(request.baseUrl ?? '')
+  const apiKey = normalizeSecretValue(request.apiKey ?? '')
+  const apiMode = normalizeModelValue(request.apiMode ?? '')
+  if (!provider) throw new Error('请选择模型服务商')
+  if (!modelId) throw new Error('请填写模型 ID')
+
+  const raw = fs.readFileSync(hermesConfigPath, 'utf8')
+  const backupPath = backupHermesConfig(raw)
+  const fields: Record<string, string | undefined> = {
+    default: modelId,
+    provider
+  }
+  if (baseUrl) fields.base_url = baseUrl
+  if (apiKey) fields.api_key = apiKey
+  if (apiMode) fields.api_mode = apiMode
+  const nextRaw = upsertModelConfigFields(raw, fields)
+  fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
+  try {
+    fs.chmodSync(hermesConfigPath, 0o600)
+  } catch {
+    // macOS may already enforce permissions; failing chmod should not block config.
+  }
   return { ok: true, backupPath }
 }
 
@@ -337,10 +365,18 @@ function readYamlList(block: string) {
 }
 
 function upsertModelConfig(raw: string, modelId: string, provider?: string) {
+  return upsertModelConfigFields(raw, {
+    default: modelId,
+    provider: provider || undefined
+  })
+}
+
+function upsertModelConfigFields(raw: string, fields: Record<string, string | undefined>) {
   const lines = raw.replace(/\r/g, '').split('\n')
   const start = lines.findIndex((line) => line.trim() === 'model:')
+  const entries = Object.entries(fields).filter((entry): entry is [string, string] => Boolean(entry[1]))
   if (start === -1) {
-    return `model:\n  default: ${quoteYaml(modelId)}${provider ? `\n  provider: ${quoteYaml(provider)}` : ''}\n${raw}`
+    return [`model:`, ...entries.map(([key, value]) => `  ${key}: ${quoteYaml(value)}`), raw].join('\n')
   }
 
   let end = lines.length
@@ -350,10 +386,11 @@ function upsertModelConfig(raw: string, modelId: string, provider?: string) {
       break
     }
   }
-  const block = lines.slice(start + 1, end)
-  const nextBlock = upsertIndentedScalar(block, 'default', modelId)
-  const finalBlock = provider ? upsertIndentedScalar(nextBlock, 'provider', provider) : nextBlock
-  return [...lines.slice(0, start + 1), ...finalBlock, ...lines.slice(end)].join('\n')
+  let block = lines.slice(start + 1, end)
+  for (const [key, value] of entries) {
+    block = upsertIndentedScalar(block, key, value)
+  }
+  return [...lines.slice(0, start + 1), ...block, ...lines.slice(end)].join('\n')
 }
 
 function upsertIndentedScalar(lines: string[], key: string, value: string) {
@@ -438,6 +475,10 @@ function normalizeProviderId(value: string) {
 
 function normalizeModelValue(value: string) {
   return value.trim().replace(/[\r\n\0]/g, '').slice(0, 160)
+}
+
+function normalizeSecretValue(value: string) {
+  return value.trim().replace(/[\r\n\0]/g, '').slice(0, 4096)
 }
 
 function customProviderId(value: string) {

@@ -50,11 +50,11 @@ import {
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addWorkspace,
-  addModel,
   AppState,
   archiveTask,
   Artifact,
   BackgroundServiceStatus,
+  configureHermesModel,
   configureHermesMcpServer,
   createTask,
   deleteTask,
@@ -295,6 +295,12 @@ const providerModelPresets: Record<string, string[]> = {
   'Z.AI / GLM': ['glm-5.1', 'glm-5', 'glm-5-turbo']
 }
 
+const providerBaseUrlHints: Record<string, string> = {
+  'Custom endpoint': '例如 https://api.example.com/v1',
+  OpenRouter: 'https://openrouter.ai/api/v1',
+  'Xiaomi MiMo': '例如 https://token-plan-cn.xiaomimimo.com/v1'
+}
+
 function App() {
   const [state, setState] = useState<AppState>(emptyState)
   const [viewMode, setViewMode] = useState<ViewMode>('tasks')
@@ -359,6 +365,10 @@ function App() {
   const [newModelId, setNewModelId] = useState('')
   const [newModelLabel, setNewModelLabel] = useState('')
   const [newModelProvider, setNewModelProvider] = useState('')
+  const [newModelBaseUrl, setNewModelBaseUrl] = useState('')
+  const [newModelApiKey, setNewModelApiKey] = useState('')
+  const [newModelApiMode, setNewModelApiMode] = useState('chat_completions')
+  const [modelPanelSaving, setModelPanelSaving] = useState(false)
   const [modelNotice, setModelNotice] = useState<string | null>(null)
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
@@ -814,24 +824,39 @@ function App() {
   async function handleAddModel(event: FormEvent) {
     event.preventDefault()
     const id = newModelId.trim() || newModelLabel.trim()
-    if (!id) return
+    const provider = hermesProviderId(newModelProvider)
+    if (!id || !provider) return
     setModelNotice(null)
+    setHermesModelError(null)
+    setModelPanelSaving(true)
     try {
-      const model = await addModel({
-        id,
-        label: newModelLabel.trim() || id,
-        provider: hermesProviderId(newModelProvider) || undefined,
-        description: '用户添加的模型选项'
+      const response = await configureHermesModel({
+        provider,
+        modelId: id,
+        baseUrl: newModelBaseUrl.trim() || undefined,
+        apiKey: newModelApiKey.trim() || undefined,
+        apiMode: newModelApiMode
       })
+      await selectModel('auto')
+      setModels(response.models)
+      setSelectedModelId('auto')
+      setHermesModel(response.hermes)
       setNewModelId('')
       setNewModelLabel('')
       setNewModelProvider('')
+      setNewModelBaseUrl('')
+      setNewModelApiKey('')
+      setNewModelApiMode('chat_completions')
       setModelPanelOpen(false)
       setModelMenuOpen(false)
-      setModelNotice(`已切换到 ${model.label}`)
+      setModelNotice(`已配置 Hermes 默认模型：${id}`)
       await refreshModels()
     } catch (cause) {
-      setModelNotice(cause instanceof Error ? cause.message : String(cause))
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setModelNotice(message)
+      setHermesModelError(message)
+    } finally {
+      setModelPanelSaving(false)
     }
   }
 
@@ -1579,12 +1604,13 @@ function App() {
                       type="button"
                       className="add-model-option"
                       onClick={() => {
+                        setModelNotice(null)
                         setModelPanelOpen(true)
                         setModelMenuOpen(false)
                       }}
                     >
                       <Settings size={14} />
-                      添加模型
+                      配置模型服务
                     </button>
                   </div>
                 )}
@@ -1771,9 +1797,10 @@ function App() {
 
       {modelPanelOpen && (
         <div className="modal-backdrop model-backdrop">
-          <form className="modal" onSubmit={handleAddModel}>
-            <h2>添加模型</h2>
-            <p>这里只保存模型路由名称，不保存 API 密钥；真正的密钥和默认模型仍跟随 Hermes 本机配置。</p>
+          <form className="modal model-config-modal" onSubmit={handleAddModel}>
+            <h2>配置模型服务</h2>
+            <p>这里直接写入 Hermes 本机配置。API Key 只保存在你的 Mac 上，界面不会回显。</p>
+            {modelNotice && <div className="modal-inline-error">{modelNotice}</div>}
             <label>
               服务商
               <select
@@ -1782,14 +1809,17 @@ function App() {
                   setNewModelProvider(event.target.value)
                   setNewModelId('')
                   setNewModelLabel('')
+                  setNewModelBaseUrl('')
+                  setNewModelApiKey('')
+                  setNewModelApiMode(event.target.value === 'Anthropic' ? 'anthropic_messages' : 'chat_completions')
                 }}
               >
                 <option value="">选择模型服务商</option>
-                {modelProviders.map((provider) => <option key={provider}>{provider}</option>)}
+                {modelProviders.filter((provider) => provider !== 'Hermes 当前 Provider').map((provider) => <option key={provider}>{provider}</option>)}
               </select>
             </label>
             <label>
-              模型
+              默认模型
               <select
                 value={newModelLabel}
                 onChange={(event) => {
@@ -1818,20 +1848,41 @@ function App() {
               </label>
             )}
             <label>
-              显示名称
+              Base URL
               <input
-                value={newModelLabel === 'custom' ? '' : newModelLabel}
-                onChange={(event) => setNewModelLabel(event.target.value)}
-                placeholder="留空则使用模型 ID"
+                value={newModelBaseUrl}
+                onChange={(event) => setNewModelBaseUrl(event.target.value)}
+                placeholder={providerBaseUrlHints[newModelProvider] ?? '非自定义服务通常可留空'}
               />
             </label>
+            <label>
+              API Key
+              <input
+                type="password"
+                value={newModelApiKey}
+                onChange={(event) => setNewModelApiKey(event.target.value)}
+                placeholder="留空则保留 Hermes 当前密钥或登录状态"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              API 模式
+              <select value={newModelApiMode} onChange={(event) => setNewModelApiMode(event.target.value)}>
+                <option value="chat_completions">OpenAI 兼容 / Chat Completions</option>
+                <option value="anthropic_messages">Anthropic Messages</option>
+                <option value="responses">OpenAI Responses</option>
+              </select>
+            </label>
+            <div className="model-config-note">
+              保存后，Hermes Cowork 会把它设为 Hermes 默认模型；底部模型选择会回到“使用 Hermes 默认”。
+            </div>
             <div className="modal-actions">
-              <button type="button" className="ghost-button" onClick={() => setModelPanelOpen(false)}>
+              <button type="button" className="ghost-button" onClick={() => setModelPanelOpen(false)} disabled={modelPanelSaving}>
                 取消
               </button>
-              <button className="send-button">
-                <Plus size={16} />
-                添加并切换
+              <button className="send-button" disabled={modelPanelSaving || !newModelProvider || !(newModelId.trim() || newModelLabel.trim())}>
+                {modelPanelSaving ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
+                保存到 Hermes
               </button>
             </div>
           </form>
@@ -1896,6 +1947,7 @@ function App() {
             onRefreshModels={() => void refreshModels()}
             onAddRule={handleAddSettingsRule}
             onOpenAddModel={() => {
+              setModelNotice(null)
               setModelPanelOpen(true)
             }}
           />
@@ -3185,6 +3237,10 @@ function SettingsModal({
                 <Info size={15} />
                 普通使用只需要关注默认模型、本次任务模型和备用路线；Provider、Base URL、凭据属于高级配置。
               </div>
+              <button className="settings-add-button" onClick={onOpenAddModel}>
+                <Plus size={14} />
+                配置模型服务
+              </button>
             </SettingsBlock>
 
             <SettingsBlock title="本次任务用哪个模型">
@@ -3207,7 +3263,7 @@ function SettingsModal({
               </div>
               <button className="settings-add-button" onClick={onOpenAddModel}>
                 <Plus size={14} />
-                添加可选模型
+                配置新的模型服务
               </button>
             </SettingsBlock>
 

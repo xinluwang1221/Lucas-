@@ -6550,6 +6550,32 @@ summary:focus-visible {
   width: min(560px, calc(100vw - 48px));
 }
 
+.model-config-modal {
+  width: min(620px, calc(100vw - 48px));
+}
+
+.modal-inline-error {
+  margin: 12px 0;
+  padding: 10px 12px;
+  color: #7b3d20;
+  background: #fff5e6;
+  border: 1px solid #f0d2a8;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.model-config-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  color: var(--moss);
+  background: #edf8f0;
+  border: 1px solid #bfe2cb;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .manual-mcp-note {
   margin-top: 6px;
   color: var(--ink-soft);

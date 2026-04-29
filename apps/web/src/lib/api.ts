@@ -149,6 +149,14 @@ export type ModelListResponse = {
   hermes: HermesModelOverview
 }
 
+export type HermesModelConfigureRequest = {
+  provider: string
+  modelId: string
+  baseUrl?: string
+  apiKey?: string
+  apiMode?: string
+}
+
 export type Skill = {
   id: string
   name: string
@@ -525,6 +533,14 @@ export async function setHermesDefaultModel(modelId: string, provider?: string):
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({ modelId, provider })
+  })
+}
+
+export async function configureHermesModel(requestBody: HermesModelConfigureRequest): Promise<ModelListResponse> {
+  return request('/api/models/configure', {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify(requestBody)
   })
 }
 

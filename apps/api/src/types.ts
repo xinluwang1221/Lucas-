@@ -127,6 +127,14 @@ export type HermesModelOverview = {
   updatedAt: string
 }
 
+export type HermesModelConfigureRequest = {
+  provider: string
+  modelId: string
+  baseUrl?: string
+  apiKey?: string
+  apiMode?: string
+}
+
 export type HermesMcpServer = {
   id: string
   name: string

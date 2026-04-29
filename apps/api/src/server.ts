@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
-import { listModelOptions, normalizeModelId, readHermesModelOverview, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
+import { configureHermesModel, listModelOptions, normalizeModelId, readHermesModelOverview, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
@@ -341,6 +341,31 @@ app.post('/api/models/hermes-default', (req, res) => {
       return
     }
     setHermesDefaultModel(modelId, typeof provider === 'string' ? provider : undefined)
+    const settings = store.snapshot.modelSettings
+    res.json({
+      selectedModelId: settings.selectedModelId,
+      models: listModelOptions(settings),
+      hermes: readHermesModelOverview(settings)
+    })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/models/configure', (req, res) => {
+  try {
+    const { provider, modelId, baseUrl, apiKey, apiMode } = req.body as Record<string, unknown>
+    if (typeof provider !== 'string' || typeof modelId !== 'string') {
+      res.status(400).json({ error: 'provider and modelId are required' })
+      return
+    }
+    configureHermesModel({
+      provider,
+      modelId,
+      baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
+      apiKey: typeof apiKey === 'string' ? apiKey : undefined,
+      apiMode: typeof apiMode === 'string' ? apiMode : undefined
+    })
     const settings = store.snapshot.modelSettings
     res.json({
       selectedModelId: settings.selectedModelId,
