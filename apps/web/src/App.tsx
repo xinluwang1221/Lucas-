@@ -555,12 +555,14 @@ function App() {
   )
 
   const runningTask = state.tasks.find((task) => task.status === 'running')
-  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? {
+  const composerModels = useMemo(() => configuredModelOptionsForComposer(models), [models])
+  const selectedModel = composerModels.find((model) => model.id === selectedModelId) ?? composerModels[0] ?? {
     id: 'auto',
     label: 'Hermes 默认模型',
-    builtIn: true
+    builtIn: true,
+    source: 'auto'
   }
-  const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(models), [models])
+  const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
   const rememberedProviderConfig = providerSavedModelConfig(newModelProvider, hermesModel)
 
   const filteredTasks = useMemo(() => {
@@ -748,8 +750,8 @@ function App() {
       const activeTask = selectedTask?.status === 'running' ? null : selectedTask
       const taskSkillNames = activeTask?.skillNames?.length ? activeTask.skillNames : composerSkillNames
       const task = activeTask
-        ? await sendTaskMessage(activeTask.id, nextPrompt, selectedModelId, taskSkillNames).then(() => activeTask)
-        : await createTask(selectedWorkspace.id, nextPrompt, selectedModelId, taskSkillNames)
+        ? await sendTaskMessage(activeTask.id, nextPrompt, selectedModel.id, taskSkillNames).then(() => activeTask)
+        : await createTask(selectedWorkspace.id, nextPrompt, selectedModel.id, taskSkillNames)
       setPrompt('')
       setComposerSkillNames([])
       setSelectedTaskId(task.id)
@@ -1741,7 +1743,7 @@ function App() {
               <div className="model-picker" ref={modelPickerRef}>
                 {modelMenuOpen && (
                   <div className="model-menu">
-                    <div className="model-menu-title">Hermes 模型</div>
+                    <div className="model-menu-title">已配置模型</div>
                     {modelMenuGroups.map((group) => (
                       <div className="model-menu-group" key={group.label || 'default-models'}>
                         {group.label && <div className="model-menu-group-title">{group.label}</div>}
@@ -2077,9 +2079,9 @@ function App() {
             privacyMode={privacyMode}
             runtime={runtime}
             selectedModel={selectedModel}
-            models={models}
+            models={composerModels}
             modelCatalog={modelCatalog}
-            selectedModelId={selectedModelId}
+            selectedModelId={selectedModel.id}
             hermesModel={hermesModel}
             hermesModelUpdating={hermesModelUpdating}
             hermesModelError={hermesModelError}
@@ -4712,7 +4714,6 @@ function modelGroupsForProvider(providerId: string, models: string[]) {
 
 function groupModelOptionsForMenu(models: ModelOption[]) {
   const autoModels = models.filter((model) => model.id === 'auto')
-  const modelById = new Map(models.map((model) => [`${model.provider ?? 'auto'}:${model.id}`, model]))
   const providerGroups = new Map<string, ModelOption[]>()
   const otherModels: ModelOption[] = []
 
@@ -4730,18 +4731,6 @@ function groupModelOptionsForMenu(models: ModelOption[]) {
   if (autoModels.length) groups.push({ label: '常用', models: autoModels })
 
   for (const [providerId, providerModels] of providerGroups) {
-    if (providerId === 'xiaomi') {
-      for (const group of modelGroupsForProvider(providerId, providerModels.map((model) => model.id))) {
-        groups.push({
-          label: group.label,
-          models: group.models
-            .map((modelId) => modelById.get(`${providerId}:${modelId}`))
-            .filter((model): model is ModelOption => Boolean(model))
-        })
-      }
-      continue
-    }
-
     groups.push({
       label: providerLabelFromModel(providerModels[0]),
       models: providerModels
@@ -4752,11 +4741,25 @@ function groupModelOptionsForMenu(models: ModelOption[]) {
   return groups.filter((group) => group.models.length)
 }
 
+function configuredModelOptionsForComposer(models: ModelOption[]) {
+  const filtered = models.filter(isConfiguredComposerModel)
+  const hasAuto = filtered.some((model) => model.id === 'auto')
+  const autoModel = models.find((model) => model.id === 'auto')
+  return hasAuto || !autoModel ? filtered : [autoModel, ...filtered]
+}
+
+function isConfiguredComposerModel(model: ModelOption) {
+  if (model.id === 'auto') return true
+  if (model.source === 'catalog') return false
+  if (model.description?.includes('Hermes 模型目录')) return false
+  return true
+}
+
 function providerLabelFromModel(model?: ModelOption) {
-  const label = model?.description?.split('·')[0]?.trim()
-  if (label) return label
   if (model?.provider === 'xiaomi') return 'Xiaomi MiMo'
   if (model?.provider === 'minimax') return 'MiniMax'
+  const label = model?.description?.split('·')[0]?.trim()
+  if (label) return label
   return model?.provider || '模型服务'
 }
 

@@ -97,6 +97,7 @@ export type ModelOption = {
   provider?: string
   builtIn?: boolean
   description?: string
+  source?: 'auto' | 'current' | 'custom' | 'catalog'
 }
 
 export type ModelSettings = {

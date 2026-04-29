@@ -58,6 +58,7 @@ export function listModelOptions(settings: ModelSettings) {
       label: configModel.model ? `Hermes 默认模型 · ${configModel.model}` : 'Hermes 默认模型',
       builtIn: true,
       provider: configModel.provider || undefined,
+      source: 'auto',
       description: configModel.model
         ? `跟随 Hermes config.yaml 当前配置${configModel.provider ? ` · ${configModel.provider}` : ''}`
         : '跟随 Hermes config.yaml 当前配置'
@@ -70,12 +71,14 @@ export function listModelOptions(settings: ModelSettings) {
       label: configModel.model,
       provider: configModel.provider,
       builtIn: true,
+      source: 'current',
       description: configModel.provider ? `Hermes 当前默认模型 · ${configModel.provider}` : 'Hermes 当前默认模型'
     })
   }
 
   const seen = new Set<string>()
-  return [...builtIns, ...listConfiguredProviderModelOptions(settings, configModel), ...settings.customModels]
+  const customModels = settings.customModels.map((model) => ({ ...model, source: model.source ?? 'custom' }))
+  return [...builtIns, ...customModels, ...listConfiguredProviderModelOptions(settings, configModel)]
     .filter((model) => {
       if (seen.has(model.id)) return false
       seen.add(model.id)
@@ -89,7 +92,9 @@ export function normalizeModelId(value: string) {
 
 export function selectedModelOption(settings: ModelSettings) {
   const options = listModelOptions(settings)
-  return options.find((model) => model.id === settings.selectedModelId) ?? options[0]
+  const selected = options.find((model) => model.id === settings.selectedModelId)
+  if (selected && selected.source !== 'catalog') return selected
+  return options[0]
 }
 
 function listConfiguredProviderModelOptions(
@@ -135,6 +140,7 @@ function listConfiguredProviderModelOptions(
         label: modelId,
         provider: providerId,
         builtIn: true,
+        source: 'catalog',
         description: `${label} · Hermes 模型目录`
       })
     }

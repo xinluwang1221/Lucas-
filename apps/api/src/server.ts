@@ -320,6 +320,10 @@ app.post('/api/models/select', (req, res) => {
     res.status(404).json({ error: 'model not found' })
     return
   }
+  if (model.source === 'catalog') {
+    res.status(400).json({ error: '请先在“配置模型服务”中保存该模型，再作为本次任务模型使用。' })
+    return
+  }
 
   store.update((state) => {
     state.modelSettings.selectedModelId = model.id
@@ -339,6 +343,7 @@ app.post('/api/models', (req, res) => {
     id: normalizedId,
     label: label?.trim() || normalizedId,
     provider: provider?.trim() || undefined,
+    source: 'custom',
     description: description?.trim() || '用户添加的本机模型选项'
   }
 
