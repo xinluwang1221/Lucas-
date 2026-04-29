@@ -5,6 +5,14 @@ export type Workspace = {
   createdAt: string
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787'
+
+function apiUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path
+  if (!path.startsWith('/api')) return path
+  return `${API_BASE}${path}`
+}
+
 export type Message = {
   id: string
   taskId: string
@@ -617,7 +625,7 @@ export async function listSkillFiles(skillId: string): Promise<SkillFile[]> {
 
 export async function readSkillFile(skillId: string, relativePath: string): Promise<string> {
   const response = await fetch(
-    `/api/skills/${encodeURIComponent(skillId)}/files/content?path=${encodeURIComponent(relativePath)}`
+    apiUrl(`/api/skills/${encodeURIComponent(skillId)}/files/content?path=${encodeURIComponent(relativePath)}`)
   )
   if (!response.ok) {
     const error = await parseError(response)
@@ -675,17 +683,21 @@ export async function setTaskTags(taskId: string, tags: string[]) {
 }
 
 export function taskExportUrl(taskId: string) {
-  return `/api/tasks/${taskId}/export.md`
+  return apiUrl(`/api/tasks/${taskId}/export.md`)
 }
 
 export function taskStreamUrl(taskId: string) {
-  return `/api/tasks/${encodeURIComponent(taskId)}/stream`
+  return apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/stream`)
 }
 
 export function tasksExportUrl(taskIds: string[]) {
   const params = new URLSearchParams()
   if (taskIds.length) params.set('ids', taskIds.join(','))
-  return `/api/tasks/export.md${params.toString() ? `?${params.toString()}` : ''}`
+  return apiUrl(`/api/tasks/export.md${params.toString() ? `?${params.toString()}` : ''}`)
+}
+
+export function artifactDownloadUrl(artifactId: string) {
+  return apiUrl(`/api/artifacts/${artifactId}/download`)
 }
 
 export async function addWorkspace(name: string, path: string): Promise<Workspace> {
@@ -727,7 +739,7 @@ export async function revealArtifact(artifactId: string) {
 
 export async function previewWorkspaceFile(workspaceId: string, relativePath: string): Promise<string> {
   const response = await fetch(
-    `/api/workspaces/${workspaceId}/files/preview?path=${encodeURIComponent(relativePath)}`
+    apiUrl(`/api/workspaces/${workspaceId}/files/preview?path=${encodeURIComponent(relativePath)}`)
   )
   if (!response.ok) {
     const error = await parseError(response)
@@ -737,7 +749,7 @@ export async function previewWorkspaceFile(workspaceId: string, relativePath: st
 }
 
 export async function previewArtifact(artifactId: string): Promise<string> {
-  const response = await fetch(`/api/artifacts/${artifactId}/preview`)
+  const response = await fetch(apiUrl(`/api/artifacts/${artifactId}/preview`))
   if (!response.ok) {
     const error = await parseError(response)
     throw new Error(error)
@@ -746,7 +758,7 @@ export async function previewArtifact(artifactId: string): Promise<string> {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(apiUrl(url), init)
   if (!response.ok) {
     const error = await parseError(response)
     throw new Error(error)

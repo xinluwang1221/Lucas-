@@ -53,6 +53,7 @@ import {
   AppState,
   archiveTask,
   Artifact,
+  artifactDownloadUrl,
   BackgroundServiceStatus,
   configureHermesModel,
   configureHermesMcpServer,
@@ -2498,7 +2499,7 @@ function ProjectsView({
               {workspaceArtifacts.length ? (
                 <div className="workspace-artifact-list">
                   {workspaceArtifacts.map((artifact) => (
-                    <a href={`/api/artifacts/${artifact.id}/download`} key={artifact.id}>
+                    <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
                       <FileArchive size={16} />
                       <div>
                         <strong>{artifact.name}</strong>
@@ -5143,7 +5144,7 @@ function TaskArtifactsCard({
               <button title="在 Finder 中显示" onClick={() => onReveal(artifact)}>
                 <FolderOpen size={15} />
               </button>
-              <a title="下载" href={`/api/artifacts/${artifact.id}/download`}>
+              <a title="下载" href={artifactDownloadUrl(artifact.id)}>
                 <Upload size={15} />
               </a>
             </div>
