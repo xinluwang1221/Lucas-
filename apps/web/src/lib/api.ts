@@ -36,11 +36,21 @@ export type WorkspaceFile = {
 
 export type ExecutionView = {
   response: string
+  activity: ExecutionActivity[]
   tools: string[]
   logs: string[]
   errors: string[]
   rawOutput: string
   rawLog: string
+}
+
+export type ExecutionActivity = {
+  id: string
+  kind: 'thinking' | 'search' | 'tool' | 'file' | 'status' | 'done' | 'stopped' | 'error'
+  title: string
+  detail: string
+  createdAt: string
+  source: 'hermes' | 'synthetic'
 }
 
 export type ExecutionEvent = {

@@ -15,7 +15,7 @@ import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServ
 import { configureHermesModel, listModelOptions, normalizeModelId, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -1682,6 +1682,7 @@ function buildExecutionView(task: Task): ExecutionView {
   const stdout = cleanBridgeStdout(task.stdout ?? '')
   const stderr = task.stderr ?? ''
   const response = cleanHermesOutput(stdout)
+  const activity = buildExecutionActivity(task)
   const stdoutLines = splitUsefulLines(stdout)
   const stderrLines = splitUsefulLines(stderr)
   const toolLines = new Set<string>()
@@ -1735,12 +1736,226 @@ function buildExecutionView(task: Task): ExecutionView {
 
   return {
     response,
+    activity,
     tools: [...toolLines],
     logs: [...logLines],
     errors: [...errorLines],
     rawOutput: stdout.trim(),
     rawLog: stderr.trim()
   }
+}
+
+function buildExecutionActivity(task: Task): ExecutionActivity[] {
+  const events = taskRunEvents(task)
+    .filter((event) =>
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'task.completed', 'task.stopped', 'task.failed'].includes(
+        event.type
+      )
+    )
+    .map(eventToActivity)
+    .filter((event): event is ExecutionActivity => Boolean(event))
+
+  if (task.status === 'completed' && !events.some((event) => event.kind === 'done')) {
+    events.push({
+      id: `${task.id}-completed`,
+      kind: 'done',
+      title: '任务完成',
+      detail: 'Hermes 已返回最终结果',
+      createdAt: task.completedAt ?? task.updatedAt,
+      source: 'synthetic'
+    })
+  }
+
+  if (task.status === 'stopped' && !events.some((event) => event.kind === 'stopped')) {
+    events.push({
+      id: `${task.id}-stopped`,
+      kind: 'stopped',
+      title: '任务已停止',
+      detail: '用户已停止这次执行',
+      createdAt: task.completedAt ?? task.updatedAt,
+      source: 'synthetic'
+    })
+  }
+
+  if (task.status === 'failed' && !events.some((event) => event.kind === 'error')) {
+    events.push({
+      id: `${task.id}-failed`,
+      kind: 'error',
+      title: '任务失败',
+      detail: task.error || 'Hermes 返回失败状态',
+      createdAt: task.completedAt ?? task.updatedAt,
+      source: 'synthetic'
+    })
+  }
+
+  if (task.status === 'running' && !events.some((event) => event.kind === 'done' || event.kind === 'error')) {
+    events.push({
+      id: `${task.id}-running`,
+      kind: 'status',
+      title: '持续运行中',
+      detail: 'Hermes 正在执行任务，新的思考和操作会继续出现在这里。',
+      createdAt: task.updatedAt,
+      source: 'synthetic'
+    })
+  }
+
+  return events.slice(-24)
+}
+
+function taskRunEvents(task: Task) {
+  const runStartedAt = new Date(task.startedAt ?? task.createdAt).getTime()
+  if (!Number.isFinite(runStartedAt)) return task.events ?? []
+
+  let events = (task.events ?? []).filter((event) => {
+    const eventTime = new Date(event.createdAt).getTime()
+    return !Number.isFinite(eventTime) || eventTime >= runStartedAt - 1000
+  })
+
+  if (task.status === 'completed') {
+    events = events.filter((event) => event.category !== 'error')
+  }
+
+  if (task.status === 'completed' || task.status === 'failed' || task.status === 'stopped') {
+    const terminalIndex = events.findIndex((event) => ['task.completed', 'task.failed', 'task.stopped'].includes(event.type))
+    if (terminalIndex >= 0) return events.slice(0, terminalIndex + 1)
+  }
+
+  return events
+}
+
+function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
+  if (event.type === 'thinking') {
+    return {
+      id: event.id,
+      kind: 'thinking',
+      title: '思考',
+      detail: normalizeThinkingDetail(eventPrimaryText(event)),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'step') {
+    return {
+      id: event.id,
+      kind: 'thinking',
+      title: `第 ${event.iteration ?? '?'} 轮推理`,
+      detail: `${Array.isArray(event.previousTools) ? event.previousTools.length : 0} 个上一轮工具结果`,
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type.startsWith('tool.')) {
+    if (isInternalProgressEvent(event)) return null
+    const name = humanToolName(String(event.name ?? inferredToolName(event)))
+    return {
+      id: event.id,
+      kind: activityToolKind(event),
+      title: `${activityToolPhase(event)}：${name}`,
+      detail: activityToolDetail(event),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'artifact.created') {
+    return {
+      id: event.id,
+      kind: 'file',
+      title: `生成产物：${String(event.name ?? '文件')}`,
+      detail: eventPrimaryText(event) || String(event.relativePath ?? '文件已加入产物区'),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'task.completed') {
+    return {
+      id: event.id,
+      kind: 'done',
+      title: '任务完成',
+      detail: 'Hermes 已返回最终结果',
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'task.stopped') {
+    return {
+      id: event.id,
+      kind: 'stopped',
+      title: '任务已停止',
+      detail: eventPrimaryText(event) || '用户已停止当前 Hermes 任务',
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'task.failed') {
+    return {
+      id: event.id,
+      kind: 'error',
+      title: '任务失败',
+      detail: eventPrimaryText(event) || 'Hermes 执行失败',
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  return {
+    id: event.id,
+    kind: 'status',
+    title: event.type === 'bridge.started' ? '桥接已启动' : `状态：${String(event.kind ?? '运行')}`,
+    detail: event.type === 'bridge.started' ? String(event.cwd ?? '授权工作区') : eventPrimaryText(event),
+    createdAt: event.createdAt,
+    source: event.synthetic ? 'synthetic' : 'hermes'
+  }
+}
+
+function normalizeThinkingDetail(value: string) {
+  const text = value.trim()
+  if (!text) return 'Hermes 正在思考'
+  if (/^(thinking|reasoning|computing|analyzing|deliberating|reflecting)(\.\.\.)?$/i.test(text)) return 'Hermes 正在思考'
+  if (/(thinking|reasoning|computing|analyzing|deliberating|reflecting)\.\.\./i.test(text)) return 'Hermes 正在思考'
+  return text
+}
+
+function isInternalProgressEvent(event: ExecutionEvent) {
+  const name = String(event.name ?? inferredToolName(event)).toLowerCase()
+  if (name.startsWith('reasoning.')) return true
+  if (Array.isArray(event.args) && String(event.args[0] ?? '').toLowerCase().startsWith('reasoning.')) return true
+  return false
+}
+
+function activityToolKind(event: ExecutionEvent): ExecutionActivity['kind'] {
+  if (event.category === 'search') return 'search'
+  if (event.category === 'file') return 'file'
+  if (event.category === 'error') return 'error'
+  if (event.category === 'result') return 'done'
+  const text = `${String(event.name ?? '')} ${event.type} ${eventPrimaryText(event)} ${safeJson(event.args)} ${safeJson(event.kwargs)}`.toLowerCase()
+  if (event.isError) return 'error'
+  if (text.includes('search') || text.includes('browser') || text.includes('web') || text.includes('url') || text.includes('http')) return 'search'
+  if (text.includes('file') || text.includes('read') || text.includes('write') || text.includes('workspace') || text.includes('path')) return 'file'
+  return 'tool'
+}
+
+function activityToolPhase(event: ExecutionEvent) {
+  if (event.type === 'tool.started') return '开始'
+  if (event.type === 'tool.completed') return event.isError ? '异常' : '完成'
+  if (event.type === 'tool.progress') return '进度'
+  return '工具'
+}
+
+function activityToolDetail(event: ExecutionEvent) {
+  const primary = eventPrimaryText(event)
+  if (primary) return primary.slice(0, 180)
+  if (event.type === 'tool.started') return safeJson(event.args ?? event.kwargs ?? '工具开始执行').slice(0, 180)
+  if (event.type === 'tool.completed') return event.isError ? '工具返回错误' : safeJson(event.result ?? '工具执行完成').slice(0, 180)
+  return safeJson(event).slice(0, 180)
+}
+
+function humanToolName(name: string) {
+  const lower = name.toLowerCase()
+  if (lower.includes('mimo_web_search') || lower.includes('web_search') || lower.includes('smart_search')) return '网页搜索'
+  if (lower.includes('browser') || lower.includes('playwright') || lower.includes('chrome')) return '浏览器'
+  if (lower.includes('terminal') || lower.includes('shell') || lower.includes('command')) return '命令行'
+  if (lower.includes('file') || lower.includes('workspace')) return '文件读写'
+  if (lower.includes('lark') || lower.includes('feishu')) return '飞书'
+  return name
 }
 
 function safeJson(value: unknown) {

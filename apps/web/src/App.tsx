@@ -5977,6 +5977,16 @@ function taskRunEvents(task: Task) {
 }
 
 function executionTraceRows(task: Task): TraceRow[] {
+  if (task.executionView?.activity?.length) {
+    return task.executionView.activity.map((activity) => ({
+      id: activity.id,
+      kind: activity.kind,
+      title: activity.title,
+      detail: activity.detail,
+      createdAt: activity.createdAt
+    })).slice(-24)
+  }
+
   const rows = taskRunEvents(task)
     .filter((event) =>
       ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'task.completed', 'task.stopped', 'task.failed'].includes(
