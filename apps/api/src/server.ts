@@ -361,6 +361,10 @@ app.post('/api/models/hermes-default', (req, res) => {
       return
     }
     setHermesDefaultModel(modelId, typeof provider === 'string' ? provider : undefined)
+    store.update((state) => {
+      state.modelSettings.selectedModelId = 'auto'
+      state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
+    })
     const settings = store.snapshot.modelSettings
     res.json({
       selectedModelId: settings.selectedModelId,
@@ -386,6 +390,10 @@ app.post('/api/models/configure', (req, res) => {
       baseUrl: typeof baseUrl === 'string' ? baseUrl : undefined,
       apiKey: typeof apiKey === 'string' ? apiKey : undefined,
       apiMode: typeof apiMode === 'string' ? apiMode : undefined
+    })
+    store.update((state) => {
+      state.modelSettings.selectedModelId = 'auto'
+      state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
     })
     const settings = store.snapshot.modelSettings
     res.json({

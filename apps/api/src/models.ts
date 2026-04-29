@@ -296,7 +296,21 @@ function buildHermesProviders(
   const customModelOptions = settings.customModels.filter((model) => model.provider)
 
   const addProvider = (provider: HermesModelProvider) => {
-    providers.set(provider.id, provider)
+    const existing = providers.get(provider.id)
+    if (!existing) {
+      providers.set(provider.id, provider)
+      return
+    }
+    providers.set(provider.id, {
+      ...existing,
+      source: existing.source === 'hermes' ? existing.source : provider.source,
+      configured: existing.configured || provider.configured,
+      isCurrent: existing.isCurrent || provider.isCurrent,
+      baseUrl: provider.baseUrl || existing.baseUrl,
+      apiMode: provider.apiMode || existing.apiMode,
+      models: uniqueStrings([...existing.models, ...provider.models]),
+      credentialSummary: uniqueStrings([existing.credentialSummary, provider.credentialSummary]).join('；')
+    })
   }
 
   const currentPreset = hermesProviderPreset(currentProvider)
@@ -413,7 +427,7 @@ function parseHermesAuthList(raw: string): HermesModelCredential[] {
   for (const line of raw.replace(/\r/g, '').split('\n')) {
     const match = line.match(/^([A-Za-z0-9_:. -]+)\s+\((\d+)\s+credentials?\):/)
     if (!match) continue
-    const id = normalizeProviderId(match[1])
+    const id = normalizeKnownProviderId(match[1])
     credentials.push({
       id,
       label: providerLabel(id),
@@ -452,14 +466,14 @@ function readCustomProviders(raw: string) {
   const providers: Array<{ id: string; name: string; baseUrl?: string; models: string[] }> = []
   let current: { name: string; baseUrl?: string; models: string[] } | null = null
   for (const line of block.split('\n')) {
-    const itemMatch = line.match(/^ {2}-\s+name:\s*(.+)$/)
+    const itemMatch = line.match(/^\s*-\s+name:\s*(.+)$/)
     if (itemMatch) {
       if (current) providers.push({ id: customProviderId(current.name), ...current })
       current = { name: unquoteYaml(itemMatch[1]), models: [] }
       continue
     }
     if (!current) continue
-    const fieldMatch = line.match(/^ {4}([A-Za-z0-9_-]+):\s*(.*)$/)
+    const fieldMatch = line.match(/^\s+([A-Za-z0-9_-]+):\s*(.*)$/)
     if (!fieldMatch) continue
     const value = unquoteYaml(fieldMatch[2] ?? '')
     if (fieldMatch[1] === 'base_url' || fieldMatch[1] === 'url' || fieldMatch[1] === 'api') current.baseUrl = value
@@ -599,7 +613,13 @@ function normalizeCredentialLabel(label: string) {
   if (normalized.includes('kimi') || normalized.includes('moonshot')) return 'kimi'
   if (normalized.includes('qwen')) return 'qwen'
   if (normalized.includes('github') || normalized.includes('copilot')) return 'copilot'
-  return normalizeProviderId(label)
+  return normalizeKnownProviderId(label)
+}
+
+function normalizeKnownProviderId(value: string) {
+  const normalized = normalizeProviderId(value)
+  const unwrappedCustom = normalized.startsWith('custom:') ? normalizeProviderId(normalized.replace(/^custom:/, '')) : normalized
+  return isChineseModelProvider(unwrappedCustom) ? unwrappedCustom : normalized
 }
 
 async function fetchOfficialModelCatalogSupplements(): Promise<HermesModelCatalogRefreshSource[]> {
@@ -694,7 +714,8 @@ function normalizeSecretValue(value: string) {
 }
 
 function customProviderId(value: string) {
-  return `custom:${normalizeProviderId(value)}`
+  const normalized = normalizeProviderId(value)
+  return isChineseModelProvider(normalized) ? normalized : `custom:${normalized}`
 }
 
 function providerLabel(provider: string) {
