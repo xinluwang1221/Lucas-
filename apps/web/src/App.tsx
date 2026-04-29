@@ -388,6 +388,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const skillFileInputRef = useRef<HTMLInputElement | null>(null)
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const modelPickerRef = useRef<HTMLDivElement | null>(null)
   const dragDepthRef = useRef(0)
   const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
   const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
@@ -680,6 +681,19 @@ function App() {
     if (!settingsOpen || settingsTab !== 'models') return
     void refreshModels().catch(() => undefined)
   }, [settingsOpen, settingsTab])
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (!modelPickerRef.current?.contains(target)) {
+        setModelMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [modelMenuOpen])
 
   function focusComposer() {
     window.requestAnimationFrame(() => {
@@ -1673,7 +1687,7 @@ function App() {
               <ChevronDown size={14} />
             </div>
             <div className="composer-actions">
-              <div className="model-picker">
+              <div className="model-picker" ref={modelPickerRef}>
                 {modelMenuOpen && (
                   <div className="model-menu">
                     <div className="model-menu-title">Hermes 模型</div>
