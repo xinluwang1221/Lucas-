@@ -4523,15 +4523,16 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   if (!rows.length) return null
 
   const visibleRows = compactTraceRows(task, rows)
-  const hiddenCount = Math.max(0, rows.length - visibleRows.length)
   const toolCount = rows.filter((row) => row.kind === 'tool' || row.kind === 'search' || row.kind === 'file').length
   const thinkingCount = rows.filter((row) => row.kind === 'thinking').length
-  const fileCount = rows.filter((row) => row.kind === 'file').length
-  const searchCount = rows.filter((row) => row.kind === 'search').length
-  const errorCount = rows.filter((row) => row.kind === 'error').length
   const lastRow = rows[rows.length - 1]
   const showCurrentRow = task.status === 'running' && lastRow
   const summaryLabel = task.status === 'running' ? '查看实时过程' : '查看过程记录'
+  const summaryParts = [
+    toolCount > 0 ? `${toolCount} 次操作` : '',
+    thinkingCount > 0 ? `${thinkingCount} 条思考` : '',
+    statusLabel(task.status)
+  ].filter(Boolean)
 
   return (
     <section className="agent-trace">
@@ -4556,28 +4557,9 @@ function InlineExecutionTrace({ task }: { task: Task }) {
       <details className="agent-trace-details">
         <summary>
           <span>{summaryLabel}</span>
-          <em>{toolCount} 次操作 · {thinkingCount} 条思考 · {statusLabel(task.status)}</em>
+          <em>{summaryParts.join(' · ')}</em>
           <ChevronDown size={14} />
         </summary>
-        <div className="agent-trace-stats">
-          <span>{thinkingCount} 条思考摘要</span>
-          <span>{toolCount} 次操作</span>
-          {fileCount > 0 && <span>{fileCount} 次文件动作</span>}
-          {searchCount > 0 && <span>{searchCount} 次网页/搜索</span>}
-          {errorCount > 0 && <span className="danger-text">{errorCount} 个异常</span>}
-          <span>{statusLabel(task.status)}</span>
-        </div>
-        {hiddenCount > 0 && (
-          <p className="agent-trace-note">
-            已收起 {hiddenCount} 条较早过程，只显示当前轮最近记录。
-          </p>
-        )}
-        <div className="agent-trace-lanes">
-          {(['thinking', 'search', 'file', 'tool', 'done'] as TraceRow['kind'][]).map((kind) => {
-            const active = rows.some((row) => row.kind === kind)
-            return <span className={active ? `active ${kind}` : ''} key={kind}>{traceKindLabel(kind)}</span>
-          })}
-        </div>
         <ol className="agent-trace-list">
           {visibleRows.map((row) => (
             <li className={`agent-trace-row ${row.kind}`} key={row.id}>
@@ -6161,17 +6143,6 @@ function traceIcon(kind: TraceRow['kind']) {
   if (kind === 'error') return <XCircle size={14} />
   if (kind === 'tool') return <Wrench size={14} />
   return <Clock3 size={14} />
-}
-
-function traceKindLabel(kind: TraceRow['kind']) {
-  if (kind === 'thinking') return '思考'
-  if (kind === 'search') return '检索'
-  if (kind === 'file') return '文件'
-  if (kind === 'tool') return '工具'
-  if (kind === 'done') return '结果'
-  if (kind === 'stopped') return '停止'
-  if (kind === 'error') return '异常'
-  return '状态'
 }
 
 function taskOperationStats(task: Task) {
