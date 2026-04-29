@@ -4530,6 +4530,7 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   const searchCount = rows.filter((row) => row.kind === 'search').length
   const errorCount = rows.filter((row) => row.kind === 'error').length
   const lastRow = rows[rows.length - 1]
+  const showCurrentRow = task.status === 'running' && lastRow
   const summaryLabel = task.status === 'running' ? '查看实时过程' : '查看过程记录'
 
   return (
@@ -4542,7 +4543,7 @@ function InlineExecutionTrace({ task }: { task: Task }) {
         {task.status === 'running' && <Loader2 size={13} className="spin" />}
       </div>
 
-      {lastRow && (
+      {showCurrentRow && (
         <div className={`agent-trace-current ${lastRow.kind}`}>
           <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
           <div>
