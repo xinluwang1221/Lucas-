@@ -379,15 +379,20 @@ function App() {
   const skillFileInputRef = useRef<HTMLInputElement | null>(null)
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const dragDepthRef = useRef(0)
+  const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
+  const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
 
   const refresh = async () => {
     const next = await getState()
     setState(next)
-    if (selectedTaskId === undefined && next.tasks.length > 0) {
+    if (selectedTaskIdRef.current === undefined && next.tasks.length > 0) {
       setSelectedTaskId(next.tasks[0].id)
+      selectedTaskIdRef.current = next.tasks[0].id
     }
-    if (!next.workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
-      setSelectedWorkspaceId(next.workspaces[0]?.id ?? 'default')
+    if (!next.workspaces.some((workspace) => workspace.id === selectedWorkspaceIdRef.current)) {
+      const fallbackWorkspaceId = next.workspaces[0]?.id ?? 'default'
+      setSelectedWorkspaceId(fallbackWorkspaceId)
+      selectedWorkspaceIdRef.current = fallbackWorkspaceId
     }
   }
 
@@ -591,6 +596,14 @@ function App() {
     : undefined
   const currentWorkspaceTaskCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && !task.archivedAt).length
   const currentWorkspaceRunningCount = state.tasks.filter((task) => task.workspaceId === selectedWorkspaceId && task.status === 'running').length
+
+  useEffect(() => {
+    selectedTaskIdRef.current = selectedTaskId
+  }, [selectedTaskId])
+
+  useEffect(() => {
+    selectedWorkspaceIdRef.current = selectedWorkspaceId
+  }, [selectedWorkspaceId])
 
   useEffect(() => {
     void refresh().catch((cause) => setError(cause.message))

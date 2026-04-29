@@ -553,6 +553,12 @@ findChangedArtifacts(...)
 - 只记录常见办公、报告、表格、图片、文本和压缩包类型。
 - 产物事件会进入 `task.events`，类型为 `artifact.created`，字段包含 `name`、`relativePath`、`artifactId`、`size`。
 
+### 9.5 会话选择与轮询刷新
+
+前端会定时调用 `/api/state` 刷新任务状态。轮询函数不能直接依赖首次渲染时闭包里的 `selectedTaskId`，否则用户点击靠下的会话后，下一次轮询可能仍按旧的 `undefined` 状态自动选回第一条任务。
+
+当前实现用 `selectedTaskIdRef` 和 `selectedWorkspaceIdRef` 保存最新选择，只在首次进入且未选择任何会话时自动选第一条任务。用户手动选择会话后，轮询只刷新任务数据，不再改动当前会话。
+
 ## 10. 常用开发命令
 
 安装依赖：
