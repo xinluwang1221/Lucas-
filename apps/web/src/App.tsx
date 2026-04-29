@@ -4754,55 +4754,55 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   if (!rows.length) return null
 
   const visibleRows = compactTraceRows(task, rows)
-  const toolCount = rows.filter((row) => row.kind === 'tool' || row.kind === 'search' || row.kind === 'file').length
-  const thinkingCount = rows.filter((row) => row.kind === 'thinking').length
+  const groups = groupTraceRows(visibleRows)
   const lastRow = rows[rows.length - 1]
   const showCurrentRow = task.status === 'running' && lastRow
-  const summaryLabel = task.status === 'running' ? '查看实时过程' : '查看过程记录'
-  const summaryParts = [
-    toolCount > 0 ? `${toolCount} 次操作` : '',
-    thinkingCount > 0 ? `${thinkingCount} 条思考` : '',
-    statusLabel(task.status)
-  ].filter(Boolean)
+  const summaryParts = traceSummaryParts(task, rows)
+  const summaryLabel = task.status === 'running' ? '处理中' : '已处理'
 
   return (
-    <section className="agent-trace">
-      <div className="agent-trace-agent">
-        <div className="agent-avatar">
-          <Bot size={15} />
-        </div>
-        <strong>Hermes Cowork</strong>
-        {task.status === 'running' && <Loader2 size={13} className="spin" />}
-      </div>
-
-      {showCurrentRow && (
-        <div className={`agent-trace-current ${lastRow.kind}`}>
-          <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
-          <div>
-            <strong>{lastRow.title}</strong>
-            {lastRow.detail && <p>{lastRow.detail}</p>}
-          </div>
-        </div>
-      )}
-
-      <details className="agent-trace-details">
+    <section className={`agent-run-summary ${task.status}`}>
+      <details className="agent-run-details" open={task.status === 'running'}>
         <summary>
-          <span>{summaryLabel}</span>
-          <em>{summaryParts.join(' · ')}</em>
+          <span>{summaryLabel} {taskElapsedLabel(task)}</span>
+          {summaryParts.length > 0 && <em>{summaryParts.join(' · ')}</em>}
           <ChevronDown size={14} />
         </summary>
-        <ol className="agent-trace-list">
-          {visibleRows.map((row) => (
-            <li className={`agent-trace-row ${row.kind}`} key={row.id}>
-              <span className="agent-trace-icon">{traceIcon(row.kind)}</span>
-              <div>
-                <strong>{row.title}</strong>
-                {row.detail && <p>{row.detail}</p>}
-              </div>
-              <time>{formatTime(row.createdAt)}</time>
-            </li>
+
+        {showCurrentRow && (
+          <div className={`agent-run-current ${lastRow.kind}`}>
+            <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
+            <div>
+              <strong>{lastRow.title}</strong>
+              {lastRow.detail && <TraceDetail text={lastRow.detail} />}
+            </div>
+            <time>{formatTime(lastRow.createdAt)}</time>
+          </div>
+        )}
+
+        <div className="agent-run-groups">
+          {groups.map((group) => (
+            <section className={`agent-run-group ${group.kind}`} key={group.kind}>
+              <h4>
+                <span className="agent-trace-icon">{traceIcon(group.iconKind)}</span>
+                {group.label}
+                <em>{group.rows.length}</em>
+              </h4>
+              <ol>
+                {group.rows.map((row) => (
+                  <li className={`agent-run-row ${row.kind}`} key={row.id}>
+                    <span className="agent-trace-icon">{traceIcon(row.kind)}</span>
+                    <div>
+                      <strong>{row.title}</strong>
+                      {row.detail && <TraceDetail text={row.detail} />}
+                    </div>
+                    <time>{formatTime(row.createdAt)}</time>
+                  </li>
+                ))}
+              </ol>
+            </section>
           ))}
-        </ol>
+        </div>
       </details>
     </section>
   )
@@ -6140,6 +6140,141 @@ type TraceRow = {
   title: string
   detail: string
   createdAt: string
+}
+
+type TraceGroupKind = 'thinking' | 'search' | 'file' | 'tool' | 'result' | 'error'
+
+type TraceGroup = {
+  kind: TraceGroupKind
+  label: string
+  iconKind: TraceRow['kind']
+  rows: TraceRow[]
+}
+
+type TraceDetailToken = {
+  value: string
+  kind: 'text' | 'code' | 'url' | 'path'
+}
+
+const traceGroupOrder: TraceGroupKind[] = ['thinking', 'search', 'file', 'tool', 'result', 'error']
+
+function groupTraceRows(rows: TraceRow[]): TraceGroup[] {
+  const groups = new Map<TraceGroupKind, TraceRow[]>()
+
+  for (const row of rows) {
+    const groupKind = traceGroupKind(row)
+    groups.set(groupKind, [...(groups.get(groupKind) ?? []), row])
+  }
+
+  return traceGroupOrder
+    .map((kind) => {
+      const groupRows = groups.get(kind) ?? []
+      if (!groupRows.length) return null
+      return {
+        kind,
+        label: traceGroupLabel(kind),
+        iconKind: traceGroupIconKind(kind),
+        rows: groupRows
+      }
+    })
+    .filter((group): group is TraceGroup => Boolean(group))
+}
+
+function traceGroupKind(row: TraceRow): TraceGroupKind {
+  if (row.kind === 'search') return 'search'
+  if (row.kind === 'file') return 'file'
+  if (row.kind === 'tool') return 'tool'
+  if (row.kind === 'done' || row.kind === 'stopped') return 'result'
+  if (row.kind === 'error') return 'error'
+  return 'thinking'
+}
+
+function traceGroupLabel(kind: TraceGroupKind) {
+  if (kind === 'thinking') return '思考与规划'
+  if (kind === 'search') return '网页与搜索'
+  if (kind === 'file') return '文件活动'
+  if (kind === 'tool') return '工具调用'
+  if (kind === 'result') return '结果'
+  return '错误'
+}
+
+function traceGroupIconKind(kind: TraceGroupKind): TraceRow['kind'] {
+  if (kind === 'thinking') return 'thinking'
+  if (kind === 'search') return 'search'
+  if (kind === 'file') return 'file'
+  if (kind === 'tool') return 'tool'
+  if (kind === 'result') return 'done'
+  return 'error'
+}
+
+function traceSummaryParts(task: Task, rows: TraceRow[]) {
+  const searchCount = rows.filter((row) => row.kind === 'search').length
+  const toolCount = rows.filter((row) => row.kind === 'tool').length
+  const fileCount = rows.filter((row) => row.kind === 'file').length
+  const errorCount = rows.filter((row) => row.kind === 'error').length
+  const parts = [
+    searchCount > 0 ? `${searchCount} 次检索` : '',
+    toolCount > 0 ? `${toolCount} 次工具` : '',
+    fileCount > 0 ? `${fileCount} 个文件` : '',
+    task.artifacts.length > 0 ? `${task.artifacts.length} 个产物` : '',
+    errorCount > 0 ? `${errorCount} 个异常` : ''
+  ].filter(Boolean)
+  if (task.status === 'running' && !parts.length) return ['Hermes 正在处理']
+  return parts
+}
+
+function TraceDetail({ text }: { text: string }) {
+  const tokens = tokenizeTraceDetail(text)
+  return (
+    <p className="trace-detail">
+      {tokens.map((token, index) => {
+        if (token.kind === 'text') return <span key={`${token.kind}-${index}`}>{token.value}</span>
+        return (
+          <code className={`trace-token ${token.kind}`} key={`${token.kind}-${index}`}>
+            {trimTraceToken(token.value, token.kind)}
+          </code>
+        )
+      })}
+    </p>
+  )
+}
+
+function tokenizeTraceDetail(text: string): TraceDetailToken[] {
+  const tokens: TraceDetailToken[] = []
+  const pattern = /(`[^`]+`|https?:\/\/[^\s，。)）]+|\/Users\/[^\s，。)）]+|(?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|js|jsx|css|md|json|yaml|yml|py|txt|docx|xlsx|pptx|pdf)|[\w.-]+\.(?:ts|tsx|js|jsx|css|md|json|yaml|yml|py|txt|docx|xlsx|pptx|pdf))/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) {
+      tokens.push({ value: text.slice(lastIndex, match.index), kind: 'text' })
+    }
+    const value = match[0]
+    tokens.push({ value, kind: traceDetailTokenKind(value) })
+    lastIndex = match.index + value.length
+  }
+
+  if (lastIndex < text.length) tokens.push({ value: text.slice(lastIndex), kind: 'text' })
+  return tokens.length ? tokens : [{ value: text, kind: 'text' }]
+}
+
+function traceDetailTokenKind(value: string): TraceDetailToken['kind'] {
+  if (value.startsWith('`') && value.endsWith('`')) return 'code'
+  if (/^https?:\/\//.test(value)) return 'url'
+  return 'path'
+}
+
+function trimTraceToken(value: string, kind: TraceDetailToken['kind']) {
+  const raw = kind === 'code' ? value.slice(1, -1) : value
+  if (kind === 'url') {
+    try {
+      return new URL(raw).hostname.replace(/^www\./, '')
+    } catch {
+      return raw
+    }
+  }
+  if (kind === 'path') return shortReference(raw)
+  return raw
 }
 
 function taskRunEvents(task: Task) {
