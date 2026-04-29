@@ -15,7 +15,7 @@ import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServ
 import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, removeHermesModelProvider, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, Task } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, ModelSettings, Task } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -389,6 +389,43 @@ app.delete('/api/models/:modelId', (req, res) => {
   })
 })
 
+function rememberConfiguredModels(
+  settings: ModelSettings,
+  candidates: Array<{ model?: string; modelId?: string; provider?: string }>
+) {
+  const additions: ModelOption[] = []
+  for (const candidate of candidates) {
+    const id = normalizeModelId(candidate.model ?? candidate.modelId ?? '')
+    const provider = typeof candidate.provider === 'string' ? candidate.provider.trim() : ''
+    if (!id || id === 'auto') continue
+    const existing = settings.customModels.find((model) => model.id === id)
+    additions.push({
+      id,
+      label: existing?.label || id,
+      provider: provider || existing?.provider,
+      source: 'custom',
+      description: existing?.description || (provider ? `${providerLabelForModelOption(provider)} · 已配置模型` : '已配置的 Hermes 模型')
+    })
+  }
+
+  if (!additions.length) return
+  const seen = new Set<string>()
+  settings.customModels = [...additions, ...settings.customModels]
+    .filter((model) => {
+      if (seen.has(model.id)) return false
+      seen.add(model.id)
+      return true
+    })
+}
+
+function providerLabelForModelOption(provider: string) {
+  if (provider === 'xiaomi') return 'Xiaomi MiMo'
+  if (provider === 'minimax') return 'MiniMax'
+  if (provider === 'deepseek') return 'DeepSeek'
+  if (provider === 'zai') return 'Z.AI / GLM'
+  return provider
+}
+
 app.post('/api/models/hermes-default', (req, res) => {
   try {
     const { modelId, provider } = req.body as { modelId?: unknown; provider?: unknown }
@@ -396,10 +433,14 @@ app.post('/api/models/hermes-default', (req, res) => {
       res.status(400).json({ error: 'modelId is required' })
       return
     }
+    const previousDefault = readHermesDefaultModel()
     setHermesDefaultModel(modelId, typeof provider === 'string' ? provider : undefined)
     store.update((state) => {
       state.modelSettings.selectedModelId = 'auto'
-      state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
+      rememberConfiguredModels(state.modelSettings, [
+        previousDefault,
+        { model: modelId, provider: typeof provider === 'string' ? provider : previousDefault.provider }
+      ])
     })
     const settings = store.snapshot.modelSettings
     res.json({
@@ -420,6 +461,7 @@ app.post('/api/models/configure', (req, res) => {
       res.status(400).json({ error: 'provider and modelId are required' })
       return
     }
+    const previousDefault = readHermesDefaultModel()
     configureHermesModel({
       provider,
       modelId,
@@ -429,7 +471,10 @@ app.post('/api/models/configure', (req, res) => {
     })
     store.update((state) => {
       state.modelSettings.selectedModelId = 'auto'
-      state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
+      rememberConfiguredModels(state.modelSettings, [
+        previousDefault,
+        { model: modelId, provider }
+      ])
     })
     const settings = store.snapshot.modelSettings
     res.json({
