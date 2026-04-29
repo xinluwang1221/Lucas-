@@ -878,8 +878,6 @@ function App() {
 
   async function handleDeleteModel(model: ModelOption) {
     if (model.builtIn) return
-    const ok = window.confirm(`删除本次任务模型选项“${model.label}”？这不会删除 Hermes 的默认模型配置。`)
-    if (!ok) return
     setHermesModelUpdating(`delete-model:${model.id}`)
     setHermesModelError(null)
     setModelNotice(null)
@@ -890,7 +888,7 @@ function App() {
       setHermesModel(response.hermes)
       setModelCatalog(response.catalog ?? [])
       setModelMenuOpen(false)
-      setModelNotice(`已删除本次任务模型选项：${model.label}`)
+      setModelNotice(`已从已配置模型中移除：${model.label}`)
     } catch (cause) {
       setHermesModelError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -3470,7 +3468,7 @@ function SettingsModal({
                         className="model-delete-button"
                         onClick={() => onDeleteModel(model)}
                         disabled={Boolean(hermesModelUpdating)}
-                        title="删除这个本次任务模型选项"
+                        title="从已配置模型中移除"
                       >
                         {hermesModelUpdating === `delete-model:${model.id}` ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
                       </button>

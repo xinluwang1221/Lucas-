@@ -361,7 +361,7 @@ app.post('/api/models', (req, res) => {
 app.delete('/api/models/:modelId', (req, res) => {
   const modelId = normalizeModelId(req.params.modelId)
   if (!modelId || modelId === 'auto') {
-    res.status(400).json({ error: '只能删除用户添加的本次任务模型选项' })
+    res.status(400).json({ error: '只能删除 Cowork 中已配置的自定义模型' })
     return
   }
 
