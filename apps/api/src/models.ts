@@ -75,7 +75,7 @@ export function listModelOptions(settings: ModelSettings) {
   }
 
   const seen = new Set<string>()
-  return [...builtIns, ...settings.customModels]
+  return [...builtIns, ...listConfiguredProviderModelOptions(settings, configModel), ...settings.customModels]
     .filter((model) => {
       if (seen.has(model.id)) return false
       seen.add(model.id)
@@ -90,6 +90,56 @@ export function normalizeModelId(value: string) {
 export function selectedModelOption(settings: ModelSettings) {
   const options = listModelOptions(settings)
   return options.find((model) => model.id === settings.selectedModelId) ?? options[0]
+}
+
+function listConfiguredProviderModelOptions(
+  settings: ModelSettings,
+  currentModel: { model: string; provider: string }
+): ModelOption[] {
+  const providerIds = new Set<string>()
+  const currentProviderId = normalizeProviderId(currentModel.provider || '')
+  if (currentProviderId && currentProviderId !== 'auto') providerIds.add(currentProviderId)
+
+  for (const model of settings.customModels) {
+    const providerId = normalizeProviderId(model.provider || '')
+    if (providerId && providerId !== 'auto') providerIds.add(providerId)
+  }
+
+  try {
+    const config = readHermesModelConfig()
+    for (const provider of config.fallbackProviders) {
+      const providerId = normalizeProviderId(provider)
+      if (providerId && providerId !== 'auto') providerIds.add(providerId)
+    }
+    for (const provider of config.customProviders) {
+      const providerId = normalizeProviderId(provider.id)
+      if (!providerId || providerId === 'auto') continue
+      if (provider.apiKey || isLocalModelEndpoint(provider.baseUrl) || providerId === currentProviderId) {
+        providerIds.add(providerId)
+      }
+    }
+  } catch {
+    // If Hermes config is temporarily unreadable, keep the menu to the known built-ins.
+  }
+
+  if (!providerIds.size) return []
+
+  const options: ModelOption[] = []
+  for (const provider of readHermesModelCatalog()) {
+    const providerId = normalizeProviderId(provider.id)
+    if (!providerIds.has(providerId)) continue
+    const label = provider.label || providerModels[providerId]?.label || providerId
+    for (const modelId of provider.models) {
+      options.push({
+        id: modelId,
+        label: modelId,
+        provider: providerId,
+        builtIn: true,
+        description: `${label} · Hermes 模型目录`
+      })
+    }
+  }
+  return options
 }
 
 export function readHermesModelOverview(settings: ModelSettings): HermesModelOverview {

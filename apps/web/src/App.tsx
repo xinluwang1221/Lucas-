@@ -557,6 +557,7 @@ function App() {
     label: 'Hermes 默认模型',
     builtIn: true
   }
+  const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(models), [models])
   const rememberedProviderConfig = providerSavedModelConfig(newModelProvider, hermesModel)
 
   const filteredTasks = useMemo(() => {
@@ -1709,20 +1710,25 @@ function App() {
                 {modelMenuOpen && (
                   <div className="model-menu">
                     <div className="model-menu-title">Hermes 模型</div>
-                    {models.map((model) => (
-                      <button
-                        type="button"
-                        className={model.id === selectedModelId ? 'active' : ''}
-                        key={model.id}
-                        onClick={() => void handleSelectModel(model)}
-                      >
-                        <Bot size={14} />
-                        <div>
-                          <strong>{model.label}</strong>
-                          <span>{model.description ?? model.provider ?? model.id}</span>
-                        </div>
-                        {model.id === selectedModelId && <CheckCircle2 size={14} />}
-                      </button>
+                    {modelMenuGroups.map((group) => (
+                      <div className="model-menu-group" key={group.label || 'default-models'}>
+                        {group.label && <div className="model-menu-group-title">{group.label}</div>}
+                        {group.models.map((model) => (
+                          <button
+                            type="button"
+                            className={model.id === selectedModelId ? 'active' : ''}
+                            key={`${model.provider ?? 'auto'}:${model.id}`}
+                            onClick={() => void handleSelectModel(model)}
+                          >
+                            <Bot size={14} />
+                            <div>
+                              <strong>{model.label}</strong>
+                              <span>{model.description ?? model.provider ?? model.id}</span>
+                            </div>
+                            {model.id === selectedModelId && <CheckCircle2 size={14} />}
+                          </button>
+                        ))}
+                      </div>
                     ))}
                     <button
                       type="button"
@@ -4670,6 +4676,56 @@ function modelGroupsForProvider(providerId: string, models: string[]) {
     v2.length ? { label: 'MiMo V2 系列', models: v2 } : null,
     other.length ? { label: '其他模型', models: other } : null
   ].filter((group): group is { label: string; models: string[] } => Boolean(group))
+}
+
+function groupModelOptionsForMenu(models: ModelOption[]) {
+  const autoModels = models.filter((model) => model.id === 'auto')
+  const modelById = new Map(models.map((model) => [`${model.provider ?? 'auto'}:${model.id}`, model]))
+  const providerGroups = new Map<string, ModelOption[]>()
+  const otherModels: ModelOption[] = []
+
+  for (const model of models) {
+    if (model.id === 'auto') continue
+    const providerId = hermesProviderId(model.provider ?? '')
+    if (!providerId || providerId === 'auto') {
+      otherModels.push(model)
+      continue
+    }
+    providerGroups.set(providerId, [...(providerGroups.get(providerId) ?? []), model])
+  }
+
+  const groups: Array<{ label: string; models: ModelOption[] }> = []
+  if (autoModels.length) groups.push({ label: '常用', models: autoModels })
+
+  for (const [providerId, providerModels] of providerGroups) {
+    if (providerId === 'xiaomi') {
+      for (const group of modelGroupsForProvider(providerId, providerModels.map((model) => model.id))) {
+        groups.push({
+          label: group.label,
+          models: group.models
+            .map((modelId) => modelById.get(`${providerId}:${modelId}`))
+            .filter((model): model is ModelOption => Boolean(model))
+        })
+      }
+      continue
+    }
+
+    groups.push({
+      label: providerLabelFromModel(providerModels[0]),
+      models: providerModels
+    })
+  }
+
+  if (otherModels.length) groups.push({ label: '本次任务模型', models: otherModels })
+  return groups.filter((group) => group.models.length)
+}
+
+function providerLabelFromModel(model?: ModelOption) {
+  const label = model?.description?.split('·')[0]?.trim()
+  if (label) return label
+  if (model?.provider === 'xiaomi') return 'Xiaomi MiMo'
+  if (model?.provider === 'minimax') return 'MiniMax'
+  return model?.provider || '模型服务'
 }
 
 function FragmentWithTrace({
