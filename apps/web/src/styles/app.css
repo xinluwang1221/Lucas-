@@ -2758,24 +2758,13 @@ summary:focus-visible {
 }
 
 .task-focus-panel {
-  display: grid;
-  gap: 10px;
   max-width: 920px;
   margin: 12px auto 0;
-  padding: 12px 14px;
-  background: rgba(255, 253, 247, 0.82);
+  padding: 10px 12px;
+  background: rgba(255, 253, 247, 0.74);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--line-strong);
+  border-left: 3px solid var(--ink-soft);
   border-radius: 8px;
-  box-shadow: 0 8px 22px rgba(56, 49, 35, 0.04);
-}
-
-.task-focus-panel.running {
-  border-left-color: var(--cobalt);
-}
-
-.task-focus-panel.completed {
-  border-left-color: var(--moss);
 }
 
 .task-focus-panel.failed {
@@ -2786,150 +2775,44 @@ summary:focus-visible {
   border-left-color: var(--ink-soft);
 }
 
-.task-focus-panel.terminal {
-  gap: 8px;
-  padding: 10px 12px;
-}
-
 .task-focus-head {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.task-focus-head h2 {
-  margin: 6px 0 0;
-  font-size: 15px;
-}
-
-.task-focus-panel.terminal .task-focus-head {
+  gap: 12px;
   align-items: center;
 }
 
-.task-focus-panel.terminal .task-focus-head h2 {
-  display: inline;
-  margin: 0 0 0 8px;
+.task-focus-head > div:first-child {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.task-focus-head h2 {
+  margin: 0;
   font-size: 13px;
   white-space: nowrap;
 }
 
-.task-focus-panel.terminal .task-focus-head > div:first-child {
-  display: flex;
-  align-items: center;
-  min-width: 0;
+.task-focus-head p {
+  flex-basis: 100%;
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .task-focus-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-}
-
-.task-focus-panel.terminal .task-focus-actions {
   gap: 6px;
 }
 
 .ghost-button.danger-lite {
   color: var(--danger);
-}
-
-.task-result-digest span,
-.task-focus-live span,
-.task-focus-error span {
-  color: var(--ink-soft);
-  font-size: 12px;
-}
-
-.task-focus-meta-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.task-focus-meta-line span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 220px;
-  min-height: 24px;
-  padding: 0 8px;
-  color: var(--ink-soft);
-  background: rgba(244, 241, 232, 0.68);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-focus-panel.terminal .task-focus-meta-line span {
-  min-height: 22px;
-  font-size: 10.5px;
-}
-
-.task-result-digest,
-.task-focus-live,
-.task-focus-error {
-  padding: 12px 13px;
-  background: rgba(244, 241, 232, 0.5);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-}
-
-.task-focus-live {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--moss);
-  background: var(--moss-soft);
-}
-
-.task-focus-error {
-  display: grid;
-  gap: 4px;
-  color: var(--danger);
-  background: #fff1eb;
-  border-color: #e3b8aa;
-}
-
-.task-result-digest p {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
-  overflow: hidden;
-  margin: 7px 0 0;
-  color: var(--ink);
-  line-height: 1.64;
-  white-space: pre-wrap;
-}
-
-.task-result-digest.empty p {
-  color: var(--ink-soft);
-}
-
-.task-focus-support {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.task-focus-support span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 220px;
-  min-height: 26px;
-  padding: 0 8px;
-  color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.72);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
 }
 
 .conversation {

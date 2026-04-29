@@ -1578,11 +1578,9 @@ function App() {
         {error && <div className="error-banner">{error}</div>}
         {uploadNotice && !error && <div className="upload-banner">{uploadNotice}</div>}
 
-        {selectedTask && (
+        {selectedTask && (selectedTask.status === 'failed' || selectedTask.status === 'stopped') && (
           <TaskFocusPanel
             task={selectedTask}
-            workspace={selectedWorkspace}
-            session={selectedHermesSession}
             onContinue={() => handleContinueTask(selectedTask)}
             onRetry={() => handleRetryTask(selectedTask)}
             onArchive={() => void handleArchiveTask(selectedTask)}
@@ -4812,33 +4810,24 @@ function InlineExecutionTrace({ task }: { task: Task }) {
 
 function TaskFocusPanel({
   task,
-  workspace,
-  session,
   onContinue,
   onRetry,
   onArchive,
   onDelete
 }: {
   task: Task
-  workspace?: Workspace
-  session?: HermesSessionSummary
   onContinue: () => void
   onRetry: () => void
   onArchive: () => void
   onDelete: () => void
 }) {
-  const references = extractTaskReferences(task).slice(0, 3)
-  const isTerminal = task.status === 'completed' || task.status === 'failed' || task.status === 'stopped'
-  const title = task.status === 'running'
-    ? 'Hermes 正在执行'
-    : task.status === 'failed'
-      ? '这次执行失败'
-      : task.status === 'stopped'
-        ? '这次执行已停止'
-        : '任务已完成'
+  const title = task.status === 'failed' ? '这次执行失败' : '这次执行已停止'
+  const detail = task.status === 'failed'
+    ? (task.error || '可以重新运行，或继续追问补充信息。')
+    : '任务已被停止，可以继续追问或重新运行。'
 
   return (
-    <section className={`task-focus-panel ${task.status} ${isTerminal ? 'terminal' : ''}`}>
+    <section className={`task-focus-panel ${task.status}`}>
       <div className="task-focus-head">
         <div>
           <span className={`status-pill compact ${task.status}`}>
@@ -4846,20 +4835,17 @@ function TaskFocusPanel({
             {statusLabel(task.status)}
           </span>
           <h2>{title}</h2>
+          <p>{detail}</p>
         </div>
         <div className="task-focus-actions">
-          {isTerminal && (
-            <>
-              <button type="button" className="ghost-button" onClick={onContinue}>
-                <MessageSquarePlus size={15} />
-                继续追问
-              </button>
-              <button type="button" className="ghost-button" onClick={onRetry}>
-                <RefreshCw size={15} />
-                重新运行
-              </button>
-            </>
-          )}
+          <button type="button" className="ghost-button" onClick={onContinue}>
+            <MessageSquarePlus size={15} />
+            继续追问
+          </button>
+          <button type="button" className="ghost-button" onClick={onRetry}>
+            <RefreshCw size={15} />
+            重新运行
+          </button>
           <button type="button" className="ghost-button" onClick={onArchive}>
             {task.archivedAt ? <ArchiveRestore size={15} /> : <Archive size={15} />}
             {task.archivedAt ? '取消归档' : '归档'}
@@ -4870,35 +4856,6 @@ function TaskFocusPanel({
           </button>
         </div>
       </div>
-
-      <div className="task-focus-meta-line">
-        <span><Folder size={13} />{workspace?.name ?? task.workspaceId}</span>
-        <span><Clock3 size={13} />{taskElapsedLabel(task)}</span>
-        <span><Bot size={13} />{task.modelId === 'auto' || !task.modelId ? 'Hermes 默认' : task.modelId}</span>
-        <span title={task.hermesSessionId}><Database size={13} />{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '新会话'}</span>
-        {session && <span>{session.messageCount} 条原生消息</span>}
-      </div>
-
-      {task.status === 'running' ? (
-        <div className="task-focus-live">
-          <Loader2 size={16} className="spin" />
-          <span>Hermes 会把思考、工具和结果实时同步到当前任务。</span>
-        </div>
-      ) : task.status === 'failed' ? (
-        <div className="task-focus-error">
-          <strong>{task.error || 'Hermes 返回失败状态'}</strong>
-          <span>可以重新运行，或展开调试信息查看原始日志。</span>
-        </div>
-      ) : null}
-
-      {(task.artifacts.length > 0 || references.length > 0) && (
-        <div className="task-focus-support">
-          {task.artifacts.length > 0 && <span><FileArchive size={13} />{task.artifacts.length} 个产物</span>}
-          {references.map((reference) => (
-            <span title={reference} key={reference}><ExternalLink size={13} />{shortReference(reference)}</span>
-          ))}
-        </div>
-      )}
     </section>
   )
 }
