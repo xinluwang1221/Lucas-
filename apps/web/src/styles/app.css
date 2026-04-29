@@ -4921,6 +4921,194 @@ summary:focus-visible {
   font-size: 11px;
 }
 
+.hermes-update-panel {
+  gap: 10px;
+  padding: 12px;
+}
+
+.hermes-update-banner {
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 13px;
+  background: #fffdf7;
+}
+
+.hermes-update-banner.verified {
+  background: #f7fbf4;
+  border-color: #a7cdb0;
+}
+
+.hermes-update-banner.needs-review {
+  background: #fff8eb;
+  border-color: #e0bc68;
+}
+
+.hermes-update-banner.blocked {
+  background: #fff6f6;
+  border-color: #ebb7bd;
+}
+
+.hermes-update-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: #245f48;
+  background: #eef8f0;
+  border: 1px solid #b8d4bd;
+  border-radius: 7px;
+}
+
+.hermes-update-banner.blocked .hermes-update-status-icon {
+  color: #b9414e;
+  background: #fff0f1;
+  border-color: #ebb7bd;
+}
+
+.hermes-update-banner.needs-review .hermes-update-status-icon,
+.hermes-update-banner.unknown .hermes-update-status-icon {
+  color: #7a5713;
+  background: #fff6e6;
+  border-color: #e6c57e;
+}
+
+.hermes-update-summary-copy {
+  min-width: 0;
+}
+
+.hermes-update-summary-copy strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.hermes-update-summary-copy p {
+  max-width: none;
+  margin-top: 6px;
+}
+
+.hermes-update-version-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.hermes-update-version-strip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  color: #245f48;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(36, 95, 72, 0.14);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hermes-update-actions {
+  gap: 8px;
+  padding: 8px;
+  background: #f6f4ef;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-update-result-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.hermes-update-diagnostics {
+  overflow: hidden;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.hermes-update-diagnostics summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.hermes-update-diagnostics summary::-webkit-details-marker {
+  display: none;
+}
+
+.hermes-update-diagnostics summary em {
+  padding: 3px 8px;
+  color: var(--ink-soft);
+  background: #f6f4ef;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hermes-update-diagnostics[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.hermes-update-diagnostics .hermes-update-grid,
+.hermes-update-diagnostics .hermes-update-checks,
+.hermes-update-diagnostics .hermes-update-notes {
+  margin: 10px 12px;
+}
+
+.hermes-smoke-card,
+.hermes-auto-update-card {
+  gap: 10px;
+  padding: 11px;
+}
+
+.hermes-smoke-card.pending {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.hermes-smoke-head,
+.hermes-auto-update-head {
+  align-items: center;
+}
+
+.hermes-smoke-head span,
+.hermes-auto-update-head span {
+  max-width: 760px;
+}
+
+.hermes-compact-details {
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.hermes-compact-details summary {
+  cursor: pointer;
+  color: #245f48;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hermes-compact-details .hermes-smoke-steps,
+.hermes-compact-details .hermes-smoke-response,
+.hermes-compact-details .hermes-auto-update-backup,
+.hermes-compact-details .hermes-update-log {
+  margin-top: 8px;
+}
+
+.hermes-auto-update-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -5160,6 +5348,54 @@ summary:focus-visible {
 .settings-block h3 {
   margin: 0 0 10px;
   font-size: 14px;
+}
+
+.about-summary-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.about-summary-card span,
+.about-summary-card strong,
+.about-summary-card p {
+  display: block;
+}
+
+.about-summary-card span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.about-summary-card strong {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.about-summary-card p {
+  max-width: 560px;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.about-summary-card em {
+  padding: 5px 9px;
+  color: #245f48;
+  background: #eef8f0;
+  border: 1px solid #b8d4bd;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .settings-section-copy {

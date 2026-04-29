@@ -3882,11 +3882,14 @@ function SettingsModal({
         )}
         {tab === 'about' && (
           <SettingsSection title="关于 Hermes Cowork">
-            <InfoGrid items={[
-              ['产品', 'Hermes Cowork'],
-              ['定位', 'Hermes 本机前端'],
-              ['版本', '0.1.0']
-            ]} />
+            <div className="about-summary-card">
+              <div>
+                <span>本机智能体工作台</span>
+                <strong>Hermes Cowork</strong>
+                <p>负责把 Hermes 的模型、MCP、任务流和升级状态整理成可操作的前端。</p>
+              </div>
+              <em>v0.1.0</em>
+            </div>
             <SettingsBlock title="Hermes 后台更新">
               <HermesUpdatePanel
                 status={hermesUpdate}
@@ -6874,35 +6877,65 @@ function HermesUpdatePanel({
     blocked: '暂不建议升级',
     unknown: '需要检查'
   }[status.compatibility.status]
+  const statusIcon = status.compatibility.status === 'blocked'
+    ? <XCircle size={18} />
+    : status.compatibility.status === 'verified'
+      ? <CheckCircle2 size={18} />
+      : <RefreshCw size={18} />
+  const headline = status.updateAvailable
+    ? `发现 Hermes 新版本 ${status.latestTag || ''}`.trim()
+    : status.compatibility.status === 'blocked'
+      ? 'Hermes 已更新，但环境需要整理'
+      : 'Hermes 当前可继续使用'
+  const versionText = status.latestTag && status.latestTag !== status.currentTag
+    ? `${status.currentTag || '未知'} → ${status.latestTag}`
+    : `${status.currentTag || status.currentVersion || '未知版本'}`
   const canAutoUpdate = Boolean(status.updateAvailable && testResult?.status === 'passed' && status.compatibility.status !== 'blocked')
-  const autoUpdateHint = status.updateAvailable
-    ? canAutoUpdate
-      ? '前测已通过。点击后会自动备份、执行 hermes update，并在升级后复测。'
-      : '先完成自动复测，通过后才能进入自动更新。'
-    : '当前没有检测到 Hermes 可用更新。'
+  const autoUpdateHint = canAutoUpdate
+    ? '前测已通过，Cowork 会自动备份、更新并复测。'
+    : status.updateAvailable
+      ? '先运行复测，通过后才能自动更新。'
+      : '当前没有检测到 Hermes 可用更新。'
 
   return (
     <div className="hermes-update-panel">
       <div className={statusClass}>
-        <div>
-          <span>兼容性判断</span>
-          <strong>{status.compatibility.title}</strong>
+        <div className="hermes-update-status-icon">{statusIcon}</div>
+        <div className="hermes-update-summary-copy">
+          <span>Hermes 后台更新</span>
+          <strong>{headline}</strong>
           <p>{status.compatibility.detail}</p>
+          <div className="hermes-update-version-strip">
+            <span>当前 {versionText}</span>
+            <span>{status.updateAvailable ? '有可用更新' : '无需更新'}</span>
+            {status.workingTreeDirty && <span>本机仓库有改动</span>}
+          </div>
         </div>
-        <button className="hermes-update-test-button" onClick={onRunTest} disabled={testRunning}>
-          {testRunning ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
-          {testRunning ? '复测中' : statusLabel}
-        </button>
       </div>
 
       <div className="hermes-update-actions">
         <button className="settings-add-button" onClick={onRefresh} disabled={loading}>
           {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-          检查 GitHub 更新
+          检查更新
         </button>
+        <button className="hermes-update-test-button" onClick={onRunTest} disabled={testRunning || autoUpdating}>
+          {testRunning ? <Loader2 size={14} className="spin" /> : <Play size={14} />}
+          {testRunning ? '复测中' : '运行复测'}
+        </button>
+        {status.updateAvailable && (
+          <button
+            className="hermes-auto-update-button"
+            onClick={onRunAutoUpdate}
+            disabled={!canAutoUpdate || autoUpdating || testRunning}
+            title={autoUpdateHint}
+          >
+            {autoUpdating ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+            {autoUpdating ? '正在更新' : '自动更新'}
+          </button>
+        )}
         <a className="settings-link-button" href={status.repoUrl} target="_blank" rel="noreferrer">
           <ExternalLink size={13} />
-          打开 Hermes GitHub
+          GitHub
         </a>
       </div>
 
@@ -6910,66 +6943,58 @@ function HermesUpdatePanel({
       {testError && <div className="settings-error-line">{testError}</div>}
       {autoUpdateError && <div className="settings-error-line">{autoUpdateError}</div>}
 
-      <HermesCompatibilityResultCard result={testResult} running={testRunning} onRun={onRunTest} />
-
-      <div className={`hermes-auto-update-gate ${canAutoUpdate ? 'ready' : ''}`}>
-        <div>
-          <strong>自动更新</strong>
-          <span>{autoUpdateHint}</span>
-        </div>
-        <button
-          className="hermes-auto-update-button"
-          onClick={onRunAutoUpdate}
-          disabled={!canAutoUpdate || autoUpdating || testRunning}
-        >
-          {autoUpdating ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-          {autoUpdating ? '正在更新' : '自动更新 Hermes'}
-        </button>
+      <div className="hermes-update-result-stack">
+        <HermesCompatibilityResultCard result={testResult} running={testRunning} onRun={onRunTest} />
+        <HermesAutoUpdateResultCard result={autoUpdateResult} running={autoUpdating} />
       </div>
 
-      <HermesAutoUpdateResultCard result={autoUpdateResult} running={autoUpdating} />
-
-      <div className="hermes-update-grid">
-        <div>
-          <span>本机 Hermes</span>
-          <strong>{status.currentTag || '未知'}</strong>
-          <small title={status.currentVersion}>{status.currentVersion}</small>
-        </div>
-        <div>
-          <span>GitHub 最新</span>
-          <strong>{status.latestTag || '未读取到'}</strong>
-          <small>{status.updateAvailable ? '有可用更新' : '当前无需更新'}</small>
-        </div>
-        <div>
-          <span>Cowork 验证基线</span>
-          <strong>{status.verifiedCoworkTag}</strong>
-          <small>超过该版本需要复测</small>
-        </div>
-        <div>
-          <span>本机仓库</span>
-          <strong>{status.branch || '未知分支'}</strong>
-          <small>{status.workingTreeDirty ? '有未提交改动' : status.commitsBehind ? `落后 ${status.commitsBehind} 个提交` : '工作树干净'}</small>
-        </div>
-      </div>
-
-      <div className="hermes-update-checks">
-        {status.checks.map((check) => (
-          <div className={check.ok ? 'ok' : 'failed'} key={check.id}>
-            {check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-            <div>
-              <strong>{check.label}</strong>
-              <span title={check.detail}>{check.detail}</span>
-            </div>
+      <details className="hermes-update-diagnostics">
+        <summary>
+          <span>诊断详情</span>
+          <em>{statusLabel}</em>
+        </summary>
+        <div className="hermes-update-grid">
+          <div>
+            <span>本机 Hermes</span>
+            <strong>{status.currentTag || '未知'}</strong>
+            <small title={status.currentVersion}>{status.currentVersion}</small>
           </div>
-        ))}
-      </div>
+          <div>
+            <span>GitHub 最新</span>
+            <strong>{status.latestTag || '未读取到'}</strong>
+            <small>{status.updateAvailable ? '有可用更新' : '当前无需更新'}</small>
+          </div>
+          <div>
+            <span>Cowork 验证基线</span>
+            <strong>{status.verifiedCoworkTag}</strong>
+            <small>超过该版本需要复测</small>
+          </div>
+          <div>
+            <span>本机仓库</span>
+            <strong>{status.branch || '未知分支'}</strong>
+            <small>{status.workingTreeDirty ? '有未提交改动' : status.commitsBehind ? `落后 ${status.commitsBehind} 个提交` : '工作树干净'}</small>
+          </div>
+        </div>
 
-      <div className="hermes-update-notes">
-        <strong>升级前建议</strong>
-        <ul>
-          {status.compatibility.notes.map((note) => <li key={note}>{note}</li>)}
-        </ul>
-      </div>
+        <div className="hermes-update-checks">
+          {status.checks.map((check) => (
+            <div className={check.ok ? 'ok' : 'failed'} key={check.id}>
+              {check.ok ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+              <div>
+                <strong>{check.label}</strong>
+                <span title={check.detail}>{check.detail}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hermes-update-notes">
+          <strong>升级前建议</strong>
+          <ul>
+            {status.compatibility.notes.map((note) => <li key={note}>{note}</li>)}
+          </ul>
+        </div>
+      </details>
     </div>
   )
 }
@@ -6987,12 +7012,12 @@ function HermesCompatibilityResultCard({
     return (
       <div className="hermes-smoke-card pending">
         <div>
-          <strong>自动复测</strong>
-          <span>点击后 Cowork 后端会真实调用 Hermes，检查版本/status、模型 Adapter、MCP Adapter 和一个最小 Bridge 任务。</span>
+          <strong>还没有本轮复测结果</strong>
+          <span>复测会真实调用 Hermes，确认 Cowork 与当前后端仍能配合。</span>
         </div>
         <button className="settings-add-button" onClick={onRun}>
           <Play size={14} />
-          立即复测
+          复测
         </button>
       </div>
     )
@@ -7003,43 +7028,48 @@ function HermesCompatibilityResultCard({
       <div className="hermes-smoke-card running">
         <Loader2 size={18} className="spin" />
         <div>
-          <strong>正在自动复测 Hermes</strong>
-          <span>这会启动一个真实 Hermes 小任务，通常需要几十秒。期间请不要关闭 Cowork API。</span>
+          <strong>正在复测 Hermes</strong>
+          <span>正在跑一个最小真实任务，完成后会给出是否可继续使用。</span>
         </div>
       </div>
     )
   }
 
   if (!result) return null
+  const failedStep = result.steps.find((step) => step.status === 'failed')
+  const summary = failedStep?.detail || result.smokeTask?.responsePreview || result.detail
 
   return (
     <div className={`hermes-smoke-card ${result.status}`}>
       <div className="hermes-smoke-head">
         <div>
           <strong>{result.title}</strong>
-          <span>{result.detail}</span>
+          <span>{summary}</span>
         </div>
-        <em>{result.status === 'passed' ? '可升级后再跑一次' : '先修复再升级'}</em>
+        <em>{result.status === 'passed' ? '通过' : '失败'}</em>
       </div>
-      <div className="hermes-smoke-steps">
-        {result.steps.map((step) => (
-          <div className={step.status} key={step.id}>
-            {step.status === 'passed' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-            <div>
-              <strong>{step.label}</strong>
-              <span>{step.detail}</span>
+      <details className="hermes-compact-details">
+        <summary>查看 {result.steps.length} 项复测明细</summary>
+        <div className="hermes-smoke-steps">
+          {result.steps.map((step) => (
+            <div className={step.status} key={step.id}>
+              {step.status === 'passed' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+              <div>
+                <strong>{step.label}</strong>
+                <span>{step.detail}</span>
+              </div>
+              <time>{formatDuration(step.elapsedMs)}</time>
             </div>
-            <time>{formatDuration(step.elapsedMs)}</time>
-          </div>
-        ))}
-      </div>
-      {result.smokeTask && (
-        <div className="hermes-smoke-response">
-          <span>小任务返回</span>
-          <strong>{result.smokeTask.responsePreview || '无正文预览'}</strong>
-          <small>{result.smokeTask.eventCount} 个事件{result.smokeTask.sessionId ? ` · ${shortSessionId(result.smokeTask.sessionId)}` : ''}</small>
+          ))}
         </div>
-      )}
+        {result.smokeTask && (
+          <div className="hermes-smoke-response">
+            <span>小任务返回</span>
+            <strong>{result.smokeTask.responsePreview || '无正文预览'}</strong>
+            <small>{result.smokeTask.eventCount} 个事件{result.smokeTask.sessionId ? ` · ${shortSessionId(result.smokeTask.sessionId)}` : ''}</small>
+          </div>
+        )}
+      </details>
     </div>
   )
 }
@@ -7059,7 +7089,7 @@ function HermesAutoUpdateResultCard({
         <Loader2 size={18} className="spin" />
         <div>
           <strong>正在执行自动更新</strong>
-          <span>Cowork 会按顺序完成前测、备份、Hermes 更新和升级后复测。这个过程可能需要几分钟。</span>
+          <span>Cowork 正在备份配置、更新 Hermes，并在结束后自动复测。</span>
         </div>
       </div>
     )
@@ -7096,21 +7126,23 @@ function HermesAutoUpdateResultCard({
           <strong>{result.postTest ? (result.postTest.status === 'passed' ? '通过' : '失败') : '未执行'}</strong>
         </div>
       </div>
-      <div className="hermes-auto-update-backup">
-        <Archive size={15} />
-        <div>
-          <strong>配置备份</strong>
-          <span title={result.backupDir || ''}>{backupLabel}</span>
-          <small>{result.backupFiles.length ? `${result.backupFiles.length} 个文件已备份` : '没有找到需要备份的配置文件'}</small>
+      <details className="hermes-compact-details">
+        <summary>备份与命令输出</summary>
+        <div className="hermes-auto-update-backup">
+          <Archive size={15} />
+          <div>
+            <strong>配置备份</strong>
+            <span title={result.backupDir || ''}>{backupLabel}</span>
+            <small>{result.backupFiles.length ? `${result.backupFiles.length} 个文件已备份` : '没有找到需要备份的配置文件'}</small>
+          </div>
         </div>
-      </div>
-      {(result.stdout || result.stderr) && (
-        <details className="hermes-update-log">
-          <summary>查看 hermes update 输出</summary>
-          {result.stdout && <pre>{result.stdout}</pre>}
-          {result.stderr && <pre>{result.stderr}</pre>}
-        </details>
-      )}
+        {(result.stdout || result.stderr) && (
+          <div className="hermes-update-log">
+            {result.stdout && <pre>{result.stdout}</pre>}
+            {result.stderr && <pre>{result.stderr}</pre>}
+          </div>
+        )}
+      </details>
       <small className="hermes-auto-update-time">完成于 {formatTime(result.completedAt)}</small>
     </div>
   )
