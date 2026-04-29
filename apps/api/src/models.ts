@@ -19,9 +19,20 @@ const chineseModelProviderIds = new Set([
   'qwen-oauth'
 ])
 
+const xiaomiMiMoModels = [
+  'mimo-v2.5-pro',
+  'mimo-v2.5',
+  'mimo-v2.5-tts-voiceclone',
+  'mimo-v2.5-tts-voicedesign',
+  'mimo-v2.5-tts',
+  'mimo-v2-pro',
+  'mimo-v2-omni',
+  'mimo-v2-tts'
+]
+
 const providerModels: Record<string, { label: string; models: string[] }> = {
   custom: { label: 'Custom endpoint', models: [] },
-  xiaomi: { label: 'Xiaomi MiMo', models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'] },
+  xiaomi: { label: 'Xiaomi MiMo', models: xiaomiMiMoModels },
   minimax: { label: 'MiniMax', models: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'] },
   anthropic: { label: 'Anthropic', models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'] },
   'openai-codex': { label: 'OpenAI Codex', models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.3-codex-spark'] },
@@ -191,7 +202,7 @@ function mergeHermesCatalogSupplements(catalog: HermesModelCatalogProvider[]) {
       id,
       label: provider.label || supplement?.label || id,
       description: provider.description || supplement?.label || provider.label || id,
-      models: uniqueStrings([...(supplement?.models ?? []), ...savedModels, ...(provider.models ?? [])]),
+      models: normalizeProviderModels(id, [...(supplement?.models ?? []), ...savedModels, ...(provider.models ?? [])]),
       source: provider.source || 'hermes'
     })
   }
@@ -203,7 +214,7 @@ function mergeHermesCatalogSupplements(catalog: HermesModelCatalogProvider[]) {
       id,
       label: preset.label,
       description: preset.label,
-      models: uniqueStrings([...(savedSupplements[id] ?? []), ...preset.models]),
+      models: normalizeProviderModels(id, [...(savedSupplements[id] ?? []), ...preset.models]),
       source: 'hermes'
     })
   }
@@ -758,11 +769,11 @@ async function fetchXiaomiOfficialModels(): Promise<HermesModelCatalogRefreshSou
       }
     }
     const html = await response.text()
-    const matches = [...html.matchAll(/Xiaomi\s+MiMo-?(V[0-9.]+(?:-(?:Pro|Omni|Flash))?)/gi)]
-    const models = uniqueStrings(matches
-      .map((match) => `mimo-${match[1].toLowerCase()}`)
-      .filter((model) => !model.includes('tts') && !model.includes('asr'))
-    )
+    const matches = [...html.matchAll(/MiMo-?(V[0-9.]+(?:-(?:Pro|Omni|Flash|TTS(?:-(?:VoiceClone|VoiceDesign))?))?)/gi)]
+    const models = normalizeProviderModels('xiaomi', [
+      ...xiaomiMiMoModels,
+      ...matches.map((match) => `mimo-${match[1].toLowerCase()}`)
+    ])
     return {
       provider: 'xiaomi',
       label: 'Xiaomi MiMo',
@@ -861,6 +872,20 @@ function hermesProviderPreset(provider: string) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+}
+
+function normalizeProviderModels(providerId: string, models: string[]) {
+  const normalizedProviderId = normalizeProviderId(providerId)
+  const uniqueModels = uniqueStrings(models.map((model) => normalizedProviderId === 'xiaomi' ? model.toLowerCase() : model))
+  if (normalizedProviderId !== 'xiaomi') return uniqueModels
+
+  const officialModelSet = new Set(xiaomiMiMoModels)
+  const officialExtras = uniqueModels.filter((model) => (
+    /^mimo-v/i.test(model)
+    && model !== 'mimo-v2-flash'
+    && !officialModelSet.has(model)
+  ))
+  return uniqueStrings([...xiaomiMiMoModels, ...officialExtras])
 }
 
 function unquoteYaml(value: string) {

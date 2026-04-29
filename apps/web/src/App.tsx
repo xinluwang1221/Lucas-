@@ -1963,7 +1963,15 @@ function App() {
                 disabled={!newModelProvider}
               >
                 <option value="">选择模型</option>
-                {(modelCatalog.find((provider) => provider.id === newModelProvider)?.models ?? []).map((model) => <option key={model}>{model}</option>)}
+                {modelGroupsForProvider(newModelProvider, modelCatalog.find((provider) => provider.id === newModelProvider)?.models ?? []).map((group) => (
+                  group.label ? (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.models.map((model) => <option key={model} value={model}>{model}</option>)}
+                    </optgroup>
+                  ) : (
+                    group.models.map((model) => <option key={model} value={model}>{model}</option>)
+                  )
+                ))}
                 <option value="custom">使用其他模型</option>
               </select>
             </label>
@@ -3467,16 +3475,23 @@ function SettingsModal({
                         </div>
                       </div>
                       <div className="model-chip-list">
-                        {provider.models.length ? provider.models.slice(0, 6).map((modelId) => (
-                          <button
-                            key={modelId}
-                            disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
-                            onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
-                          >
-                            {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
-                            {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
-                            {modelId}
-                          </button>
+                        {provider.models.length ? modelGroupsForProvider(provider.id, provider.models).map((group) => (
+                          <div className="model-chip-group" key={group.label || `${provider.id}-models`}>
+                            {group.label && <span className="model-chip-group-label">{group.label}</span>}
+                            <div className="model-chip-group-options">
+                              {group.models.map((modelId) => (
+                                <button
+                                  key={modelId}
+                                  disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
+                                  onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
+                                >
+                                  {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
+                                  {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
+                                  {modelId}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         )) : <span className="model-chip-empty">暂无可选模型</span>}
                       </div>
                     </div>
@@ -4639,6 +4654,22 @@ function providerSavedModelConfig(providerId: string, overview: HermesModelOverv
     apiMode: provider?.apiMode || (isCurrent ? overview?.apiMode : '') || defaultModelApiMode(id),
     canReuse: Boolean(provider?.configured || isCurrent)
   }
+}
+
+function modelGroupsForProvider(providerId: string, models: string[]) {
+  const uniqueModels = [...new Set(models.filter(Boolean))]
+  if (hermesProviderId(providerId) !== 'xiaomi') {
+    return [{ label: '', models: uniqueModels }]
+  }
+
+  const v25 = uniqueModels.filter((model) => /^mimo-v2\.5(?:-|$)/i.test(model))
+  const v2 = uniqueModels.filter((model) => /^mimo-v2(?:-|$)/i.test(model) && !/^mimo-v2\.5(?:-|$)/i.test(model))
+  const other = uniqueModels.filter((model) => !v25.includes(model) && !v2.includes(model))
+  return [
+    v25.length ? { label: 'MiMo V2.5 系列', models: v25 } : null,
+    v2.length ? { label: 'MiMo V2 系列', models: v2 } : null,
+    other.length ? { label: '其他模型', models: other } : null
+  ].filter((group): group is { label: string; models: string[] } => Boolean(group))
 }
 
 function FragmentWithTrace({
