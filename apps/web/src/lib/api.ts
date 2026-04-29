@@ -129,6 +129,14 @@ export type HermesModelProvider = {
   credentialSummary: string
 }
 
+export type HermesModelCatalogProvider = {
+  id: string
+  label: string
+  description: string
+  models: string[]
+  source: 'hermes'
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string
@@ -147,6 +155,7 @@ export type ModelListResponse = {
   selectedModelId: string
   models: ModelOption[]
   hermes: HermesModelOverview
+  catalog: HermesModelCatalogProvider[]
 }
 
 export type HermesModelConfigureRequest = {

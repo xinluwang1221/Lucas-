@@ -113,6 +113,14 @@ export type HermesModelProvider = {
   credentialSummary: string
 }
 
+export type HermesModelCatalogProvider = {
+  id: string
+  label: string
+  description: string
+  models: string[]
+  source: 'hermes'
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { hermesAgentDir, hermesBin } from './paths.js'
-import { HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
+import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
+import { HermesModelCatalogProvider, HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
 
 const hermesConfigPath = '/Users/lucas/.hermes/config.yaml'
 const hermesEnvPath = '/Users/lucas/.hermes/.env'
@@ -22,6 +22,8 @@ const providerModels: Record<string, { label: string; models: string[] }> = {
   qwen: { label: 'Qwen OAuth', models: ['qwen3-coder-plus', 'qwen3.5-plus', 'qwen3-coder-next'] },
   copilot: { label: 'GitHub Copilot', models: ['gpt-5.4', 'gpt-5.4-mini', 'claude-sonnet-4.6', 'gemini-2.5-pro'] }
 }
+
+let catalogCache: { value: HermesModelCatalogProvider[]; expiresAt: number } | null = null
 
 export function listModelOptions(settings: ModelSettings) {
   const configModel = readHermesDefaultModel()
@@ -84,6 +86,56 @@ export function readHermesModelOverview(settings: ModelSettings): HermesModelOve
     credentials,
     providers,
     updatedAt: new Date().toISOString()
+  }
+}
+
+export function readHermesModelCatalog(): HermesModelCatalogProvider[] {
+  const now = Date.now()
+  if (catalogCache && catalogCache.expiresAt > now) return catalogCache.value
+  try {
+    const raw = execFileSync(hermesPythonBin, ['-c', `
+import json
+from hermes_cli.models import CANONICAL_PROVIDERS, OPENROUTER_MODELS, _PROVIDER_MODELS
+items = [{
+    "id": "custom",
+    "label": "Custom endpoint",
+    "description": "OpenAI-compatible custom endpoint",
+    "models": [],
+    "source": "hermes",
+}]
+for provider in CANONICAL_PROVIDERS:
+    models = list(_PROVIDER_MODELS.get(provider.slug, []))
+    if provider.slug == "openrouter":
+        models = [item[0] for item in OPENROUTER_MODELS]
+    items.append({
+        "id": provider.slug,
+        "label": provider.label,
+        "description": getattr(provider, "description", None) or getattr(provider, "tui_desc", "") or provider.label,
+        "models": models,
+        "source": "hermes",
+    })
+print(json.dumps(items, ensure_ascii=False))
+`], {
+      cwd: hermesAgentDir,
+      env: {
+        ...process.env,
+        PYTHONPATH: hermesAgentDir
+      },
+      timeout: 5000,
+      encoding: 'utf8'
+    })
+    const parsed = JSON.parse(raw) as HermesModelCatalogProvider[]
+    const value = parsed.filter((provider) => provider.id && provider.label)
+    catalogCache = { value, expiresAt: now + 5 * 60 * 1000 }
+    return value
+  } catch {
+    return Object.entries(providerModels).map(([id, preset]) => ({
+      id,
+      label: preset.label,
+      description: preset.label,
+      models: preset.models,
+      source: 'hermes'
+    }))
   }
 }
 
@@ -175,7 +227,7 @@ function buildHermesProviders(
     providers.set(provider.id, provider)
   }
 
-  const currentPreset = providerModels[currentProvider] ?? providerModels.custom
+  const currentPreset = hermesProviderPreset(currentProvider)
   addProvider({
     id: currentProvider,
     label: providerLabel(currentProvider),
@@ -189,14 +241,14 @@ function buildHermesProviders(
   })
 
   for (const credential of credentials.filter((item) => item.configured)) {
-    const preset = providerModels[credential.id]
+    const preset = hermesProviderPreset(credential.id)
     addProvider({
       id: credential.id,
-      label: preset?.label ?? credential.label,
+      label: preset.label || credential.label,
       source: credential.kind === 'pool' ? 'auth' : 'hermes',
       configured: true,
       isCurrent: credential.id === currentProvider,
-      models: uniqueStrings([...(preset?.models ?? [])]),
+      models: uniqueStrings([...preset.models]),
       credentialSummary: credential.detail
     })
   }
@@ -217,14 +269,14 @@ function buildHermesProviders(
   for (const model of customModelOptions) {
     const providerId = normalizeProviderId(model.provider ?? 'custom')
     if (!providers.has(providerId)) {
-      const preset = providerModels[providerId]
+      const preset = hermesProviderPreset(providerId)
       addProvider({
         id: providerId,
-        label: preset?.label ?? providerId,
+        label: preset.label || providerId,
         source: 'custom',
         configured: configuredIds.has(providerId),
         isCurrent: providerId === currentProvider,
-        models: uniqueStrings([model.id, ...(preset?.models ?? [])]),
+        models: uniqueStrings([model.id, ...preset.models]),
         credentialSummary: configuredIds.has(providerId) ? 'Hermes 已检测到凭据' : 'Cowork 本地模型选项'
       })
     }
@@ -487,7 +539,19 @@ function customProviderId(value: string) {
 
 function providerLabel(provider: string) {
   if (!provider || provider === 'auto') return '自动'
-  return providerModels[provider]?.label ?? provider.replace(/^custom:/, '')
+  return hermesProviderPreset(provider).label || provider.replace(/^custom:/, '')
+}
+
+function hermesProviderPreset(provider: string) {
+  const normalized = normalizeProviderId(provider)
+  const catalogProvider = readHermesModelCatalog().find((item) => item.id === normalized)
+  if (catalogProvider) {
+    return {
+      label: catalogProvider.label,
+      models: catalogProvider.models
+    }
+  }
+  return providerModels[normalized] ?? { label: normalized.replace(/^custom:/, '') || 'Custom endpoint', models: [] }
 }
 
 function uniqueStrings(values: string[]) {

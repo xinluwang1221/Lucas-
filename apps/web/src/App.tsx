@@ -72,6 +72,7 @@ import {
   HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult,
+  HermesModelCatalogProvider,
   HermesModelOverview,
   HermesSessionSummary,
   getState,
@@ -281,24 +282,12 @@ const defaultSettingsPrefs: SettingsPrefs = {
   rules: []
 }
 
-const modelProviders = ['Hermes 当前 Provider', 'Custom endpoint', 'Anthropic', 'OpenAI Codex', 'MiniMax', 'Xiaomi MiMo', 'OpenRouter', 'Kimi / Moonshot', 'Z.AI / GLM']
-
-const providerModelPresets: Record<string, string[]> = {
-  'Hermes 当前 Provider': ['mimo-v2.5-pro'],
-  'Custom endpoint': ['mimo-v2.5-pro', 'mimo-v2-pro'],
-  Anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929'],
-  'OpenAI Codex': ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex'],
-  MiniMax: ['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2'],
-  'Xiaomi MiMo': ['mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'],
-  OpenRouter: ['anthropic/claude-opus-4.6', 'anthropic/claude-sonnet-4.6', 'openai/gpt-5.4'],
-  'Kimi / Moonshot': ['kimi-k2.5', 'kimi-k2-thinking', 'kimi-k2-turbo-preview'],
-  'Z.AI / GLM': ['glm-5.1', 'glm-5', 'glm-5-turbo']
-}
-
 const providerBaseUrlHints: Record<string, string> = {
-  'Custom endpoint': '例如 https://api.example.com/v1',
-  OpenRouter: 'https://openrouter.ai/api/v1',
-  'Xiaomi MiMo': '例如 https://token-plan-cn.xiaomimimo.com/v1'
+  custom: '例如 https://api.example.com/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  xiaomi: '例如 https://token-plan-cn.xiaomimimo.com/v1',
+  gemini: '通常可留空，Hermes 会使用 provider 默认地址',
+  anthropic: '通常可留空，Hermes 会使用 Anthropic 默认地址'
 }
 
 function App() {
@@ -356,6 +345,7 @@ function App() {
   const [skillFileContent, setSkillFileContent] = useState('')
   const [skillFileError, setSkillFileError] = useState<string | null>(null)
   const [models, setModels] = useState<ModelOption[]>([])
+  const [modelCatalog, setModelCatalog] = useState<HermesModelCatalogProvider[]>([])
   const [selectedModelId, setSelectedModelId] = useState('auto')
   const [hermesModel, setHermesModel] = useState<HermesModelOverview | null>(null)
   const [hermesModelUpdating, setHermesModelUpdating] = useState<string | null>(null)
@@ -404,6 +394,7 @@ function App() {
     setModels(nextModels.models)
     setSelectedModelId(nextModels.selectedModelId)
     setHermesModel(nextModels.hermes)
+    setModelCatalog(nextModels.catalog ?? [])
   }
 
   const refreshHermesMcp = async () => {
@@ -769,6 +760,7 @@ function App() {
       setModels(response.models)
       setSelectedModelId(response.selectedModelId)
       setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
       setModelNotice(`Hermes 默认模型已更新为 ${modelId}`)
     } catch (cause) {
       setHermesModelError(cause instanceof Error ? cause.message : String(cause))
@@ -785,6 +777,7 @@ function App() {
       setModels(response.models)
       setSelectedModelId(response.selectedModelId)
       setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
       setModelNotice(providers.length ? '备用模型列表已更新' : '已关闭备用模型')
     } catch (error) {
       const cause = error instanceof Error ? error : new Error(String(error))
@@ -841,6 +834,7 @@ function App() {
       setModels(response.models)
       setSelectedModelId('auto')
       setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
       setNewModelId('')
       setNewModelLabel('')
       setNewModelProvider('')
@@ -1811,11 +1805,14 @@ function App() {
                   setNewModelLabel('')
                   setNewModelBaseUrl('')
                   setNewModelApiKey('')
-                  setNewModelApiMode(event.target.value === 'Anthropic' ? 'anthropic_messages' : 'chat_completions')
+                  setNewModelApiMode(event.target.value === 'anthropic' ? 'anthropic_messages' : 'chat_completions')
                 }}
               >
                 <option value="">选择模型服务商</option>
-                {modelProviders.filter((provider) => provider !== 'Hermes 当前 Provider').map((provider) => <option key={provider}>{provider}</option>)}
+                <option value="custom">Custom endpoint</option>
+                {modelCatalog.map((provider) => (
+                  <option key={provider.id} value={provider.id}>{provider.label}</option>
+                ))}
               </select>
             </label>
             <label>
@@ -1830,7 +1827,7 @@ function App() {
                 disabled={!newModelProvider}
               >
                 <option value="">选择模型</option>
-                {(providerModelPresets[newModelProvider] ?? []).map((model) => <option key={model}>{model}</option>)}
+                {(modelCatalog.find((provider) => provider.id === newModelProvider)?.models ?? []).map((model) => <option key={model}>{model}</option>)}
                 <option value="custom">使用其他模型</option>
               </select>
             </label>
@@ -1899,6 +1896,7 @@ function App() {
             runtime={runtime}
             selectedModel={selectedModel}
             models={models}
+            modelCatalog={modelCatalog}
             selectedModelId={selectedModelId}
             hermesModel={hermesModel}
             hermesModelUpdating={hermesModelUpdating}
@@ -2838,6 +2836,7 @@ function SettingsModal({
   runtime,
   selectedModel,
   models,
+  modelCatalog,
   selectedModelId,
   hermesModel,
   hermesModelUpdating,
@@ -2894,6 +2893,7 @@ function SettingsModal({
   runtime: HermesRuntime | null
   selectedModel: ModelOption
   models: ModelOption[]
+  modelCatalog: HermesModelCatalogProvider[]
   selectedModelId: string
   hermesModel: HermesModelOverview | null
   hermesModelUpdating: string | null
@@ -3269,6 +3269,10 @@ function SettingsModal({
 
             <SettingsBlock title="长期默认模型">
               <p className="settings-section-copy">这里会写回 Hermes `config.yaml`。适合你决定以后所有 Hermes 新任务都使用某个模型。</p>
+              <div className="settings-info-banner">
+                <Info size={15} />
+                模型候选来自 Hermes 内置目录，当前读取到 {modelCatalog.length || '0'} 个 Hermes provider；列表会随 Hermes 升级更新。
+              </div>
               <div className="model-provider-list compact">
                 {modelProvidersForView.slice(0, 5).map((provider) => (
                   <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
@@ -4402,7 +4406,7 @@ function hermesProviderId(label: string) {
     'Kimi / Moonshot': 'kimi',
     'Z.AI / GLM': 'zai'
   }
-  return map[label] ?? label.trim().toLowerCase().replace(/\s+/g, '-')
+  return map[label] ?? label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9._:-]/g, '')
 }
 
 function FragmentWithTrace({
