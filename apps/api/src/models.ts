@@ -125,18 +125,48 @@ print(json.dumps(items, ensure_ascii=False))
       encoding: 'utf8'
     })
     const parsed = JSON.parse(raw) as HermesModelCatalogProvider[]
-    const value = parsed.filter((provider) => provider.id && provider.label)
+    const value = mergeHermesCatalogSupplements(parsed.filter((provider) => provider.id && provider.label))
     catalogCache = { value, expiresAt: now + 5 * 60 * 1000 }
     return value
   } catch {
-    return Object.entries(providerModels).map(([id, preset]) => ({
+    return mergeHermesCatalogSupplements(Object.entries(providerModels).map(([id, preset]) => ({
       id,
       label: preset.label,
       description: preset.label,
       models: preset.models,
       source: 'hermes'
-    }))
+    })))
   }
+}
+
+function mergeHermesCatalogSupplements(catalog: HermesModelCatalogProvider[]) {
+  const providers = new Map<string, HermesModelCatalogProvider>()
+
+  for (const provider of catalog) {
+    const id = normalizeProviderId(provider.id)
+    const supplement = providerModels[id]
+    providers.set(id, {
+      ...provider,
+      id,
+      label: provider.label || supplement?.label || id,
+      description: provider.description || supplement?.label || provider.label || id,
+      models: uniqueStrings([...(supplement?.models ?? []), ...(provider.models ?? [])]),
+      source: provider.source || 'hermes'
+    })
+  }
+
+  for (const [id, preset] of Object.entries(providerModels)) {
+    if (providers.has(id)) continue
+    providers.set(id, {
+      id,
+      label: preset.label,
+      description: preset.label,
+      models: uniqueStrings(preset.models),
+      source: 'hermes'
+    })
+  }
+
+  return [...providers.values()]
 }
 
 export function setHermesDefaultModel(modelId: string, provider?: string) {
