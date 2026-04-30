@@ -291,6 +291,7 @@ HC_EVENT\t
 - 返回 `finalResponse`、`sessionId`、`stdout`、`stderr`、`events`。
 - Node 侧最终会对事件做二次增强：给工具事件补 `category` / `summary`，并从 stdout/stderr 中推断网页调研、文件读写、命令执行、MCP/工具调用和错误事件。推断事件会标记 `synthetic: true`，避免依赖 Hermes 当前 callbacks 暴露程度。
 - Node 侧会生成 `executionView.activity` 作为前端主对话区的稳定展示层：它只包含桥接状态、推理轮次、思考摘要、工具/文件/搜索、产物、完成/失败/停止等用户可理解事件；`reasoning.available` 等内部进度不会作为工具展示，Hermes 原始思考动效文案会归一成“正在思考”。
+- 如果 Hermes bridge 以非 0 退出，Node 侧必须优先读取 `task.failed.error` / `status` 事件里的真实后端错误，再退回 stderr；不能只显示 `(Hermes 没有返回内容)`。错误进入 `task.error`、对话消息和 `executionView.errors` 前要做密钥脱敏，避免 API Key 片段泄露。
 
 `apps/api/src/store.ts`
 
@@ -333,6 +334,7 @@ HC_EVENT\t
 - 模型设置页已从配置后台收敛为“用户能力”页面：默认展示 Hermes 默认大脑、本次任务临时模型、备用路线和模型服务状态；长期默认模型可写回 Hermes `config.yaml`，本次任务模型只影响 Cowork 发起的新任务，Provider/Base URL/凭据状态统一收进高级折叠区。
 - 维护 Cowork 本地模型选项和当前选中模型。
 - `Hermes 默认模型 · <当前模型>` 表示不传 `--model`，完全跟随 Hermes 当前 `config.yaml` 与路由。
+- 模型运行失败排查顺序：先看 `task.failed.error` 是否为 401/认证失败，再看 `hermes auth list` 的 provider 凭据池状态，最后才检查模型 ID/Base URL。DeepSeek 和 Xiaomi MiMo 这类多 provider 场景下，切换底部“本次任务模型”不会自动修复 provider 凭据；如果 Hermes 返回 401，用户需要在模型设置里重填对应 provider 的 Key/Plan Key。
 
 `apps/api/src/hermes_update.ts`
 

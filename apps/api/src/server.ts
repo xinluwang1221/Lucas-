@@ -1259,12 +1259,15 @@ async function executeTask(
       stoppedBeforeFinal ? [] : artifacts,
       completedAt
     )
+    const cleanedStdout = cleanBridgeStdout(result.stdout)
+    const cleanedResponse = result.finalResponse || cleanHermesOutput(cleanedStdout)
+    const failureMessage = result.exitCode === 0 ? '' : bridgeFailureMessage(result, finalEvents)
 
     if (stoppedBeforeFinal) {
       store.update((state) => {
         const task = state.tasks.find((item) => item.id === taskId)
         if (!task || task.status !== 'stopped') return
-        task.stdout = result.finalResponse || cleanBridgeStdout(result.stdout) || task.stdout
+        task.stdout = result.finalResponse || cleanedStdout || task.stdout
         task.stderr = result.stderr || task.stderr
         task.hermesSessionId = result.sessionId ?? task.hermesSessionId
         task.events = finalEvents
@@ -1278,22 +1281,22 @@ async function executeTask(
       const task = state.tasks.find((item) => item.id === taskId)
       if (!task) return
       task.status = result.exitCode === 0 ? 'completed' : 'failed'
-      task.stdout = result.finalResponse || cleanBridgeStdout(result.stdout)
+      task.stdout = result.finalResponse || cleanedStdout
       task.stderr = result.stderr
       task.hermesSessionId = result.sessionId
       task.events = finalEvents
       task.completedAt = completedAt
       task.updatedAt = completedAt
-      task.error = result.exitCode === 0 ? undefined : result.stderr || `Hermes exited with ${result.exitCode}`
+      task.error = result.exitCode === 0 ? undefined : failureMessage || `Hermes exited with ${result.exitCode}`
 
       state.messages.push({
         id: crypto.randomUUID(),
         taskId,
         role: 'assistant',
         content:
-          result.finalResponse ||
-          cleanHermesOutput(cleanBridgeStdout(result.stdout)) ||
-          result.stderr ||
+          cleanedResponse ||
+          (failureMessage ? `Hermes 调用失败：${failureMessage}` : '') ||
+          sanitizeHermesRuntimeMessage(result.stderr) ||
           '(Hermes 没有返回内容)',
         createdAt: completedAt
       })
@@ -1350,6 +1353,42 @@ function enabledSkillNames() {
     .filter((skill) => skill.enabled)
     .map((skill) => skill.name)
     .slice(0, 80)
+}
+
+function bridgeFailureMessage(
+  result: { error?: string; stderr?: string; events?: HermesBridgeEvent[] },
+  finalEvents: ExecutionEvent[] = []
+) {
+  const candidates = [
+    result.error,
+    ...[...(result.events ?? [])].reverse().map((event) => bridgeEventFailureText(event)),
+    ...[...finalEvents].reverse().map((event) => bridgeEventFailureText(event)),
+    result.stderr
+  ]
+  return sanitizeHermesRuntimeMessage(candidates.find((message) => message && message.trim()) ?? '')
+}
+
+function bridgeEventFailureText(event: HermesBridgeEvent | ExecutionEvent) {
+  if (event.type === 'task.failed') {
+    return String(event.error ?? event.summary ?? event.message ?? '')
+  }
+  if (event.type === 'status') {
+    const text = String(event.summary ?? event.message ?? '')
+    return isErrorLine(text) ? text : ''
+  }
+  if (event.category === 'error') {
+    return String(event.summary ?? event.message ?? event.error ?? event.result ?? '')
+  }
+  return ''
+}
+
+function sanitizeHermesRuntimeMessage(message: string) {
+  return message
+    .replace(/\r/g, '')
+    .replace(/(api[_ -]?key\s*[:=]\s*)['"]?[^'",}\s]+/gi, '$1****')
+    .replace(/(authorization\s*[:=]\s*bearer\s+)[A-Za-z0-9._-]+/gi, '$1****')
+    .replace(/(sk-|tp-)[A-Za-z0-9._-]{8,}/g, '$1****')
+    .trim()
 }
 
 function normalizeSkillNames(value: unknown, fallback: string[] = []) {
@@ -1824,7 +1863,7 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
         typeof bridgeEvent.sessionId === 'string' ? bridgeEvent.sessionId : task.hermesSessionId
     }
     if (bridgeEvent.type === 'task.failed' && typeof bridgeEvent.error === 'string') {
-      task.error = bridgeEvent.error
+      task.error = sanitizeHermesRuntimeMessage(bridgeEvent.error)
     }
     task.updatedAt = new Date().toISOString()
   })
@@ -2074,12 +2113,12 @@ function inferredToolName(event: ExecutionEvent) {
 }
 
 function eventPrimaryText(event: ExecutionEvent) {
-  if (typeof event.summary === 'string' && event.summary.trim()) return event.summary.trim()
-  if (typeof event.message === 'string' && event.message.trim()) return event.message.trim()
-  if (typeof event.text === 'string' && event.text.trim()) return event.text.trim()
-  if (typeof event.result === 'string' && event.result.trim()) return event.result.trim().slice(0, 1000)
-  if (typeof event.error === 'string' && event.error.trim()) return event.error.trim()
-  if (Array.isArray(event.args) && typeof event.args[2] === 'string' && event.args[2].trim()) return event.args[2].trim()
+  if (typeof event.summary === 'string' && event.summary.trim()) return sanitizeHermesRuntimeMessage(event.summary.trim())
+  if (typeof event.message === 'string' && event.message.trim()) return sanitizeHermesRuntimeMessage(event.message.trim())
+  if (typeof event.text === 'string' && event.text.trim()) return sanitizeHermesRuntimeMessage(event.text.trim())
+  if (typeof event.result === 'string' && event.result.trim()) return sanitizeHermesRuntimeMessage(event.result.trim().slice(0, 1000))
+  if (typeof event.error === 'string' && event.error.trim()) return sanitizeHermesRuntimeMessage(event.error.trim())
+  if (Array.isArray(event.args) && typeof event.args[2] === 'string' && event.args[2].trim()) return sanitizeHermesRuntimeMessage(event.args[2].trim())
   return ''
 }
 
@@ -2197,14 +2236,14 @@ function buildExecutionView(task: Task): ExecutionView {
       logLines.add(`${event.type}: ${String(event.summary ?? event.message ?? event.kind ?? safeJson(event))}`)
     }
     if (event.type === 'task.failed') {
-      errorLines.add(String(event.error ?? safeJson(event)))
+      errorLines.add(sanitizeHermesRuntimeMessage(String(event.error ?? safeJson(event))))
     }
   }
 
   for (const line of [...stdoutLines, ...stderrLines]) {
     if (isDecorativeLine(line) || /^session_id:/i.test(line)) continue
     if (isErrorLine(line)) {
-      errorLines.add(line)
+      errorLines.add(sanitizeHermesRuntimeMessage(line))
       continue
     }
     if (isToolLine(line)) {
@@ -2216,7 +2255,7 @@ function buildExecutionView(task: Task): ExecutionView {
     }
   }
 
-  if (task.error) errorLines.add(task.error)
+  if (task.error) errorLines.add(sanitizeHermesRuntimeMessage(task.error))
 
   return {
     response,
@@ -2266,7 +2305,7 @@ function buildExecutionActivity(task: Task): ExecutionActivity[] {
       id: `${task.id}-failed`,
       kind: 'error',
       title: '任务失败',
-      detail: task.error || 'Hermes 返回失败状态',
+      detail: sanitizeHermesRuntimeMessage(task.error || 'Hermes 返回失败状态'),
       createdAt: task.completedAt ?? task.updatedAt,
       source: 'synthetic'
     })
