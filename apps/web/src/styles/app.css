@@ -7996,6 +7996,65 @@ summary:focus-visible {
   font-size: 14px;
 }
 
+.embedded-preview {
+  width: 100%;
+  min-height: calc(100vh - 150px);
+  background: #ffffff;
+  border: 1px solid rgba(35, 39, 32, 0.1);
+  border-radius: 6px;
+}
+
+.file-preview-panel.compact .embedded-preview {
+  min-height: 600px;
+}
+
+.image-preview-frame {
+  display: grid;
+  place-items: center;
+  min-height: 520px;
+  padding: 22px;
+  background: rgba(255, 253, 247, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.image-preview-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 190px);
+  object-fit: contain;
+}
+
+.media-preview-player {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 180px);
+  margin: 0 auto;
+  background: #151713;
+  border-radius: 8px;
+}
+
+audio.media-preview-player {
+  max-width: 680px;
+  margin-top: 80px;
+  background: transparent;
+}
+
+.spreadsheet-preview {
+  display: grid;
+  gap: 18px;
+}
+
+.sheet-preview-section {
+  display: grid;
+  gap: 10px;
+}
+
+.sheet-preview-section h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
 .text-preview {
   overflow: auto;
   max-height: 58vh;

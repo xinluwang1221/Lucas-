@@ -613,6 +613,7 @@ POST /api/models/fallbacks
 - 工作区文本文件预览。
 - Markdown 文件渲染预览。
 - CSV/TSV 文件表格预览。
+- 主流文件预览：PDF、图片、音视频、HTML 原样内嵌预览；docx/doc/rtf、pptx/ppsx、xlsx/xlsm 走内容级抽取预览。
 - 工作区文件 Finder 定位。
 - 产物识别。
 - 产物识别增强：任务完成时会生成 `artifact.created` 事件，右侧“最近操作”和对话区过程流能直接显示新增产物。
@@ -854,8 +855,8 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 - 当前不是 macOS 原生客户端，还是本地 Web。
 - 工作区授权已改为左侧“+ / 授权文件夹”触发 macOS Finder 目录选择；当前仍是本地 Web + Node Adapter 方案，未来打包成客户端后要替换为 Tauri/Electron 原生授权和安全书签。
 - 文件预览已经统一到右侧文件详情面板：点击工作区文件或任务产物时，右侧任务上下文会切换为文件预览、Finder 定位、复制路径和“作为上下文”操作。
-- 当前预览覆盖文本类、小型无扩展文本文件、CSV/TSV 表格和 docx 正文抽取；docx 是正文级预览，不保留 Word 原版分页、字体和图片。
-- pptx/xlsx/pdf 还没有高保真预览，后续应接文档渲染服务或系统 Quick Look。
+- 当前预览覆盖文本类、小型无扩展文本文件、Markdown、CSV/TSV、PDF、图片、音视频、HTML、docx/doc/rtf、pptx/ppsx、xlsx/xlsm。
+- Office 文件当前是内容级预览：docx/doc/rtf 抽正文，pptx/ppsx 抽幻灯片文字，xlsx/xlsm 抽前几个工作表为表格；不保留原版分页、字体、图表、图片和复杂排版。后续如需高保真，应接系统 Quick Look 或专门文档渲染服务。
 - 任务状态存在 `data/state.json`，大规模数据不适合长期使用。
 - Hermes session 已有只读元数据索引和 Cowork 任务关联；原生 session 删除、重命名、全文浏览和双向同步还没有接。
 - 工具事件依赖 Hermes 当前 callbacks 暴露程度。

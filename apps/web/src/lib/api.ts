@@ -827,6 +827,10 @@ export function artifactDownloadUrl(artifactId: string) {
   return apiUrl(`/api/artifacts/${artifactId}/download`)
 }
 
+export function artifactRawUrl(artifactId: string) {
+  return apiUrl(`/api/artifacts/${artifactId}/raw`)
+}
+
 export async function addWorkspace(name: string, path: string): Promise<Workspace> {
   return request('/api/workspaces', {
     method: 'POST',
@@ -879,6 +883,10 @@ export async function revealWorkspaceFile(workspaceId: string, relativePath: str
     headers: jsonHeaders,
     body: JSON.stringify({ path: relativePath })
   })
+}
+
+export function workspaceFileRawUrl(workspaceId: string, relativePath: string) {
+  return apiUrl(`/api/workspaces/${workspaceId}/files/raw?path=${encodeURIComponent(relativePath)}`)
 }
 
 export async function revealArtifact(artifactId: string) {

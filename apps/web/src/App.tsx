@@ -55,6 +55,7 @@ import {
   archiveTask,
   Artifact,
   artifactDownloadUrl,
+  artifactRawUrl,
   BackgroundServiceStatus,
   configureHermesModel,
   configureHermesMcpServer,
@@ -134,6 +135,7 @@ import {
   uploadSkill,
   Workspace,
   WorkspaceFile,
+  workspaceFileRawUrl,
   WorkspaceTree,
   WorkspaceTreeEntry
 } from './lib/api'
@@ -154,7 +156,8 @@ const emptyState: AppState = {
 type Preview = {
   title: string
   body: string
-  kind: 'markdown' | 'csv' | 'document' | 'text'
+  kind: 'markdown' | 'csv' | 'document' | 'spreadsheet' | 'presentation' | 'pdf' | 'image' | 'media' | 'html' | 'text'
+  rawUrl?: string
 }
 
 type FilePreviewTarget = {
@@ -1342,21 +1345,36 @@ function App() {
 
   async function handlePreview(artifact: Artifact) {
     const target = artifactPreviewTarget(artifact)
+    const kind = previewKind(target.title)
+    const rawUrl = previewRawUrl(target)
     setError(null)
     setFilePreview({
       target,
       title: target.title,
       body: '',
-      kind: previewKind(target.title),
+      kind,
+      rawUrl,
       status: 'loading'
     })
+    if (isInlinePreviewKind(kind) && rawUrl) {
+      setFilePreview({
+        target,
+        title: target.title,
+        body: '',
+        kind,
+        rawUrl,
+        status: 'ready'
+      })
+      return
+    }
     try {
       const body = await previewArtifact(artifact.id)
       setFilePreview({
         target,
         title: target.title,
         body,
-        kind: previewKind(target.title),
+        kind,
+        rawUrl,
         status: 'ready'
       })
     } catch (cause) {
@@ -1365,7 +1383,8 @@ function App() {
         target,
         title: target.title,
         body: '',
-        kind: previewKind(target.title),
+        kind,
+        rawUrl,
         status: message.includes('暂不支持') ? 'unsupported' : 'error',
         error: message
       })
@@ -1375,21 +1394,36 @@ function App() {
   async function handlePreviewWorkspaceFile(file: WorkspaceFile) {
     if (!selectedWorkspace) return
     const target = workspacePreviewTarget(file, selectedWorkspace.id)
+    const kind = previewKind(target.title)
+    const rawUrl = previewRawUrl(target)
     setError(null)
     setFilePreview({
       target,
       title: target.title,
       body: '',
-      kind: previewKind(target.title),
+      kind,
+      rawUrl,
       status: 'loading'
     })
+    if (isInlinePreviewKind(kind) && rawUrl) {
+      setFilePreview({
+        target,
+        title: target.title,
+        body: '',
+        kind,
+        rawUrl,
+        status: 'ready'
+      })
+      return
+    }
     try {
       const body = await previewWorkspaceFile(selectedWorkspace.id, file.relativePath)
       setFilePreview({
         target,
         title: target.title,
         body,
-        kind: previewKind(target.title),
+        kind,
+        rawUrl,
         status: 'ready'
       })
     } catch (cause) {
@@ -1398,7 +1432,8 @@ function App() {
         target,
         title: target.title,
         body: '',
-        kind: previewKind(target.title),
+        kind,
+        rawUrl,
         status: message.includes('暂不支持') ? 'unsupported' : 'error',
         error: message
       })
@@ -5507,6 +5542,28 @@ function FilePreviewPanel({
 }
 
 function PreviewBody({ preview }: { preview: Preview }) {
+  if (preview.kind === 'pdf' && preview.rawUrl) {
+    return <iframe className="embedded-preview pdf-embedded-preview" title={preview.title} src={preview.rawUrl} />
+  }
+
+  if (preview.kind === 'html' && preview.rawUrl) {
+    return <iframe className="embedded-preview html-embedded-preview" title={preview.title} src={preview.rawUrl} sandbox="allow-same-origin allow-scripts allow-forms" />
+  }
+
+  if (preview.kind === 'image' && preview.rawUrl) {
+    return (
+      <div className="image-preview-frame">
+        <img src={preview.rawUrl} alt={preview.title} />
+      </div>
+    )
+  }
+
+  if (preview.kind === 'media' && preview.rawUrl) {
+    return mediaPreviewIsAudio(preview.title)
+      ? <audio className="media-preview-player" controls src={preview.rawUrl} />
+      : <video className="media-preview-player" controls src={preview.rawUrl} />
+  }
+
   if (preview.kind === 'markdown') {
     return <div className="markdown-preview">{renderMarkdown(preview.body)}</div>
   }
@@ -5515,11 +5572,23 @@ function PreviewBody({ preview }: { preview: Preview }) {
     return <CsvPreview title={preview.title} body={preview.body} />
   }
 
+  if (preview.kind === 'spreadsheet') {
+    return <SpreadsheetPreview body={preview.body} />
+  }
+
+  if (preview.kind === 'presentation') {
+    return <div className="markdown-preview presentation-preview">{renderMarkdown(preview.body)}</div>
+  }
+
   if (preview.kind === 'document') {
     return <DocumentPreview preview={preview} />
   }
 
   return <pre className="text-preview">{preview.body}</pre>
+}
+
+function mediaPreviewIsAudio(title: string) {
+  return /\.(mp3|wav|m4a)$/i.test(title)
 }
 
 function DocumentPreview({ preview }: { preview: Preview }) {
@@ -5581,6 +5650,41 @@ function CsvPreview({ title, body }: { title: string; body: string }) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function SpreadsheetPreview({ body }: { body: string }) {
+  const sections = body.split(/\n(?=## 工作表 )/).map((section) => section.trim()).filter(Boolean)
+  return (
+    <div className="spreadsheet-preview">
+      {sections.map((section, sectionIndex) => {
+        const [heading = `工作表 ${sectionIndex + 1}`, ...tableLines] = section.split(/\r?\n/)
+        const rows = tableLines.filter(Boolean).map((line) => line.split('\t'))
+        const columnCount = Math.max(1, ...rows.map((row) => row.length))
+        return (
+          <section className="sheet-preview-section" key={`${heading}-${sectionIndex}`}>
+            <h3>{heading.replace(/^##\s*/, '')}</h3>
+            {rows.length ? (
+              <div className="csv-table-wrap">
+                <table>
+                  <tbody>
+                    {rows.slice(0, 120).map((row, rowIndex) => (
+                      <tr key={`${sectionIndex}-${rowIndex}`}>
+                        {Array.from({ length: columnCount }).map((_, columnIndex) => (
+                          <td key={`${rowIndex}-${columnIndex}`}>{row[columnIndex] ?? ''}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted-copy">这个工作表没有可展示的数据。</p>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }
@@ -6344,6 +6448,16 @@ function artifactPreviewTarget(artifact: Artifact): FilePreviewTarget {
   }
 }
 
+function previewRawUrl(target: FilePreviewTarget) {
+  if (target.source === 'artifact' && target.artifactId) return artifactRawUrl(target.artifactId)
+  if (target.workspaceId) return workspaceFileRawUrl(target.workspaceId, target.relativePath)
+  return undefined
+}
+
+function isInlinePreviewKind(kind: Preview['kind']) {
+  return ['pdf', 'image', 'media', 'html'].includes(kind)
+}
+
 function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
   return Array.from(event.dataTransfer.types).includes('Files')
 }
@@ -6353,6 +6467,13 @@ function previewKind(title: string): Preview['kind'] {
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
   if (lower.endsWith('.csv') || lower.endsWith('.tsv')) return 'csv'
   if (lower.endsWith('.docx') || lower.endsWith('.doc')) return 'document'
+  if (lower.endsWith('.rtf')) return 'document'
+  if (lower.endsWith('.pptx') || lower.endsWith('.ppsx')) return 'presentation'
+  if (lower.endsWith('.xlsx') || lower.endsWith('.xlsm')) return 'spreadsheet'
+  if (lower.endsWith('.pdf')) return 'pdf'
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(lower)) return 'image'
+  if (/\.(mp4|webm|mov|mp3|wav|m4a)$/i.test(lower)) return 'media'
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
   return 'text'
 }
 
