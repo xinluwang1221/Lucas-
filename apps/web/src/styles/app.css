@@ -4234,6 +4234,23 @@ summary:focus-visible {
   font-weight: 700;
 }
 
+.inspector-title-button {
+  justify-self: start;
+  padding: 0 4px;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.inspector-title-button:hover {
+  background: rgba(49, 92, 66, 0.08);
+}
+
+.inspector-title-button svg {
+  color: var(--ink-soft);
+}
+
 .inspector-title-block p {
   margin: 0;
   color: var(--ink-soft);

@@ -29,7 +29,6 @@ import {
   MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRight,
   PanelRightClose,
   PanelRightOpen,
   Palette,
@@ -1978,8 +1977,8 @@ function App() {
             <button
               type="button"
               className="icon-button topbar-icon-button"
-              title={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏右侧工作区'}
-              aria-label={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏右侧工作区'}
+              title={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏侧边栏'}
+              aria-label={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏侧边栏'}
               onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
             >
               {rightSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
@@ -2183,10 +2182,16 @@ function App() {
         ) : (
           <>
             <div className="inspector-title-block">
-              <div className="inspector-title">
-                <PanelRight size={17} />
-                工作区
-              </div>
+              <button
+                type="button"
+                className="inspector-title inspector-title-button"
+                title="隐藏右侧工作区"
+                aria-label="隐藏右侧工作区"
+                onClick={() => setRightSidebarCollapsed(true)}
+              >
+                <PanelRightClose size={17} />
+                <span>工作区</span>
+              </button>
               <p>{selectedWorkspace?.name ?? '未选择工作区'} · 当前任务的步骤、产出物和过程资源</p>
             </div>
 
