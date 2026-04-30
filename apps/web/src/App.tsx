@@ -83,7 +83,9 @@ import {
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesModelCatalogProvider,
+  HermesModelCredential,
   HermesModelOverview,
+  HermesModelProvider,
   HermesSessionSummary,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
@@ -1017,10 +1019,16 @@ function App() {
     setNewModelApiMode(savedConfig.apiMode || defaultModelApiMode(providerId))
   }
 
-  function openModelConfigPanel(providerId = hermesModel?.provider || '') {
+  function openModelConfigPanel(providerId = hermesModel?.provider || '', modelId = '') {
     setModelNotice(null)
     const knownProviderId = modelCatalog.some((provider) => provider.id === providerId) ? providerId : ''
     selectNewModelProvider(knownProviderId)
+    const providerModels = modelCatalog.find((provider) => provider.id === knownProviderId)?.models ?? []
+    const defaultModel = modelId || (hermesProviderId(knownProviderId) === hermesProviderId(hermesModel?.provider ?? '') ? hermesModel?.defaultModel ?? '' : '')
+    if (defaultModel) {
+      setNewModelId(defaultModel)
+      setNewModelLabel(providerModels.includes(defaultModel) ? defaultModel : 'custom')
+    }
     setModelPanelOpen(true)
   }
 
@@ -2142,6 +2150,17 @@ function App() {
                     ))}
                     <button
                       type="button"
+                      className="add-model-option key-option"
+                      onClick={() => {
+                        openModelConfigPanel(selectedModel.provider || hermesModel?.provider || '', selectedModel.id === 'auto' ? hermesModel?.defaultModel : selectedModel.id)
+                        setModelMenuOpen(false)
+                      }}
+                    >
+                      <Shield size={14} />
+                      重填当前 Key
+                    </button>
+                    <button
+                      type="button"
                       className="add-model-option"
                       onClick={() => {
                         openModelConfigPanel()
@@ -2149,7 +2168,7 @@ function App() {
                       }}
                     >
                       <Settings size={14} />
-                      配置模型服务
+                      模型服务设置
                     </button>
                   </div>
                 )}
@@ -2326,8 +2345,8 @@ function App() {
           if (!modelPanelSaving) setModelPanelOpen(false)
         })}>
           <form className="modal model-config-modal" onSubmit={handleAddModel}>
-            <h2>配置模型服务</h2>
-            <p>选择中国模型服务商，填入 Key 或 Plan Key 后直接写入 Hermes 本机配置。API Key 只保存在你的 Mac 上，界面不会回显。</p>
+            <h2>配置或重填模型 Key</h2>
+            <p>如果模型报 401、无返回或凭据失效，就在这里选择服务商并重新输入 Key / Plan Key。保存后直接写入 Hermes 本机配置，Key 只保存在你的 Mac 上。</p>
             <div className="model-catalog-refresh-line">
               <span>模型列表来自 Hermes 目录，并可从供应商官网补充新版本。</span>
               <button type="button" className="settings-add-button" onClick={() => void handleRefreshModelCatalog()} disabled={modelCatalogRefreshing}>
@@ -2351,7 +2370,7 @@ function App() {
             {rememberedProviderConfig.canReuse && (
               <div className="model-config-memory">
                 <CheckCircle2 size={14} />
-                已记住 {rememberedProviderConfig.label} 的供应商配置。切换这个供应商下的模型时，只需要选择模型；Base URL 和 API 模式会自动带入，Key 留空即可复用。
+                已记住 {rememberedProviderConfig.label} 的 Base URL 和 API 模式。修复 401 时请重新输入 Key；留空会继续沿用当前凭据。
               </div>
             )}
             <label>
@@ -2405,7 +2424,7 @@ function App() {
                 type="password"
                 value={newModelApiKey}
                 onChange={(event) => setNewModelApiKey(event.target.value)}
-                placeholder={rememberedProviderConfig.canReuse ? '已保存该供应商的 Key 或登录状态，留空即可复用' : '首次配置请填写 Key 或 Plan Key'}
+                placeholder={rememberedProviderConfig.canReuse ? '修复 401 请重新输入 Key；留空则沿用当前凭据' : '请输入 Key 或 Plan Key'}
                 autoComplete="off"
               />
             </label>
@@ -2418,7 +2437,7 @@ function App() {
               </select>
             </label>
             <div className="model-config-note">
-              保存后，Hermes Cowork 会把它设为 Hermes 默认模型；底部模型选择会回到“使用 Hermes 默认”。
+              保存后会写入 Hermes `config.yaml`，并把该模型设为 Hermes 默认模型。同一供应商后续切换模型时，Base URL 和 API 模式会自动带入。
             </div>
             <div className="modal-actions">
               <button type="button" className="ghost-button" onClick={() => setModelPanelOpen(false)} disabled={modelPanelSaving}>
@@ -2426,7 +2445,7 @@ function App() {
               </button>
               <button className="send-button" disabled={modelPanelSaving || !newModelProvider || !(newModelId.trim() || newModelLabel.trim())}>
                 {modelPanelSaving ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
-                保存到 Hermes
+                保存 Key 到 Hermes
               </button>
             </div>
           </form>
@@ -2507,7 +2526,7 @@ function App() {
             onRefreshModels={() => void refreshModels()}
             onRefreshModelCatalog={() => void handleRefreshModelCatalog()}
             onAddRule={handleAddSettingsRule}
-            onOpenAddModel={() => openModelConfigPanel()}
+            onOpenAddModel={(providerId, modelId) => openModelConfigPanel(providerId, modelId)}
           />
         </div>
       )}
@@ -3585,7 +3604,7 @@ function SettingsModal({
   onRefreshModels: () => void
   onRefreshModelCatalog: () => void
   onAddRule: (rule: string) => void
-  onOpenAddModel: () => void
+  onOpenAddModel: (providerId?: string, modelId?: string) => void
 }) {
   const [commandDraft, setCommandDraft] = useState('')
   const [pathDraft, setPathDraft] = useState('')
@@ -3598,6 +3617,19 @@ function SettingsModal({
   const fallbackProviderSet = new Set(fallbackProviderIds)
   const configuredCredentialCount = modelCredentialsForView.filter((credential) => credential.configured).length
   const fallbackCandidates = modelProvidersForView.filter((provider) => provider.configured && !provider.isCurrent)
+  const currentProviderId = hermesProviderId(hermesModel?.provider ?? selectedModel.provider ?? '')
+  const currentProviderLabel = hermesModel?.providerLabel || modelProvidersForView.find((provider) => hermesProviderId(provider.id) === currentProviderId)?.label || currentProviderId || '当前服务商'
+  const visibleProviderIds = new Set(modelProvidersForView.map((provider) => hermesProviderId(provider.id)))
+  const credentialAlerts = [
+    ...modelProvidersForView
+      .filter((provider) => providerNeedsCredentialAttention(provider))
+      .map((provider) => ({ id: provider.id, label: provider.label, detail: provider.credentialSummary, modelId: provider.isCurrent ? hermesModel?.defaultModel : provider.models[0] })),
+    ...modelCredentialsForView
+      .filter((credential) => credentialNeedsAttention(credential) && (visibleProviderIds.has(hermesProviderId(credential.id)) || hermesProviderId(credential.id) === currentProviderId))
+      .map((credential) => ({ id: credential.id, label: credential.label, detail: credential.detail, modelId: undefined }))
+  ]
+    .filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index)
+    .slice(0, 3)
   const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode; group?: 'main' | 'tools' | 'about' }> = [
     { id: 'account', label: '账号', icon: <User size={15} />, group: 'main' },
     { id: 'general', label: '通用', icon: <Settings size={15} />, group: 'main' },
@@ -3887,10 +3919,23 @@ function SettingsModal({
                 <Info size={15} />
                 普通使用只需要关注默认模型、本次任务模型和备用路线；Provider、Base URL、凭据属于高级配置。
               </div>
-              <button className="settings-add-button" onClick={onOpenAddModel}>
-                <Plus size={14} />
-                配置模型服务
-              </button>
+              <div className={credentialAlerts.length ? 'model-key-repair-panel attention' : 'model-key-repair-panel'}>
+                <div>
+                  <strong>{credentialAlerts.length ? '检测到模型凭据需要处理' : '模型报 401 或无返回时，先重填 Key'}</strong>
+                  <span>
+                    {credentialAlerts.length
+                      ? `${credentialAlerts[0].label}：${credentialAlerts[0].detail}`
+                      : `当前默认服务：${currentProviderLabel}。这里会写入 Hermes 本机配置。`}
+                  </span>
+                </div>
+                <button
+                  className="settings-primary-button"
+                  onClick={() => onOpenAddModel(credentialAlerts[0]?.id || currentProviderId, credentialAlerts[0]?.modelId || hermesModel?.defaultModel)}
+                >
+                  <Shield size={14} />
+                  重填 Key
+                </button>
+              </div>
             </SettingsBlock>
 
             <SettingsBlock title="本次任务用哪个模型">
@@ -3925,9 +3970,9 @@ function SettingsModal({
                   </div>
                 ))}
               </div>
-              <button className="settings-add-button" onClick={onOpenAddModel}>
+              <button className="settings-add-button" onClick={() => onOpenAddModel()}>
                 <Plus size={14} />
-                配置新的模型服务
+                添加或重填模型 Key
               </button>
             </SettingsBlock>
 
@@ -3948,7 +3993,15 @@ function SettingsModal({
                           <span>{provider.credentialSummary || (provider.configured ? '已配置' : '未配置')}</span>
                         </div>
                         <div className="model-provider-actions">
-                          <em>{provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
+                          <em>{providerNeedsCredentialAttention(provider) ? '需重填 Key' : provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
+                          <button
+                            className="model-key-inline-button"
+                            onClick={() => onOpenAddModel(provider.id, provider.isCurrent ? hermesModel?.defaultModel : provider.models[0])}
+                            title={`重填 ${provider.label} 的 Key`}
+                          >
+                            <Shield size={13} />
+                            Key
+                          </button>
                           {providerCanDelete && (
                             <button
                               className="model-delete-button"
@@ -4039,9 +4092,16 @@ function SettingsModal({
                 ]} />
                 <div className="model-credential-grid">
                   {modelCredentialsForView.map((credential) => (
-                    <div className={credential.configured ? 'model-credential-pill configured' : 'model-credential-pill'} key={`${credential.id}-${credential.kind}`}>
-                      <strong>{credential.label}</strong>
-                      <span>{credential.configured ? credential.detail : '未配置'}</span>
+                    <div className={credentialPillClass(credential)} key={`${credential.id}-${credential.kind}`}>
+                      <div>
+                        <strong>{credential.label}</strong>
+                        <span>{credential.configured ? credential.detail : credential.detail || '未配置'}</span>
+                      </div>
+                      {(credentialNeedsAttention(credential) || hermesProviderId(credential.id) === currentProviderId) && (
+                        <button className="model-key-mini-button" onClick={() => onOpenAddModel(credential.id)}>
+                          重填 Key
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -5160,6 +5220,20 @@ function providerSavedModelConfig(providerId: string, overview: HermesModelOverv
     apiMode: provider?.apiMode || (isCurrent ? overview?.apiMode : '') || defaultModelApiMode(id),
     canReuse: Boolean(provider?.configured || isCurrent)
   }
+}
+
+function credentialNeedsAttention(credential: HermesModelCredential) {
+  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(credential.detail)
+}
+
+function providerNeedsCredentialAttention(provider: HermesModelProvider) {
+  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(provider.credentialSummary)
+}
+
+function credentialPillClass(credential: HermesModelCredential) {
+  if (credentialNeedsAttention(credential)) return 'model-credential-pill attention'
+  if (credential.configured) return 'model-credential-pill configured'
+  return 'model-credential-pill'
 }
 
 function modelGroupsForProvider(providerId: string, models: string[]) {

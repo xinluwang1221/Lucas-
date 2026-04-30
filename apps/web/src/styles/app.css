@@ -6077,6 +6077,24 @@ summary:focus-visible {
   margin-bottom: 12px;
 }
 
+.settings-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  color: white;
+  background: var(--moss);
+  border-radius: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settings-primary-button:hover:not(:disabled) {
+  background: #244f39;
+}
+
 .settings-danger-button {
   min-height: 34px;
   padding: 0 12px;
@@ -7079,6 +7097,40 @@ summary:focus-visible {
   margin: 4px 0 0;
 }
 
+.model-key-repair-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 12px;
+  padding: 12px;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-key-repair-panel.attention {
+  background: #fff7ec;
+  border-color: #efc789;
+}
+
+.model-key-repair-panel strong,
+.model-key-repair-panel span {
+  display: block;
+}
+
+.model-key-repair-panel strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.model-key-repair-panel span {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .model-ability-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -7327,6 +7379,29 @@ summary:focus-visible {
   gap: 8px;
 }
 
+.model-key-inline-button,
+.model-key-mini-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  color: #21553a;
+  background: #e7f5ec;
+  border: 1px solid #bfe2cb;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.model-key-inline-button:hover:not(:disabled),
+.model-key-mini-button:hover:not(:disabled) {
+  border-color: #2da66f;
+  background: #dff2e6;
+}
+
 .model-provider-meta {
   display: flex;
   flex-wrap: wrap;
@@ -7420,6 +7495,10 @@ summary:focus-visible {
 }
 
 .model-credential-pill {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   padding: 9px 10px;
   background: #f2f3f1;
   border: 1px solid var(--line);
@@ -7429,6 +7508,11 @@ summary:focus-visible {
 .model-credential-pill.configured {
   background: #f0fff6;
   border-color: #bfe2cb;
+}
+
+.model-credential-pill.attention {
+  background: #fff7ec;
+  border-color: #efc789;
 }
 
 .model-credential-pill strong,

@@ -405,6 +405,7 @@ function buildHermesProviders(
   settings: ModelSettings
 ): HermesModelProvider[] {
   const configuredIds = new Set(credentials.filter((credential) => credential.configured).map((credential) => credential.id))
+  const credentialById = new Map(credentials.map((credential) => [credential.id, credential]))
   const providers = new Map<string, HermesModelProvider>()
   const currentProvider = config.provider || 'auto'
   const customModelOptions = settings.customModels.filter((model) => model.provider)
@@ -440,13 +441,13 @@ function buildHermesProviders(
     credentialSummary: credentialSummary(currentProvider, credentials) || '当前 Hermes model 配置'
   })
 
-  for (const credential of credentials.filter((item) => item.configured && shouldShowModelProvider(item.id, currentProvider))) {
+  for (const credential of credentials.filter((item) => shouldShowModelProvider(item.id, currentProvider) && (item.configured || credentialNeedsAttention(item)))) {
     const preset = hermesProviderPreset(credential.id)
     addProvider({
       id: credential.id,
       label: preset.label || credential.label,
       source: credential.kind === 'pool' ? 'auth' : 'hermes',
-      configured: true,
+      configured: credential.configured,
       isCurrent: credential.id === currentProvider,
       models: uniqueStrings([...preset.models]),
       credentialSummary: credential.detail
@@ -474,6 +475,7 @@ function buildHermesProviders(
     const providerId = normalizeProviderId(model.provider ?? 'custom')
     if (!providers.has(providerId) && shouldShowModelProvider(providerId, currentProvider)) {
       const preset = hermesProviderPreset(providerId)
+      const credential = credentialById.get(providerId)
       addProvider({
         id: providerId,
         label: preset.label || providerId,
@@ -481,7 +483,7 @@ function buildHermesProviders(
         configured: configuredIds.has(providerId),
         isCurrent: providerId === currentProvider,
         models: uniqueStrings([model.id, ...preset.models]),
-        credentialSummary: configuredIds.has(providerId) ? 'Hermes 已检测到凭据' : 'Cowork 本地模型选项'
+        credentialSummary: credential?.detail || (configuredIds.has(providerId) ? 'Hermes 已检测到凭据' : 'Cowork 本地模型选项')
       })
     }
   }
@@ -500,6 +502,10 @@ function isChineseModelProvider(provider: string) {
 function shouldShowModelProvider(provider: string, currentProvider = '') {
   const normalized = normalizeProviderId(provider)
   return isChineseModelProvider(normalized) || normalized === normalizeProviderId(currentProvider) || normalized.startsWith('custom:')
+}
+
+function credentialNeedsAttention(credential: HermesModelCredential) {
+  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(credential.detail)
 }
 
 function parseHermesStatusCredentials(raw: string): HermesModelCredential[] {
@@ -542,18 +548,45 @@ function parseHermesStatusCredentials(raw: string): HermesModelCredential[] {
 
 function parseHermesAuthList(raw: string): HermesModelCredential[] {
   const credentials: HermesModelCredential[] = []
+  let current: { id: string; label: string; count: number; details: string[] } | null = null
+
+  const flush = () => {
+    if (!current) return
+    const detailText = current.details.join('；')
+    const failedStatus = detailText.match(/auth failed\s+(\d+)/i)
+    const hasAuthIssue = Boolean(failedStatus) || /(invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(detailText)
+    credentials.push({
+      id: current.id,
+      label: current.label,
+      kind: 'pool',
+      configured: current.count > 0 && !hasAuthIssue,
+      detail: hasAuthIssue
+        ? failedStatus
+          ? `凭据已保存但验证失败：HTTP ${failedStatus[1]}，请重新填写 Key`
+          : `凭据已保存但不可用：${sanitizeStatusDetail(detailText)}`
+        : `${current.count} 个 Hermes 凭据池条目`
+    })
+    current = null
+  }
+
   for (const line of raw.replace(/\r/g, '').split('\n')) {
     const match = line.match(/^([A-Za-z0-9_:. -]+)\s+\((\d+)\s+credentials?\):/)
-    if (!match) continue
-    const id = normalizeKnownProviderId(match[1])
-    credentials.push({
-      id,
-      label: providerLabel(id),
-      kind: 'pool',
-      configured: Number(match[2]) > 0,
-      detail: `${match[2]} 个 Hermes 凭据池条目`
-    })
+    if (match) {
+      flush()
+      const id = normalizeKnownProviderId(match[1])
+      current = {
+        id,
+        label: providerLabel(id),
+        count: Number(match[2]),
+        details: []
+      }
+      continue
+    }
+    if (current && /^\s+#\d+/.test(line)) {
+      current.details.push(line.trim())
+    }
   }
+  flush()
   return credentials
 }
 
@@ -565,7 +598,8 @@ function mergeCredentials(...groups: HermesModelCredential[][]) {
       merged.set(credential.id, credential)
       continue
     }
-    const mergedConfigured = existing.configured || credential.configured
+    const hasAuthIssue = credentialNeedsAttention(existing) || credentialNeedsAttention(credential)
+    const mergedConfigured = !hasAuthIssue && (existing.configured || credential.configured)
     const detailParts = [existing.detail, credential.detail]
       .map((detail) => sanitizeStatusDetail(detail))
       .filter((detail) => detail && !(mergedConfigured && detail.includes('未配置')))
