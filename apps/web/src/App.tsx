@@ -154,7 +154,26 @@ const emptyState: AppState = {
 type Preview = {
   title: string
   body: string
-  kind: 'markdown' | 'csv' | 'text'
+  kind: 'markdown' | 'csv' | 'document' | 'text'
+}
+
+type FilePreviewTarget = {
+  source: 'workspace' | 'artifact'
+  title: string
+  name: string
+  relativePath: string
+  path?: string
+  type: string
+  size: number
+  timestamp: string
+  workspaceId?: string
+  artifactId?: string
+}
+
+type FilePreviewState = Preview & {
+  target: FilePreviewTarget
+  status: 'loading' | 'ready' | 'unsupported' | 'error'
+  error?: string
 }
 
 type SettingsTab =
@@ -331,7 +350,7 @@ function App() {
   const [taskStreamUpdatedAt, setTaskStreamUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [workspacePicking, setWorkspacePicking] = useState(false)
-  const [preview, setPreview] = useState<Preview | null>(null)
+  const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTree | null>(null)
@@ -726,6 +745,7 @@ function App() {
   useEffect(() => {
     setWorkspaceTreePath('')
     setWorkspaceFileQuery('')
+    setFilePreview(null)
   }, [selectedWorkspaceId])
 
   useEffect(() => {
@@ -1321,24 +1341,93 @@ function App() {
   }
 
   async function handlePreview(artifact: Artifact) {
+    const target = artifactPreviewTarget(artifact)
     setError(null)
+    setFilePreview({
+      target,
+      title: target.title,
+      body: '',
+      kind: previewKind(target.title),
+      status: 'loading'
+    })
     try {
       const body = await previewArtifact(artifact.id)
-      setPreview({ title: artifact.name, body, kind: previewKind(artifact.name) })
+      setFilePreview({
+        target,
+        title: target.title,
+        body,
+        kind: previewKind(target.title),
+        status: 'ready'
+      })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setFilePreview({
+        target,
+        title: target.title,
+        body: '',
+        kind: previewKind(target.title),
+        status: message.includes('暂不支持') ? 'unsupported' : 'error',
+        error: message
+      })
     }
   }
 
   async function handlePreviewWorkspaceFile(file: WorkspaceFile) {
     if (!selectedWorkspace) return
+    const target = workspacePreviewTarget(file, selectedWorkspace.id)
     setError(null)
+    setFilePreview({
+      target,
+      title: target.title,
+      body: '',
+      kind: previewKind(target.title),
+      status: 'loading'
+    })
     try {
       const body = await previewWorkspaceFile(selectedWorkspace.id, file.relativePath)
-      setPreview({ title: file.relativePath, body, kind: previewKind(file.relativePath) })
+      setFilePreview({
+        target,
+        title: target.title,
+        body,
+        kind: previewKind(target.title),
+        status: 'ready'
+      })
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setFilePreview({
+        target,
+        title: target.title,
+        body: '',
+        kind: previewKind(target.title),
+        status: message.includes('暂不支持') ? 'unsupported' : 'error',
+        error: message
+      })
+    }
+  }
+
+  async function handleRevealPreviewTarget(target: FilePreviewTarget) {
+    setError(null)
+    try {
+      if (target.source === 'artifact' && target.artifactId) {
+        await revealArtifact(target.artifactId)
+      } else if (target.workspaceId) {
+        await revealWorkspaceFile(target.workspaceId, target.relativePath)
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
+  }
+
+  function handleUsePreviewTarget(target: FilePreviewTarget) {
+    const label = target.source === 'artifact' ? '任务产物' : '当前工作区文件'
+    const ref = target.relativePath || target.name
+    setPrompt((current) => {
+      const prefix = current.trim() ? `${current.trim()}\n\n` : ''
+      return `${prefix}请使用${label}「${ref}」作为上下文。`
+    })
+    setSelectedTaskId(null)
+    setViewMode('tasks')
+    window.setTimeout(() => focusComposer(), 0)
   }
 
   async function handleRevealWorkspace() {
@@ -1452,7 +1541,8 @@ function App() {
       className={[
         'app-shell',
         isDraggingFiles ? 'dragging-files' : '',
-        viewMode !== 'tasks' ? 'skills-mode' : ''
+        viewMode !== 'tasks' ? 'skills-mode' : '',
+        viewMode === 'tasks' && filePreview ? 'file-preview-mode' : ''
       ].filter(Boolean).join(' ')}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -1718,6 +1808,7 @@ function App() {
             workspaceTree={workspaceTree}
             workspacePath={workspaceTreePath}
             workspaceQuery={workspaceFileQuery}
+            filePreview={filePreview}
             selectedWorkspaceId={selectedWorkspaceId}
             onSelect={(workspace) => {
               setSelectedWorkspaceId(workspace.id)
@@ -1747,8 +1838,14 @@ function App() {
             }}
             onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
             onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
-            onOpenFolder={(path) => setWorkspaceTreePath(path)}
+            onOpenFolder={(path) => {
+              setWorkspaceTreePath(path)
+              setFilePreview(null)
+            }}
             onWorkspaceQueryChange={setWorkspaceFileQuery}
+            onCloseFilePreview={() => setFilePreview(null)}
+            onUsePreviewTarget={handleUsePreviewTarget}
+            onRevealPreviewTarget={(target) => void handleRevealPreviewTarget(target)}
             onUploadClick={() => fileInputRef.current?.click()}
             onAdd={() => void handleAuthorizeWorkspace()}
             onReveal={(workspace) => {
@@ -2000,125 +2097,136 @@ function App() {
       </main>
 
       {viewMode === 'tasks' && (
-      <aside className="inspector">
-        <div className="inspector-title-block">
-          <div className="inspector-title">
-            <PanelRight size={17} />
-            工作区
-          </div>
-          <p>{selectedWorkspace?.name ?? '未选择工作区'} · 当前任务的步骤、产出物和过程资源</p>
-        </div>
-
-        <TaskProgressCard
-          task={selectedTask}
-          streamStatus={taskStreamStatus}
-          streamUpdatedAt={taskStreamUpdatedAt}
-          stopping={selectedTask ? stoppingTaskId === selectedTask.id : false}
-          onStop={() => selectedTask && void handleStop(selectedTask)}
-        />
-
-        <TaskArtifactsCard
-          task={selectedTask}
-          onPreview={(artifact) => void handlePreview(artifact)}
-          onReveal={(artifact) => void handleRevealArtifact(artifact)}
-        />
-
-        <AgentResourcesCard task={selectedTask} workspaceFiles={workspaceFiles} />
-
-        {selectedTask && (
-          <details className="inspector-card inspector-details inspector-utility-details">
-            <summary>更多操作</summary>
-            <div className="task-tag-editor">
-              <div className="tag-editor-title">
-                <Tags size={13} />
-                场景标签
+      <aside className={filePreview ? 'inspector file-preview-inspector' : 'inspector'}>
+        {filePreview ? (
+          <FilePreviewPanel
+            preview={filePreview}
+            onClose={() => setFilePreview(null)}
+            onUseContext={handleUsePreviewTarget}
+            onReveal={(target) => void handleRevealPreviewTarget(target)}
+          />
+        ) : (
+          <>
+            <div className="inspector-title-block">
+              <div className="inspector-title">
+                <PanelRight size={17} />
+                工作区
               </div>
-              <div className="tag-chip-list">
-                {taskTagOptions.map((tag) => (
-                  <button
-                    className={(selectedTask.tags ?? []).includes(tag) ? 'active' : ''}
-                    key={tag}
-                    onClick={() => void handleToggleTag(selectedTask, tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
+              <p>{selectedWorkspace?.name ?? '未选择工作区'} · 当前任务的步骤、产出物和过程资源</p>
             </div>
-            {selectedTask.status === 'running' && (
-              <button className="danger-button" onClick={() => void handleStop(selectedTask)}>
-                <Square size={14} />
-                停止任务
-              </button>
+
+            <TaskProgressCard
+              task={selectedTask}
+              streamStatus={taskStreamStatus}
+              streamUpdatedAt={taskStreamUpdatedAt}
+              stopping={selectedTask ? stoppingTaskId === selectedTask.id : false}
+              onStop={() => selectedTask && void handleStop(selectedTask)}
+            />
+
+            <TaskArtifactsCard
+              task={selectedTask}
+              onPreview={(artifact) => void handlePreview(artifact)}
+              onReveal={(artifact) => void handleRevealArtifact(artifact)}
+            />
+
+            <AgentResourcesCard task={selectedTask} workspaceFiles={workspaceFiles} />
+
+            {selectedTask && (
+              <details className="inspector-card inspector-details inspector-utility-details">
+                <summary>更多操作</summary>
+                <div className="task-tag-editor">
+                  <div className="tag-editor-title">
+                    <Tags size={13} />
+                    场景标签
+                  </div>
+                  <div className="tag-chip-list">
+                    {taskTagOptions.map((tag) => (
+                      <button
+                        className={(selectedTask.tags ?? []).includes(tag) ? 'active' : ''}
+                        key={tag}
+                        onClick={() => void handleToggleTag(selectedTask, tag)}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {selectedTask.status === 'running' && (
+                  <button className="danger-button" onClick={() => void handleStop(selectedTask)}>
+                    <Square size={14} />
+                    停止任务
+                  </button>
+                )}
+                <div className="status-actions">
+                  <a className="ghost-button export-button" href={taskExportUrl(selectedTask.id)}>
+                    <Download size={14} />
+                    导出 Markdown
+                  </a>
+                </div>
+                <button className="danger-button subtle" onClick={() => void handleDeleteTask(selectedTask)}>
+                  <Trash2 size={14} />
+                  删除任务记录
+                </button>
+              </details>
             )}
-            <div className="status-actions">
-              <a className="ghost-button export-button" href={taskExportUrl(selectedTask.id)}>
-                <Download size={14} />
-                导出 Markdown
-              </a>
-            </div>
-            <button className="danger-button subtle" onClick={() => void handleDeleteTask(selectedTask)}>
-              <Trash2 size={14} />
-              删除任务记录
-            </button>
-          </details>
-        )}
 
-        <details className="inspector-card inspector-details debug-details inspector-utility-details">
-          <summary>后台调试</summary>
-          {selectedTask && (
-            <div className="debug-section">
-              <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
-            </div>
-          )}
-          <div className="debug-section">
-            <div className="card-heading-row">
-              <h3>Hermes 运行时</h3>
-              <button className="mini-button" onClick={() => void refreshRuntime()}>
-                <RefreshCw size={13} />
-                刷新
-              </button>
-            </div>
-            <RuntimePanel runtime={runtime} />
-          </div>
-          {selectedTask && (
-            <>
+            <details className="inspector-card inspector-details debug-details inspector-utility-details">
+              <summary>后台调试</summary>
+              {selectedTask && (
+                <div className="debug-section">
+                  <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
+                </div>
+              )}
               <div className="debug-section">
-                <h3>运行详情</h3>
-                <div className="detail-tabs">
-                  <button
-                    className={detailTab === 'response' ? 'active' : ''}
-                    onClick={() => setDetailTab('response')}
-                  >
-                    <Info size={14} />
-                    正文
-                  </button>
-                  <button className={detailTab === 'tools' ? 'active' : ''} onClick={() => setDetailTab('tools')}>
-                    <Wrench size={14} />
-                    工具
-                  </button>
-                  <button className={detailTab === 'logs' ? 'active' : ''} onClick={() => setDetailTab('logs')}>
-                    <Terminal size={14} />
-                    日志
-                  </button>
-                  <button className={detailTab === 'errors' ? 'active' : ''} onClick={() => setDetailTab('errors')}>
-                    <XCircle size={14} />
-                    错误
+                <div className="card-heading-row">
+                  <h3>Hermes 运行时</h3>
+                  <button className="mini-button" onClick={() => void refreshRuntime()}>
+                    <RefreshCw size={13} />
+                    刷新
                   </button>
                 </div>
-                <ExecutionPane task={selectedTask} tab={detailTab} />
+                <RuntimePanel runtime={runtime} />
               </div>
-              <div className="debug-section">
-                <h3>步骤时间线</h3>
-                <EventTimeline events={selectedTask.events ?? []} />
-              </div>
-              <div className="debug-section">
-                <h3>工具调用</h3>
-                <ToolCards events={selectedTask.events ?? []} />
-              </div>
-            </>
-          )}
-        </details>
+              {selectedTask && (
+                <>
+                  <div className="debug-section">
+                    <h3>运行详情</h3>
+                    <div className="detail-tabs">
+                      <button
+                        className={detailTab === 'response' ? 'active' : ''}
+                        onClick={() => setDetailTab('response')}
+                      >
+                        <Info size={14} />
+                        正文
+                      </button>
+                      <button className={detailTab === 'tools' ? 'active' : ''} onClick={() => setDetailTab('tools')}>
+                        <Wrench size={14} />
+                        工具
+                      </button>
+                      <button className={detailTab === 'logs' ? 'active' : ''} onClick={() => setDetailTab('logs')}>
+                        <Terminal size={14} />
+                        日志
+                      </button>
+                      <button className={detailTab === 'errors' ? 'active' : ''} onClick={() => setDetailTab('errors')}>
+                        <XCircle size={14} />
+                        错误
+                      </button>
+                    </div>
+                    <ExecutionPane task={selectedTask} tab={detailTab} />
+                  </div>
+                  <div className="debug-section">
+                    <h3>步骤时间线</h3>
+                    <EventTimeline events={selectedTask.events ?? []} />
+                  </div>
+                  <div className="debug-section">
+                    <h3>工具调用</h3>
+                    <ToolCards events={selectedTask.events ?? []} />
+                  </div>
+                </>
+              )}
+            </details>
+          </>
+        )}
       </aside>
       )}
 
@@ -2321,12 +2429,6 @@ function App() {
             onAddRule={handleAddSettingsRule}
             onOpenAddModel={() => openModelConfigPanel()}
           />
-        </div>
-      )}
-
-      {preview && (
-        <div className="modal-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setPreview(null))}>
-          <PreviewModal preview={preview} onClose={() => setPreview(null)} />
         </div>
       )}
 
@@ -2705,6 +2807,7 @@ function ProjectsView({
   workspaceTree,
   workspacePath,
   workspaceQuery,
+  filePreview,
   selectedWorkspaceId,
   onSelect,
   onOpenTask,
@@ -2714,6 +2817,9 @@ function ProjectsView({
   onRevealFile,
   onOpenFolder,
   onWorkspaceQueryChange,
+  onCloseFilePreview,
+  onUsePreviewTarget,
+  onRevealPreviewTarget,
   onUploadClick,
   onAdd,
   onReveal,
@@ -2728,6 +2834,7 @@ function ProjectsView({
   workspaceTree: WorkspaceTree | null
   workspacePath: string
   workspaceQuery: string
+  filePreview: FilePreviewState | null
   selectedWorkspaceId: string
   onSelect: (workspace: Workspace) => void
   onOpenTask: (task: Task) => void
@@ -2737,6 +2844,9 @@ function ProjectsView({
   onRevealFile: (file: WorkspaceFile) => void
   onOpenFolder: (path: string) => void
   onWorkspaceQueryChange: (query: string) => void
+  onCloseFilePreview: () => void
+  onUsePreviewTarget: (target: FilePreviewTarget) => void
+  onRevealPreviewTarget: (target: FilePreviewTarget) => void
   onUploadClick: () => void
   onAdd: () => void
   onReveal: (workspace: Workspace) => void
@@ -2759,6 +2869,9 @@ function ProjectsView({
     : []
   const switchableWorkspaces = workspaces.filter((workspace) => workspace.id !== selectedWorkspace?.id)
   const failed = workspaceTasks.filter((task) => task.status === 'failed' || task.status === 'stopped').length
+  const workspaceFilePreview = selectedWorkspace && filePreview?.target.source === 'workspace' && filePreview.target.workspaceId === selectedWorkspace.id
+    ? filePreview
+    : null
 
   return (
     <section className="product-page workspace-home workspace-file-page">
@@ -2823,7 +2936,7 @@ function ProjectsView({
             </div>
           </section>
 
-          <div className="workspace-file-grid">
+          <div className={workspaceFilePreview ? 'workspace-file-grid previewing' : 'workspace-file-grid'}>
             <section className="workspace-section workspace-browser-panel">
               <div className="workspace-section-head">
                 <div>
@@ -2849,51 +2962,63 @@ function ProjectsView({
             </section>
 
             <aside className="workspace-side-column">
-              <section className="workspace-section">
-                <div className="workspace-section-head">
-                  <div>
-                    <h2>会话</h2>
-                    <p>{failed ? `${failed} 个会话需要处理。` : '从这里回到这个工作区里的任务。'}</p>
-                  </div>
-                </div>
-                {recentTasks.length ? (
-                  <div className="workspace-task-list compact">
-                    {recentTasks.map((task) => (
-                      <button className={`workspace-task-card ${task.status}`} key={task.id} onClick={() => onOpenTask(task)}>
-                        <StatusIcon status={task.status} />
-                        <div>
-                          <strong>{task.title}</strong>
-                          <span>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</span>
-                        </div>
-                        <ChevronDown size={14} />
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyWorkspaceBlock title="暂无会话" detail="点“新建对话”，让 Hermes 在这个工作区开始工作。" />
-                )}
-              </section>
-
-              {workspaceArtifacts.length > 0 && (
-                <section className="workspace-section">
-                  <div className="workspace-section-head">
-                    <div>
-                      <h2>产物</h2>
-                      <p>这个工作区里已经生成的文件。</p>
+              {workspaceFilePreview ? (
+                <FilePreviewPanel
+                  preview={workspaceFilePreview}
+                  compact
+                  onClose={onCloseFilePreview}
+                  onUseContext={onUsePreviewTarget}
+                  onReveal={onRevealPreviewTarget}
+                />
+              ) : (
+                <>
+                  <section className="workspace-section">
+                    <div className="workspace-section-head">
+                      <div>
+                        <h2>会话</h2>
+                        <p>{failed ? `${failed} 个会话需要处理。` : '从这里回到这个工作区里的任务。'}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="workspace-artifact-list">
-                    {workspaceArtifacts.map((artifact) => (
-                      <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
-                        <FileArchive size={16} />
+                    {recentTasks.length ? (
+                      <div className="workspace-task-list compact">
+                        {recentTasks.map((task) => (
+                          <button className={`workspace-task-card ${task.status}`} key={task.id} onClick={() => onOpenTask(task)}>
+                            <StatusIcon status={task.status} />
+                            <div>
+                              <strong>{task.title}</strong>
+                              <span>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</span>
+                            </div>
+                            <ChevronDown size={14} />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyWorkspaceBlock title="暂无会话" detail="点“新建对话”，让 Hermes 在这个工作区开始工作。" />
+                    )}
+                  </section>
+
+                  {workspaceArtifacts.length > 0 && (
+                    <section className="workspace-section">
+                      <div className="workspace-section-head">
                         <div>
-                          <strong>{artifact.name}</strong>
-                          <span>{formatBytes(artifact.size)}</span>
+                          <h2>产物</h2>
+                          <p>这个工作区里已经生成的文件。</p>
                         </div>
-                      </a>
-                    ))}
-                  </div>
-                </section>
+                      </div>
+                      <div className="workspace-artifact-list">
+                        {workspaceArtifacts.map((artifact) => (
+                          <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
+                            <FileArchive size={16} />
+                            <div>
+                              <strong>{artifact.name}</strong>
+                              <span>{formatBytes(artifact.size)}</span>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </>
               )}
             </aside>
           </div>
@@ -5303,30 +5428,81 @@ function SkillDetailModal({
   )
 }
 
-function PreviewModal({ preview, onClose }: { preview: Preview; onClose: () => void }) {
+function FilePreviewPanel({
+  preview,
+  compact = false,
+  onClose,
+  onUseContext,
+  onReveal
+}: {
+  preview: FilePreviewState
+  compact?: boolean
+  onClose: () => void
+  onUseContext: (target: FilePreviewTarget) => void
+  onReveal: (target: FilePreviewTarget) => void
+}) {
+  const target = preview.target
   return (
-    <div className={`modal preview-modal ${preview.kind}-preview-modal`}>
-      <div className="preview-head">
-        <div>
-          <h2>{preview.title}</h2>
-          <p>
-            {preview.kind === 'markdown' && 'Markdown 文档预览'}
-            {preview.kind === 'csv' && '表格数据预览'}
-            {preview.kind === 'text' && '文本预览'}
-          </p>
+    <section className={compact ? 'file-preview-panel compact' : 'file-preview-panel'}>
+      <header className="file-preview-topbar">
+        <div className="file-preview-title">
+          <FileText size={18} />
+          <div>
+            <strong>{target.name}</strong>
+            <span>{target.relativePath}</span>
+          </div>
         </div>
-        <button className="ghost-button" onClick={() => void copyToClipboard(preview.body)}>
+        <button type="button" className="icon-button" title="关闭预览" onClick={onClose}>
+          <XCircle size={16} />
+        </button>
+      </header>
+
+      <div className="file-preview-actions">
+        <button type="button" className="ghost-button" onClick={() => onUseContext(target)}>
+          <Plus size={14} />
+          作为上下文
+        </button>
+        <button type="button" className="ghost-button" onClick={() => onReveal(target)}>
+          <FolderOpen size={14} />
+          Finder
+        </button>
+        {target.source === 'artifact' && target.artifactId && (
+          <a className="ghost-button" href={artifactDownloadUrl(target.artifactId)}>
+            <Download size={14} />
+            下载
+          </a>
+        )}
+        <button type="button" className="ghost-button" onClick={() => void copyToClipboard(target.relativePath || target.name)}>
           <Copy size={14} />
-          复制全文
+          复制路径
         </button>
       </div>
-      <PreviewBody preview={preview} />
-      <div className="modal-actions">
-        <button className="send-button" onClick={onClose}>
-          关闭
-        </button>
+
+      <div className="file-preview-meta">
+        <span>{target.source === 'artifact' ? '任务产物' : '工作区文件'}</span>
+        <span>{target.type || 'file'}</span>
+        <span>{formatBytes(target.size)}</span>
+        <span>{formatTime(target.timestamp)}</span>
       </div>
-    </div>
+
+      <div className="file-preview-surface">
+        {preview.status === 'loading' ? (
+          <div className="file-preview-state">
+            <Loader2 size={18} className="spin" />
+            <strong>正在读取预览</strong>
+            <span>文件仍在本机，Hermes Cowork 只读取授权范围内的内容。</span>
+          </div>
+        ) : preview.status === 'ready' ? (
+          <PreviewBody preview={preview} />
+        ) : (
+          <div className={`file-preview-state ${preview.status}`}>
+            <Info size={18} />
+            <strong>{preview.status === 'unsupported' ? '暂不支持直接预览' : '预览失败'}</strong>
+            <span>{preview.error ?? '可以交给 Hermes 作为上下文，或在 Finder 中打开。'}</span>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -5339,7 +5515,34 @@ function PreviewBody({ preview }: { preview: Preview }) {
     return <CsvPreview title={preview.title} body={preview.body} />
   }
 
+  if (preview.kind === 'document') {
+    return <DocumentPreview preview={preview} />
+  }
+
   return <pre className="text-preview">{preview.body}</pre>
+}
+
+function DocumentPreview({ preview }: { preview: Preview }) {
+  const paragraphs = preview.body
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+  if (!paragraphs.length) {
+    return <p className="muted-copy">这个文档没有可展示的正文。</p>
+  }
+
+  const [title, ...body] = paragraphs
+
+  return (
+    <article className="document-preview">
+      <h1>{title}</h1>
+      {body.slice(0, 180).map((paragraph, index) => {
+        const isHeading = /^[一二三四五六七八九十]+[、.．]\s*\S/.test(paragraph) || /^\d+(?:\.\d+)*\s+\S/.test(paragraph)
+        if (isHeading) return <h2 key={`${paragraph}-${index}`}>{paragraph}</h2>
+        return <p key={`${paragraph}-${index}`}>{paragraph}</p>
+      })}
+    </article>
+  )
 }
 
 function CsvPreview({ title, body }: { title: string; body: string }) {
@@ -5701,10 +5904,10 @@ function TaskArtifactsCard({
           {artifacts.map((artifact) => (
             <div className="artifact" key={artifact.id}>
               <FileArchive size={17} />
-              <div>
+              <button type="button" className="artifact-main" onClick={() => onPreview(artifact)}>
                 <strong>{artifact.name}</strong>
                 <span>{artifact.relativePath}</span>
-              </div>
+              </button>
               <button title="预览文本产物" onClick={() => onPreview(artifact)}>
                 <FileText size={15} />
               </button>
@@ -6112,6 +6315,35 @@ function payloadText(value: unknown) {
   }
 }
 
+function workspacePreviewTarget(file: WorkspaceFile, workspaceId: string): FilePreviewTarget {
+  return {
+    source: 'workspace',
+    title: file.relativePath || file.name,
+    name: file.name,
+    relativePath: file.relativePath,
+    path: file.path,
+    type: file.type || 'file',
+    size: file.size,
+    timestamp: file.modifiedAt,
+    workspaceId
+  }
+}
+
+function artifactPreviewTarget(artifact: Artifact): FilePreviewTarget {
+  return {
+    source: 'artifact',
+    title: artifact.name,
+    name: artifact.name,
+    relativePath: artifact.relativePath,
+    path: artifact.path,
+    type: artifact.type || 'file',
+    size: artifact.size,
+    timestamp: artifact.createdAt,
+    workspaceId: artifact.workspaceId,
+    artifactId: artifact.id
+  }
+}
+
 function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
   return Array.from(event.dataTransfer.types).includes('Files')
 }
@@ -6120,6 +6352,7 @@ function previewKind(title: string): Preview['kind'] {
   const lower = title.toLowerCase()
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
   if (lower.endsWith('.csv') || lower.endsWith('.tsv')) return 'csv'
+  if (lower.endsWith('.docx') || lower.endsWith('.doc')) return 'document'
   return 'text'
 }
 

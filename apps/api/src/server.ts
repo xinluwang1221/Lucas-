@@ -4,7 +4,7 @@ import type { Response } from 'express'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFile, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import multer from 'multer'
 import { findChangedArtifacts, takeSnapshot } from './artifacts.js'
 import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgroundServices } from './background.js'
@@ -697,11 +697,11 @@ app.get('/api/workspaces/:workspaceId/files/preview', (req, res) => {
     res.status(404).json({ error: 'file not found' })
     return
   }
-  if (!isTextPreviewable(targetPath)) {
-    res.status(415).json({ error: 'preview is only available for text-like files in this MVP' })
-    return
+  try {
+    res.type('text/plain').send(readPreviewBody(targetPath))
+  } catch (error) {
+    res.status(415).json({ error: error instanceof Error ? error.message : String(error) })
   }
-  res.type('text/plain').send(fs.readFileSync(targetPath, 'utf8'))
 })
 
 app.post('/api/workspaces', (req, res) => {
@@ -1178,11 +1178,11 @@ app.get('/api/artifacts/:artifactId/preview', (req, res) => {
     return
   }
 
-  if (!isTextPreviewable(artifact.path)) {
-    res.status(415).json({ error: 'preview is only available for text-like artifacts in this MVP' })
-    return
+  try {
+    res.type('text/plain').send(readPreviewBody(artifact.path))
+  } catch (error) {
+    res.status(415).json({ error: error instanceof Error ? error.message : String(error) })
   }
-  res.type('text/plain').send(fs.readFileSync(artifact.path, 'utf8'))
 })
 
 async function executeTask(
@@ -1339,6 +1339,53 @@ function isTextPreviewable(filePath: string) {
     return true
   }
   return !ext && fs.statSync(filePath).size < 1024 * 1024
+}
+
+function readPreviewBody(filePath: string) {
+  if (isTextPreviewable(filePath)) {
+    return fs.readFileSync(filePath, 'utf8')
+  }
+
+  if (path.extname(filePath).toLowerCase() === '.docx') {
+    return readDocxPreview(filePath)
+  }
+
+  throw new Error('这个文件暂不支持正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
+}
+
+function readDocxPreview(filePath: string) {
+  try {
+    const xml = execFileSync('unzip', ['-p', filePath, 'word/document.xml'], {
+      encoding: 'utf8',
+      maxBuffer: 12 * 1024 * 1024
+    })
+    const text = decodeXmlEntities(
+      xml
+        .replace(/<w:tab\s*\/>/g, '\t')
+        .replace(/<w:br\s*\/>/g, '\n')
+        .replace(/<\/w:p>/g, '\n\n')
+        .replace(/<[^>]+>/g, '')
+    )
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+
+    if (!text) throw new Error('empty docx preview')
+    return text
+  } catch {
+    throw new Error('无法读取这个 Word 文档的正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
+  }
+}
+
+function decodeXmlEntities(value: string) {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
 }
 
 function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: string) {

@@ -62,6 +62,10 @@ summary:focus-visible {
   grid-template-columns: 286px minmax(720px, 1fr);
 }
 
+.app-shell.file-preview-mode {
+  grid-template-columns: 286px minmax(480px, 0.92fr) minmax(520px, 1.08fr);
+}
+
 .drop-overlay {
   position: fixed;
   inset: 14px;
@@ -1734,6 +1738,10 @@ summary:focus-visible {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 14px;
   align-items: start;
+}
+
+.workspace-file-grid.previewing {
+  grid-template-columns: minmax(340px, 0.76fr) minmax(460px, 1.24fr);
 }
 
 .workspace-browser-panel {
@@ -4127,6 +4135,13 @@ summary:focus-visible {
   overflow: auto;
 }
 
+.file-preview-inspector {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: #eef0ee;
+}
+
 .inspector-title-block {
   display: grid;
   gap: 2px;
@@ -5518,6 +5533,13 @@ summary:focus-visible {
   border-radius: 7px;
 }
 
+.artifact-main {
+  min-width: 0;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
 .artifact strong,
 .artifact span {
   display: block;
@@ -5536,7 +5558,7 @@ summary:focus-visible {
   font-size: 11px;
 }
 
-.artifact button,
+.artifact button:not(.artifact-main),
 .artifact a {
   display: grid;
   place-items: center;
@@ -5547,7 +5569,7 @@ summary:focus-visible {
   border-radius: 6px;
 }
 
-.artifact button:hover,
+.artifact button:not(.artifact-main):hover,
 .artifact a:hover {
   color: var(--ink);
   background: var(--paper-deep);
@@ -7791,26 +7813,187 @@ summary:focus-visible {
   margin-top: 20px;
 }
 
-.preview-modal {
-  width: min(980px, 100%);
+.file-preview-panel {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-height: 100vh;
+  color: var(--ink);
+  background: #eef0ee;
 }
 
-.preview-head {
+.file-preview-panel.compact {
+  min-height: 560px;
+  max-height: 780px;
+  overflow: hidden;
+  background: rgba(255, 253, 247, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.file-preview-topbar {
   display: flex;
-  align-items: start;
+  align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 14px;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 14px;
+  background: rgba(255, 253, 247, 0.96);
+  border-bottom: 1px solid var(--line);
 }
 
-.preview-head h2 {
-  margin-bottom: 4px;
+.file-preview-title {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
 }
 
-.preview-head p {
-  margin: 0;
+.file-preview-title > svg {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  color: var(--moss);
+  background: rgba(80, 138, 92, 0.12);
+  border-radius: 7px;
+}
+
+.file-preview-title strong,
+.file-preview-title span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-title strong {
+  font-size: 13px;
+}
+
+.file-preview-title span {
+  margin-top: 2px;
   color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.file-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 253, 247, 0.86);
+  border-bottom: 1px solid var(--line);
+}
+
+.file-preview-actions .ghost-button {
+  min-height: 32px;
+  padding: 0 10px;
   font-size: 12px;
+  text-decoration: none;
+}
+
+.file-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(247, 244, 235, 0.92);
+  border-bottom: 1px solid var(--line);
+}
+
+.file-preview-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 0 8px;
+  color: var(--ink-soft);
+  background: rgba(255, 253, 247, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.file-preview-surface {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.file-preview-panel.compact .file-preview-surface {
+  max-height: 600px;
+}
+
+.file-preview-state {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 260px;
+  padding: 28px;
+  color: var(--ink-soft);
+  text-align: center;
+  background: rgba(255, 253, 247, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.file-preview-state svg {
+  color: var(--moss);
+}
+
+.file-preview-state strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.file-preview-state span {
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.file-preview-state.error svg,
+.file-preview-state.unsupported svg {
+  color: var(--warning);
+}
+
+.document-preview {
+  max-width: 760px;
+  min-height: 820px;
+  margin: 0 auto;
+  padding: 64px 74px 78px;
+  color: #161916;
+  background: #ffffff;
+  border: 1px solid rgba(35, 39, 32, 0.08);
+  box-shadow: 0 12px 34px rgba(25, 29, 22, 0.08);
+  line-height: 1.88;
+}
+
+.file-preview-panel.compact .document-preview {
+  min-height: 680px;
+  padding: 42px 40px 54px;
+}
+
+.document-preview h1 {
+  margin: 0 0 26px;
+  font-size: 27px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.document-preview h2 {
+  margin: 30px 0 12px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.document-preview p {
+  margin: 0 0 14px;
+  font-size: 14px;
 }
 
 .text-preview {
@@ -7981,7 +8164,8 @@ summary:focus-visible {
   }
 
   .app-shell,
-  .app-shell.skills-mode {
+  .app-shell.skills-mode,
+  .app-shell.file-preview-mode {
     grid-template-columns: 240px minmax(0, 1fr);
   }
 
@@ -8020,7 +8204,8 @@ summary:focus-visible {
 
 @media (max-width: 820px) {
   .app-shell,
-  .app-shell.skills-mode {
+  .app-shell.skills-mode,
+  .app-shell.file-preview-mode {
     grid-template-columns: 180px minmax(0, 1fr);
   }
 

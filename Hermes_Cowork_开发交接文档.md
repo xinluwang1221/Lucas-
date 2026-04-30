@@ -853,8 +853,9 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 - 当前不是 macOS 原生客户端，还是本地 Web。
 - 工作区授权已改为左侧“+ / 授权文件夹”触发 macOS Finder 目录选择；当前仍是本地 Web + Node Adapter 方案，未来打包成客户端后要替换为 Tauri/Electron 原生授权和安全书签。
-- 文件预览只覆盖文本类和小型无扩展文本文件。
-- docx/pptx/xlsx/pdf 还没有高保真预览。
+- 文件预览已经统一到右侧文件详情面板：点击工作区文件或任务产物时，右侧任务上下文会切换为文件预览、Finder 定位、复制路径和“作为上下文”操作。
+- 当前预览覆盖文本类、小型无扩展文本文件、CSV/TSV 表格和 docx 正文抽取；docx 是正文级预览，不保留 Word 原版分页、字体和图片。
+- pptx/xlsx/pdf 还没有高保真预览，后续应接文档渲染服务或系统 Quick Look。
 - 任务状态存在 `data/state.json`，大规模数据不适合长期使用。
 - Hermes session 已有只读元数据索引和 Cowork 任务关联；原生 session 删除、重命名、全文浏览和双向同步还没有接。
 - 工具事件依赖 Hermes 当前 callbacks 暴露程度。
