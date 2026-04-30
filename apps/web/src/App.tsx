@@ -27,7 +27,11 @@ import {
   Loader2,
   LogOut,
   MessageSquarePlus,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRight,
+  PanelRightClose,
+  PanelRightOpen,
   Palette,
   Pencil,
   Plug,
@@ -344,6 +348,8 @@ function closeOnBackdropMouseDown(onClose: () => void) {
 function App() {
   const [state, setState] = useState<AppState>(emptyState)
   const [viewMode, setViewMode] = useState<ViewMode>('tasks')
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false)
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('default')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined)
   const [prompt, setPrompt] = useState('')
@@ -1348,6 +1354,7 @@ function App() {
     const kind = previewKind(target.title)
     const rawUrl = previewRawUrl(target)
     setError(null)
+    setRightSidebarCollapsed(false)
     setFilePreview({
       target,
       title: target.title,
@@ -1397,6 +1404,7 @@ function App() {
     const kind = previewKind(target.title)
     const rawUrl = previewRawUrl(target)
     setError(null)
+    setRightSidebarCollapsed(false)
     setFilePreview({
       target,
       title: target.title,
@@ -1577,7 +1585,9 @@ function App() {
         'app-shell',
         isDraggingFiles ? 'dragging-files' : '',
         viewMode !== 'tasks' ? 'skills-mode' : '',
-        viewMode === 'tasks' && filePreview ? 'file-preview-mode' : ''
+        viewMode === 'tasks' && filePreview ? 'file-preview-mode' : '',
+        leftSidebarCollapsed ? 'left-sidebar-collapsed' : '',
+        viewMode === 'tasks' && rightSidebarCollapsed ? 'right-sidebar-collapsed' : ''
       ].filter(Boolean).join(' ')}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -1593,15 +1603,36 @@ function App() {
           </div>
         </div>
       )}
+      {leftSidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-restore-button"
+          title="显示左侧导航"
+          aria-label="显示左侧导航"
+          onClick={() => setLeftSidebarCollapsed(false)}
+        >
+          <PanelLeftOpen size={17} />
+        </button>
+      )}
+
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
             <Bot size={19} />
           </div>
-          <div>
+          <div className="brand-copy">
             <strong>Hermes Cowork</strong>
             <span>本机智能体工作台</span>
           </div>
+          <button
+            type="button"
+            className="icon-button sidebar-collapse-button"
+            title="隐藏左侧导航"
+            aria-label="隐藏左侧导航"
+            onClick={() => setLeftSidebarCollapsed(true)}
+          >
+            <PanelLeftClose size={15} />
+          </button>
         </div>
 
         <button
@@ -1944,6 +1975,15 @@ function App() {
                 event.currentTarget.value = ''
               }}
             />
+            <button
+              type="button"
+              className="icon-button topbar-icon-button"
+              title={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏右侧工作区'}
+              aria-label={rightSidebarCollapsed ? '显示右侧工作区' : '隐藏右侧工作区'}
+              onClick={() => setRightSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              {rightSidebarCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+            </button>
           </div>
         </header>
 
@@ -2131,7 +2171,7 @@ function App() {
         )}
       </main>
 
-      {viewMode === 'tasks' && (
+      {viewMode === 'tasks' && !rightSidebarCollapsed && (
       <aside className={filePreview ? 'inspector file-preview-inspector' : 'inspector'}>
         {filePreview ? (
           <FilePreviewPanel
