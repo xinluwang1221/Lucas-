@@ -505,7 +505,11 @@ function shouldShowModelProvider(provider: string, currentProvider = '') {
 }
 
 function credentialNeedsAttention(credential: HermesModelCredential) {
-  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(credential.detail)
+  return credentialDetailNeedsAttention(credential.detail)
+}
+
+function credentialDetailNeedsAttention(detail: string) {
+  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(detail)
 }
 
 function parseHermesStatusCredentials(raw: string): HermesModelCredential[] {
@@ -598,11 +602,15 @@ function mergeCredentials(...groups: HermesModelCredential[][]) {
       merged.set(credential.id, credential)
       continue
     }
+    const hasUsableCredential = existing.configured || credential.configured
     const hasAuthIssue = credentialNeedsAttention(existing) || credentialNeedsAttention(credential)
-    const mergedConfigured = !hasAuthIssue && (existing.configured || credential.configured)
+    const mergedConfigured = hasUsableCredential
     const detailParts = [existing.detail, credential.detail]
       .map((detail) => sanitizeStatusDetail(detail))
-      .filter((detail) => detail && !(mergedConfigured && detail.includes('未配置')))
+      .filter((detail) => detail && !(mergedConfigured && (detail.includes('未配置') || credentialDetailNeedsAttention(detail))))
+    if (mergedConfigured && hasAuthIssue) {
+      detailParts.push('另有旧凭据记录未参与当前模型')
+    }
     merged.set(credential.id, {
       ...existing,
       configured: mergedConfigured,
