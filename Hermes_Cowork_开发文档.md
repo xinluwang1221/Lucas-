@@ -506,6 +506,12 @@ HC_EVENT\t
 - 负责文件详情面板、PDF/HTML/image/media iframe 或原生预览、Markdown/演示文稿渲染、CSV/表格预览、正文级文档预览和复制路径。
 - 后续文件编辑 UI 先在这个 feature 里扩展“查看 / 编辑 / 历史”，再通过后端文件 API 写入，不要在 `App.tsx` 里新增编辑器。
 
+`apps/web/src/features/file-preview/useFilePreview.ts`
+
+- 文件预览状态 hook，已从 `App.tsx` 抽离。
+- 负责打开任务产物预览、打开工作区文件预览、inline 文件直接就绪、文本预览请求、预览错误状态和关闭预览。
+- 后续做“主流文件高保真预览”“可编辑文件”“预览刷新/保存后回写”时，优先从这里扩展预览状态机。
+
 `apps/web/src/features/markdown/MarkdownContent.tsx`
 
 - Markdown 渲染模块，已从 `App.tsx` 抽离。
@@ -1167,7 +1173,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 工程稳定阶段拆分顺序：
 
-1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
+1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts` 和文件状态 hook `useWorkspaceFiles.ts`；后续如继续深化，再拆 workspace 操作 hook/provider。
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts` 和 `taskState.ts`；后续如继续深化，再把任务操作拆成 hook/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化和 MiMo 版本分组都在这个模块；后续如继续深化，再把模型状态请求和保存流程拆成 `modelsApi` / hook。

@@ -54,11 +54,9 @@ import {
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FilePreviewPanel,
-  isInlinePreviewKind,
-  previewKind,
-  type FilePreviewState,
   type FilePreviewTarget
 } from './features/file-preview/FilePreviewPanel'
+import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
 import { MessageBody } from './features/chat/MessageBody'
 import {
@@ -105,13 +103,11 @@ import { useTaskStream, type TaskStreamStatus } from './features/chat/useTaskStr
 import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
-import { artifactPreviewTarget, previewRawUrl, workspacePreviewTarget } from './features/workspace/previewTargets'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import {
   addWorkspace,
   deleteWorkspace,
   pickWorkspaceDirectory,
-  previewWorkspaceFile,
   revealWorkspace,
   revealWorkspaceFile,
   updateWorkspace,
@@ -159,7 +155,6 @@ import {
   listSkills,
   Message,
   ModelOption,
-  previewArtifact,
   readSkillFile,
   refreshModelCatalog,
   refreshHermesMcpRecommendationsWithAi,
@@ -422,7 +417,6 @@ function App() {
   const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [workspacePicking, setWorkspacePicking] = useState(false)
-  const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
   const [workspaceUpdatingId, setWorkspaceUpdatingId] = useState<string | null>(null)
   const [taskSearch, setTaskSearch] = useState('')
@@ -731,6 +725,16 @@ function App() {
     refreshAppState: refresh
   })
   const {
+    filePreview,
+    closeFilePreview,
+    openArtifactPreview,
+    openWorkspaceFilePreview
+  } = useFilePreview({
+    selectedWorkspaceId,
+    onOpen: () => setRightSidebarCollapsed(false),
+    onError: setError
+  })
+  const {
     workspaceFiles,
     workspaceTree,
     workspaceTreePath,
@@ -741,7 +745,7 @@ function App() {
   } = useWorkspaceFiles({
     selectedWorkspaceId,
     refreshKey: state.artifacts.length,
-    onWorkspaceChange: () => setFilePreview(null)
+    onWorkspaceChange: closeFilePreview
   })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
@@ -1403,105 +1407,6 @@ function App() {
     void handleUploadFiles(Array.from(event.dataTransfer.files))
   }
 
-  async function handlePreview(artifact: Artifact) {
-    const target = artifactPreviewTarget(artifact)
-    const kind = previewKind(target.title)
-    const rawUrl = previewRawUrl(target)
-    setError(null)
-    setRightSidebarCollapsed(false)
-    setFilePreview({
-      target,
-      title: target.title,
-      body: '',
-      kind,
-      rawUrl,
-      status: 'loading'
-    })
-    if (isInlinePreviewKind(kind) && rawUrl) {
-      setFilePreview({
-        target,
-        title: target.title,
-        body: '',
-        kind,
-        rawUrl,
-        status: 'ready'
-      })
-      return
-    }
-    try {
-      const body = await previewArtifact(artifact.id)
-      setFilePreview({
-        target,
-        title: target.title,
-        body,
-        kind,
-        rawUrl,
-        status: 'ready'
-      })
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setFilePreview({
-        target,
-        title: target.title,
-        body: '',
-        kind,
-        rawUrl,
-        status: message.includes('暂不支持') ? 'unsupported' : 'error',
-        error: message
-      })
-    }
-  }
-
-  async function handlePreviewWorkspaceFile(file: WorkspaceFile) {
-    if (!selectedWorkspace) return
-    const target = workspacePreviewTarget(file, selectedWorkspace.id)
-    const kind = previewKind(target.title)
-    const rawUrl = previewRawUrl(target)
-    setError(null)
-    setRightSidebarCollapsed(false)
-    setFilePreview({
-      target,
-      title: target.title,
-      body: '',
-      kind,
-      rawUrl,
-      status: 'loading'
-    })
-    if (isInlinePreviewKind(kind) && rawUrl) {
-      setFilePreview({
-        target,
-        title: target.title,
-        body: '',
-        kind,
-        rawUrl,
-        status: 'ready'
-      })
-      return
-    }
-    try {
-      const body = await previewWorkspaceFile(selectedWorkspace.id, file.relativePath)
-      setFilePreview({
-        target,
-        title: target.title,
-        body,
-        kind,
-        rawUrl,
-        status: 'ready'
-      })
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setFilePreview({
-        target,
-        title: target.title,
-        body: '',
-        kind,
-        rawUrl,
-        status: message.includes('暂不支持') ? 'unsupported' : 'error',
-        error: message
-      })
-    }
-  }
-
   async function handleRevealPreviewTarget(target: FilePreviewTarget) {
     setError(null)
     try {
@@ -1944,14 +1849,14 @@ function App() {
               setViewMode('tasks')
               window.setTimeout(() => focusComposer(), 0)
             }}
-            onPreviewFile={(file) => void handlePreviewWorkspaceFile(file)}
+            onPreviewFile={(file) => void openWorkspaceFilePreview(file)}
             onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
             onOpenFolder={(path) => {
               setWorkspaceTreePath(path)
-              setFilePreview(null)
+              closeFilePreview()
             }}
             onWorkspaceQueryChange={setWorkspaceFileQuery}
-            onCloseFilePreview={() => setFilePreview(null)}
+            onCloseFilePreview={closeFilePreview}
             onUsePreviewTarget={handleUsePreviewTarget}
             onRevealPreviewTarget={(target) => void handleRevealPreviewTarget(target)}
             onUploadClick={() => fileInputRef.current?.click()}
@@ -2163,7 +2068,7 @@ function App() {
         {filePreview ? (
           <FilePreviewPanel
             preview={filePreview}
-            onClose={() => setFilePreview(null)}
+            onClose={closeFilePreview}
             onUseContext={handleUsePreviewTarget}
             onReveal={(target) => void handleRevealPreviewTarget(target)}
           />
@@ -2191,7 +2096,7 @@ function App() {
 
             <TaskArtifactsCard
               task={selectedTask}
-              onPreview={(artifact) => void handlePreview(artifact)}
+              onPreview={(artifact) => void openArtifactPreview(artifact)}
               onReveal={(artifact) => void handleRevealArtifact(artifact)}
             />
 
