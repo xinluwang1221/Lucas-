@@ -1269,24 +1269,28 @@
 .empty-inspector-state {
   display: grid;
   justify-items: center;
-  gap: 7px;
-  padding: 22px 12px;
+  gap: 6px;
+  padding: 16px 12px 18px;
   color: var(--ink-soft);
   text-align: center;
 }
 
 .empty-inspector-state svg {
   color: var(--line-strong);
+  width: 16px;
+  height: 16px;
 }
 
 .empty-inspector-state strong {
-  color: var(--ink-soft);
+  color: var(--ink);
   font-size: 13px;
+  font-weight: 680;
 }
 
 .empty-inspector-state span {
   max-width: 190px;
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 11px;
   line-height: 1.45;
 }
 

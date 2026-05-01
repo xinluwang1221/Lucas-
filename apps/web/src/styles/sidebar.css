@@ -135,15 +135,15 @@
   min-height: 50px;
   padding: 8px 10px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.64);
+  background: var(--sidebar-elevated);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   text-align: left;
 }
 
 .sidebar-workspace-card:hover {
   border-color: var(--line-strong);
-  background: rgba(255, 253, 247, 0.82);
+  background: var(--surface);
 }
 
 .sidebar-workspace-card span,
@@ -185,7 +185,7 @@
 }
 
 .workspace-tree-node.active {
-  background: rgba(49, 92, 66, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .workspace-tree-row,
@@ -218,7 +218,7 @@
 .workspace-tree-main:hover,
 .workspace-session-main:hover,
 .workspace-session-row.active .workspace-session-main {
-  background: rgba(255, 253, 247, 0.58);
+  background: var(--sidebar-elevated);
 }
 
 .workspace-tree-main svg {
@@ -262,7 +262,7 @@
 .workspace-tree-action:hover,
 .workspace-session-actions button:hover {
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.58);
+  background: var(--sidebar-elevated);
 }
 
 .workspace-tree-action.danger {

@@ -34,11 +34,13 @@ export function TaskFocusPanel({
     <section className={`task-focus-panel ${task.status}`}>
       <div className="task-focus-head">
         <div>
-          <span className={`status-pill compact ${task.status}`}>
-            <StatusIcon status={task.status} />
-            {statusLabel(task.status)}
-          </span>
-          <h2>{title}</h2>
+          <div className="task-focus-title-line">
+            <span className={`status-pill compact ${task.status}`}>
+              <StatusIcon status={task.status} />
+              {statusLabel(task.status)}
+            </span>
+            <h2>{title}</h2>
+          </div>
           <p>{detail}</p>
         </div>
         <div className="task-focus-actions">

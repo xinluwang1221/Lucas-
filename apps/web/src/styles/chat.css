@@ -414,13 +414,14 @@
 }
 
 .task-focus-panel {
-  max-width: 920px;
-  margin: 12px auto 0;
-  padding: 10px 12px;
-  background: rgba(255, 253, 247, 0.74);
+  width: min(920px, calc(100% - 40px));
+  margin: 10px auto 0;
+  padding: 11px 13px;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-left: 3px solid var(--ink-soft);
   border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(21, 31, 18, 0.04);
 }
 
 .task-focus-panel.failed {
@@ -432,32 +433,40 @@
 }
 
 .task-focus-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
 }
 
 .task-focus-head > div:first-child {
+  min-width: 0;
+}
+
+.task-focus-title-line {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-width: 0;
-  flex-wrap: wrap;
-  gap: 0 8px;
 }
 
 .task-focus-head h2 {
   margin: 0;
   font-size: 13px;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
 .task-focus-head p {
-  flex-basis: 100%;
+  display: -webkit-box;
+  overflow: hidden;
   margin: 5px 0 0;
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .task-focus-actions {
@@ -465,6 +474,13 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+  max-width: 280px;
+}
+
+.task-focus-actions .ghost-button {
+  min-height: 32px;
+  padding: 0 10px;
+  background: var(--surface-subtle);
 }
 
 .ghost-button.danger-lite {
@@ -1579,7 +1595,8 @@
 .send-button {
   flex: 0 0 auto;
   color: var(--panel);
-  background: var(--ink);
+  background: var(--accent);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .icon-send-button {
@@ -1593,7 +1610,7 @@
 }
 
 .icon-send-button:hover:not(:disabled) {
-  background: #262a24;
+  background: var(--accent-strong);
 }
 
 .icon-send-button.running {
@@ -1616,18 +1633,18 @@
   align-items: center;
   gap: 6px;
   height: 34px;
-  max-width: 196px;
+  max-width: 218px;
   padding: 0 9px;
   color: var(--ink-soft);
-  background: rgba(244, 241, 232, 0.78);
+  background: var(--surface-subtle);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   font-size: 12px;
 }
 
 .model-trigger:hover {
   color: var(--ink);
-  background: rgba(244, 241, 232, 0.96);
+  background: var(--surface);
   border-color: var(--line-strong);
 }
 
@@ -1944,7 +1961,7 @@
 }
 
 .progress-focus-card {
-  background: linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(245, 241, 230, 0.9));
+  background: var(--surface);
 }
 
 .card-heading-row p {
