@@ -2733,3 +2733,278 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Dark theme compatibility layer for legacy page components that still live in app.css/settings.css. */
+:root[data-theme-mode="dark"] .modal-backdrop,
+:root[data-theme-mode="dark"] .settings-backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+:root[data-theme-mode="dark"] .schedule-card,
+:root[data-theme-mode="dark"] .dispatch-card,
+:root[data-theme-mode="dark"] .idea-grid button,
+:root[data-theme-mode="dark"] .utility-empty,
+:root[data-theme-mode="dark"] .connector-summary div,
+:root[data-theme-mode="dark"] .skill-browser,
+:root[data-theme-mode="dark"] .skill-file-content,
+:root[data-theme-mode="dark"] .inspector-card,
+:root[data-theme-mode="dark"] .session-card-body > div,
+:root[data-theme-mode="dark"] .task-summary-metrics > div,
+:root[data-theme-mode="dark"] .mcp-add-popover,
+:root[data-theme-mode="dark"] .mcp-server-details .settings-info-grid div,
+:root[data-theme-mode="dark"] .mcp-test-result,
+:root[data-theme-mode="dark"] .mcp-tool-empty,
+:root[data-theme-mode="dark"] .mcp-serve-grid div,
+:root[data-theme-mode="dark"] .mcp-serve-logs,
+:root[data-theme-mode="dark"] .mcp-daily-permission,
+:root[data-theme-mode="dark"] .mcp-rec-group,
+:root[data-theme-mode="dark"] .mcp-rec-candidates a,
+:root[data-theme-mode="dark"] .mcp-marketplace-modal,
+:root[data-theme-mode="dark"] .model-table-row,
+:root[data-theme-mode="dark"] .model-table-empty,
+:root[data-theme-mode="dark"] .model-runtime-card,
+:root[data-theme-mode="dark"] .model-user-summary,
+:root[data-theme-mode="dark"] .model-key-repair-panel,
+:root[data-theme-mode="dark"] .model-ability-card,
+:root[data-theme-mode="dark"] .model-health-grid > div,
+:root[data-theme-mode="dark"] .model-impact-grid > div,
+:root[data-theme-mode="dark"] .model-scenario-card,
+:root[data-theme-mode="dark"] .cowork-model-row,
+:root[data-theme-mode="dark"] .model-provider-card,
+:root[data-theme-mode="dark"] .model-filter-bar input,
+:root[data-theme-mode="dark"] .fallback-model-summary,
+:root[data-theme-mode="dark"] .fallback-provider-row,
+:root[data-theme-mode="dark"] .hermes-update-grid div,
+:root[data-theme-mode="dark"] .hermes-update-checks > div,
+:root[data-theme-mode="dark"] .hermes-smoke-card,
+:root[data-theme-mode="dark"] .hermes-auto-update-card,
+:root[data-theme-mode="dark"] .hermes-update-diagnostics,
+:root[data-theme-mode="dark"] .sound-icon {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+:root[data-theme-mode="dark"] .schedule-card.primary,
+:root[data-theme-mode="dark"] .schedule-report,
+:root[data-theme-mode="dark"] .schedule-status-list div,
+:root[data-theme-mode="dark"] .dispatch-connector-strip,
+:root[data-theme-mode="dark"] .idea-grid button:hover,
+:root[data-theme-mode="dark"] .skill-file-tree,
+:root[data-theme-mode="dark"] .inspector-utility-details,
+:root[data-theme-mode="dark"] .task-summary-card,
+:root[data-theme-mode="dark"] .task-summary-strip span,
+:root[data-theme-mode="dark"] .mcp-tool-list,
+:root[data-theme-mode="dark"] .mcp-rec-summary,
+:root[data-theme-mode="dark"] .mcp-daily-report,
+:root[data-theme-mode="dark"] .mcp-background-status,
+:root[data-theme-mode="dark"] .marketplace-tabs button,
+:root[data-theme-mode="dark"] .marketplace-search,
+:root[data-theme-mode="dark"] .marketplace-command span,
+:root[data-theme-mode="dark"] .model-table-head,
+:root[data-theme-mode="dark"] .model-provider-meta span,
+:root[data-theme-mode="dark"] .model-credential-pill,
+:root[data-theme-mode="dark"] .inline-add-control input,
+:root[data-theme-mode="dark"] .settings-info-grid div,
+:root[data-theme-mode="dark"] .model-catalog-refresh-line,
+:root[data-theme-mode="dark"] .hermes-update-notes,
+:root[data-theme-mode="dark"] .hermes-smoke-steps > div,
+:root[data-theme-mode="dark"] .hermes-smoke-response,
+:root[data-theme-mode="dark"] .hermes-auto-update-summary div,
+:root[data-theme-mode="dark"] .hermes-auto-update-backup,
+:root[data-theme-mode="dark"] .hermes-update-log,
+:root[data-theme-mode="dark"] .hermes-update-actions {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+:root[data-theme-mode="dark"] .mcp-add-popover button:hover:not(:disabled),
+:root[data-theme-mode="dark"] .mcp-expand-button:hover,
+:root[data-theme-mode="dark"] .marketplace-item.active,
+:root[data-theme-mode="dark"] .marketplace-item:hover,
+:root[data-theme-mode="dark"] .marketplace-tabs button.active,
+:root[data-theme-mode="dark"] .marketplace-search button,
+:root[data-theme-mode="dark"] .inline-add-control button,
+:root[data-theme-mode="dark"] .sound-list button:hover,
+:root[data-theme-mode="dark"] .cowork-model-select:hover:not(:disabled),
+:root[data-theme-mode="dark"] .account-popover button:hover,
+:root[data-theme-mode="dark"] .settings-close:hover,
+:root[data-theme-mode="dark"] .sidebar-user-button:hover .sidebar-settings-cue {
+  background: var(--surface-hover);
+  border-color: var(--line);
+}
+
+:root[data-theme-mode="dark"] .settings-subtabs,
+:root[data-theme-mode="dark"] .account-popover,
+:root[data-theme-mode="dark"] .mcp-add-popover,
+:root[data-theme-mode="dark"] .skill-card,
+:root[data-theme-mode="dark"] .skills-summary-card,
+:root[data-theme-mode="dark"] .appearance-preview-card,
+:root[data-theme-mode="dark"] .appearance-config-card {
+  box-shadow: var(--shadow-soft);
+}
+
+:root[data-theme-mode="dark"] .dark-mini-button,
+:root[data-theme-mode="dark"] .settings-add-button,
+:root[data-theme-mode="dark"] .settings-button,
+:root[data-theme-mode="dark"] .settings-test-button {
+  color: var(--foreground);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+
+:root[data-theme-mode="dark"] .settings-primary-button,
+:root[data-theme-mode="dark"] .marketplace-install-button,
+:root[data-theme-mode="dark"] .hermes-auto-update-button,
+:root[data-theme-mode="dark"] .context-compress-button {
+  color: #ffffff;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+:root[data-theme-mode="dark"] .settings-primary-button:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+:root[data-theme-mode="dark"] .settings-danger-button,
+:root[data-theme-mode="dark"] .settings-delete-button,
+:root[data-theme-mode="dark"] .settings-edit-button,
+:root[data-theme-mode="dark"] .model-delete-button {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+}
+
+:root[data-theme-mode="dark"] .model-delete-button:hover:not(:disabled),
+:root[data-theme-mode="dark"] .danger-button:hover,
+:root[data-theme-mode="dark"] .danger-button.subtle:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+
+:root[data-theme-mode="dark"] .settings-info-banner,
+:root[data-theme-mode="dark"] .mcp-serve-note,
+:root[data-theme-mode="dark"] .mcp-rec-ai,
+:root[data-theme-mode="dark"] .marketplace-daily-report,
+:root[data-theme-mode="dark"] .marketplace-note {
+  color: var(--info);
+  background: var(--info-soft);
+  border-color: var(--info-border);
+}
+
+:root[data-theme-mode="dark"] .skill-file-error,
+:root[data-theme-mode="dark"] .error-banner,
+:root[data-theme-mode="dark"] .danger-button,
+:root[data-theme-mode="dark"] .settings-error-line,
+:root[data-theme-mode="dark"] .mcp-test-result.failed > div,
+:root[data-theme-mode="dark"] .hermes-update-banner.blocked,
+:root[data-theme-mode="dark"] .hermes-smoke-card.failed,
+:root[data-theme-mode="dark"] .hermes-auto-update-card.failed,
+:root[data-theme-mode="dark"] .modal-inline-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+
+:root[data-theme-mode="dark"] .upload-banner,
+:root[data-theme-mode="dark"] .schedule-tags span,
+:root[data-theme-mode="dark"] .dispatch-icon,
+:root[data-theme-mode="dark"] .dispatch-card em,
+:root[data-theme-mode="dark"] .utility-empty-icon,
+:root[data-theme-mode="dark"] .connector-icon,
+:root[data-theme-mode="dark"] .skill-notice,
+:root[data-theme-mode="dark"] .session-state.linked,
+:root[data-theme-mode="dark"] .mcp-test-result.ok > div,
+:root[data-theme-mode="dark"] .mcp-rec-chips span,
+:root[data-theme-mode="dark"] .model-credential-pill.configured,
+:root[data-theme-mode="dark"] .fallback-provider-row.active,
+:root[data-theme-mode="dark"] .model-config-memory,
+:root[data-theme-mode="dark"] .model-config-note,
+:root[data-theme-mode="dark"] .hermes-update-banner.verified,
+:root[data-theme-mode="dark"] .hermes-update-status-icon,
+:root[data-theme-mode="dark"] .hermes-smoke-card.running,
+:root[data-theme-mode="dark"] .hermes-smoke-head em,
+:root[data-theme-mode="dark"] .hermes-auto-update-card.running,
+:root[data-theme-mode="dark"] .hermes-auto-update-gate.ready,
+:root[data-theme-mode="dark"] .hermes-auto-update-head em,
+:root[data-theme-mode="dark"] .about-summary-card em {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+:root[data-theme-mode="dark"] .mcp-rec-blockers,
+:root[data-theme-mode="dark"] .marketplace-safety,
+:root[data-theme-mode="dark"] .model-key-repair-panel.attention,
+:root[data-theme-mode="dark"] .model-credential-pill.attention,
+:root[data-theme-mode="dark"] .hermes-update-banner.needs-review,
+:root[data-theme-mode="dark"] .hermes-update-banner.unknown,
+:root[data-theme-mode="dark"] .hermes-update-banner.needs-review .hermes-update-status-icon,
+:root[data-theme-mode="dark"] .hermes-update-banner.unknown .hermes-update-status-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+}
+
+:root[data-theme-mode="dark"] .mcp-test-result pre,
+:root[data-theme-mode="dark"] .mcp-serve-logs pre,
+:root[data-theme-mode="dark"] .hermes-update-log pre,
+:root[data-theme-mode="dark"] .marketplace-command pre {
+  color: var(--foreground);
+  background: var(--surface);
+}
+
+:root[data-theme-mode="dark"] .status-pill.running {
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+:root[data-theme-mode="dark"] .status-pill.completed {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+:root[data-theme-mode="dark"] .status-pill.failed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+:root[data-theme-mode="dark"] .model-chip-list button,
+:root[data-theme-mode="dark"] .model-chip-empty,
+:root[data-theme-mode="dark"] .model-key-inline-button,
+:root[data-theme-mode="dark"] .model-key-mini-button {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+:root[data-theme-mode="dark"] .cowork-model-row.active,
+:root[data-theme-mode="dark"] .model-provider-card.current {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+:root[data-theme-mode="dark"] .mcp-logo,
+:root[data-theme-mode="dark"] .mcp-logo > span {
+  color: var(--info);
+  background: var(--info-soft);
+  border-color: var(--info-border);
+}
+
+:root[data-theme-mode="dark"] .ready-mark,
+:root[data-theme-mode="dark"] .settings-link-button,
+:root[data-theme-mode="dark"] .marketplace-detail-title a,
+:root[data-theme-mode="dark"] .model-provider-head em,
+:root[data-theme-mode="dark"] .model-key-repair-panel svg,
+:root[data-theme-mode="dark"] .model-config-note,
+:root[data-theme-mode="dark"] .hermes-compact-details summary {
+  color: var(--success);
+}
+
+:root[data-theme-mode="dark"] .error-mark,
+:root[data-theme-mode="dark"] .settings-error-line,
+:root[data-theme-mode="dark"] .hermes-update-checks .failed svg,
+:root[data-theme-mode="dark"] .hermes-smoke-steps > div.failed svg,
+:root[data-theme-mode="dark"] .hermes-smoke-card.failed .hermes-smoke-head em,
+:root[data-theme-mode="dark"] .hermes-auto-update-card.failed .hermes-auto-update-head em {
+  color: var(--danger);
+}

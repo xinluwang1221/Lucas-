@@ -46,6 +46,8 @@ samp {
 }
 
 button {
+  color: inherit;
+  background: transparent;
   border: 0;
   cursor: pointer;
 }
