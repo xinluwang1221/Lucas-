@@ -45,10 +45,7 @@ import {
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { usePanelLayout } from './features/layout/usePanelLayout'
-import {
-  FilePreviewPanel,
-  type FilePreviewTarget
-} from './features/file-preview/FilePreviewPanel'
+import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
 import { MessageBody } from './features/chat/MessageBody'
@@ -103,20 +100,10 @@ import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
-import {
-  addWorkspace,
-  deleteWorkspace,
-  pickWorkspaceDirectory,
-  revealWorkspace,
-  revealWorkspaceFile,
-  updateWorkspace,
-  uploadFile,
-  type Workspace,
-  type WorkspaceFile
-} from './features/workspace/workspaceApi'
+import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
+import type { WorkspaceFile } from './features/workspace/workspaceApi'
 import {
   AppState,
-  Artifact,
   BackgroundServiceStatus,
   configureHermesReasoning,
   deleteHermesModelProvider,
@@ -128,7 +115,6 @@ import {
   HermesRuntime,
   Message,
   ModelOption,
-  revealArtifact,
   setHermesDefaultModel,
   setHermesFallbackProviders,
   selectModel,
@@ -246,15 +232,12 @@ function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined)
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [workspacePicking, setWorkspacePicking] = useState(false)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
-  const [workspaceUpdatingId, setWorkspaceUpdatingId] = useState<string | null>(null)
   const [taskSearch, setTaskSearch] = useState('')
   const [taskScope, setTaskScope] = useState<'active' | 'archived' | 'all'>('active')
   const [taskWorkspaceScope, setTaskWorkspaceScope] = useState<'current' | 'all'>('current')
   const [selectedTaskTag, setSelectedTaskTag] = useState('all')
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
-  const [uploadNotice, setUploadNotice] = useState<string | null>(null)
   const {
     runtime,
     hermesUpdate,
@@ -459,6 +442,40 @@ function App() {
     selectedWorkspaceId,
     refreshKey: state.artifacts.length,
     onWorkspaceChange: closeFilePreview
+  })
+  const {
+    workspacePicking,
+    workspaceUpdatingId,
+    uploadNotice,
+    handleAuthorizeWorkspace,
+    handleRenameWorkspace,
+    handleReauthorizeWorkspace,
+    handleRemoveWorkspace,
+    handleUploadFiles,
+    handleRevealWorkspace,
+    handleRevealWorkspaceFile,
+    handleRevealPreviewTarget,
+    handleRevealArtifact,
+    handleUsePreviewTarget
+  } = useWorkspaceActions({
+    workspaces: state.workspaces,
+    tasks: state.tasks,
+    selectedWorkspace: selectedWorkspace ?? undefined,
+    refreshAppState: refresh,
+    refreshWorkspaceFiles,
+    resetWorkspaceTree: () => setWorkspaceTreePath(''),
+    openWorkspace: (workspaceId) => {
+      setSelectedWorkspaceId(workspaceId)
+      setSelectedTaskId(null)
+      setViewMode('projects')
+    },
+    openTaskComposer: () => {
+      setSelectedTaskId(null)
+      setViewMode('tasks')
+      window.setTimeout(() => focusComposer(), 0)
+    },
+    appendPrompt: appendPromptSnippet,
+    onError: setError
   })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
@@ -723,108 +740,6 @@ function App() {
     }))
   }
 
-  async function handleAuthorizeWorkspace() {
-    if (workspacePicking) return
-    setWorkspacePicking(true)
-    setError(null)
-    try {
-      const picked = await pickWorkspaceDirectory()
-      const workspace = await addWorkspace(picked.name, picked.path)
-      setSelectedWorkspaceId(workspace.id)
-      setSelectedTaskId(null)
-      setViewMode('projects')
-      await refresh()
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      if (!message.includes('取消')) setError(message)
-    } finally {
-      setWorkspacePicking(false)
-    }
-  }
-
-  async function handleRenameWorkspace(workspace: Workspace) {
-    const name = window.prompt('重命名工作区', workspace.name)?.trim()
-    if (!name || name === workspace.name) return
-    setWorkspaceUpdatingId(workspace.id)
-    setError(null)
-    try {
-      await updateWorkspace(workspace.id, { name })
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setWorkspaceUpdatingId(null)
-    }
-  }
-
-  async function handleReauthorizeWorkspace(workspace: Workspace) {
-    if (workspacePicking) return
-    setWorkspacePicking(true)
-    setWorkspaceUpdatingId(workspace.id)
-    setError(null)
-    try {
-	      const picked = await pickWorkspaceDirectory()
-	      await updateWorkspace(workspace.id, { path: picked.path, name: picked.name })
-      setSelectedWorkspaceId(workspace.id)
-      setSelectedTaskId(null)
-      setWorkspaceTreePath('')
-      setViewMode('projects')
-      await refresh()
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      if (!message.includes('取消')) setError(message)
-    } finally {
-      setWorkspacePicking(false)
-      setWorkspaceUpdatingId(null)
-    }
-  }
-
-	  async function handleRemoveWorkspace(workspace: Workspace) {
-	    if (workspace.id === 'default') {
-	      setError('Default Workspace 是 Cowork 的兜底工作区，不能移除。你可以点“重新授权文件夹”把它指向新的本机目录。')
-	      return
-	    }
-    const workspaceTaskCount = state.tasks.filter((task) => task.workspaceId === workspace.id).length
-    const confirmed = window.confirm(`移除工作区“${workspace.name}”？这只会移除 Cowork 中的工作区和 ${workspaceTaskCount} 个会话记录，不会删除真实文件。`)
-    if (!confirmed) return
-    setWorkspaceUpdatingId(workspace.id)
-    setError(null)
-    try {
-      await deleteWorkspace(workspace.id)
-      const fallbackWorkspaceId = state.workspaces.find((item) => item.id !== workspace.id)?.id ?? 'default'
-      setSelectedWorkspaceId(fallbackWorkspaceId)
-      setSelectedTaskId(null)
-      setViewMode('projects')
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setWorkspaceUpdatingId(null)
-    }
-  }
-
-  async function handleUploadFiles(files: File[]) {
-    if (!selectedWorkspace) {
-      setError('请先选择一个授权工作区。')
-      return
-    }
-    const uploadableFiles = files.filter((file) => file.size >= 0)
-    if (!uploadableFiles.length) return
-    setError(null)
-    setUploadNotice(`正在上传 ${uploadableFiles.length} 个文件到 ${selectedWorkspace.name}...`)
-    try {
-      for (const file of uploadableFiles) {
-        await uploadFile(selectedWorkspace.id, file)
-      }
-      await refresh()
-      await refreshWorkspaceFiles()
-      setUploadNotice(`已上传 ${uploadableFiles.length} 个文件到 ${selectedWorkspace.name}`)
-    } catch (cause) {
-      setUploadNotice(null)
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
   function handleDragEnter(event: ReactDragEvent<HTMLDivElement>) {
     if (!hasDraggedFiles(event)) return
     event.preventDefault()
@@ -854,62 +769,11 @@ function App() {
     void handleUploadFiles(Array.from(event.dataTransfer.files))
   }
 
-  async function handleRevealPreviewTarget(target: FilePreviewTarget) {
-    setError(null)
-    try {
-      if (target.source === 'artifact' && target.artifactId) {
-        await revealArtifact(target.artifactId)
-      } else if (target.workspaceId) {
-        await revealWorkspaceFile(target.workspaceId, target.relativePath)
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  function handleUsePreviewTarget(target: FilePreviewTarget) {
-    const label = target.source === 'artifact' ? '任务产物' : '当前工作区文件'
-    const ref = target.relativePath || target.name
-    setPrompt((current) => {
-      const prefix = current.trim() ? `${current.trim()}\n\n` : ''
-      return `${prefix}请使用${label}「${ref}」作为上下文。`
-    })
-    setSelectedTaskId(null)
-    setViewMode('tasks')
-    window.setTimeout(() => focusComposer(), 0)
-  }
-
-  async function handleRevealWorkspace() {
-    if (!selectedWorkspace) return
-    setError(null)
-    try {
-      await revealWorkspace(selectedWorkspace.id)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleRevealArtifact(artifact: Artifact) {
-    setError(null)
-    try {
-      await revealArtifact(artifact.id)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleRevealWorkspaceFile(file: WorkspaceFile) {
-    if (!selectedWorkspace) return
-    setError(null)
-    try {
-      await revealWorkspaceFile(selectedWorkspace.id, file.relativePath)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
   function insertFileContext(file: WorkspaceFile) {
-    const snippet = `请读取这个文件并作为上下文：${file.path}`
+    appendPromptSnippet(`请读取这个文件并作为上下文：${file.path}`)
+  }
+
+  function appendPromptSnippet(snippet: string) {
     setPrompt((current) => (current.trim() ? `${current.trim()}\n\n${snippet}` : snippet))
   }
 
@@ -1010,19 +874,19 @@ function App() {
               title="新增工作区：选择一个新的本机文件夹授权给 Hermes"
               aria-label="新增工作区"
               onClick={() => void handleAuthorizeWorkspace()}
-	              disabled={workspacePicking}
-	            >
+              disabled={workspacePicking}
+            >
               {workspacePicking ? <Loader2 size={15} className="spin" /> : <FolderPlus size={15} />}
             </button>
           </div>
           <div className="workspace-tree-list">
             {sidebarWorkspaceGroups.map((group) => (
               <SidebarWorkspaceNode
-	                key={group.workspace.id}
-	                workspace={group.workspace}
-	                tasks={group.tasks}
-	                archivedTasks={group.archivedTasks}
-	                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
+                key={group.workspace.id}
+                workspace={group.workspace}
+                tasks={group.tasks}
+                archivedTasks={group.archivedTasks}
+                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
                 activeTaskId={selectedTaskId ?? null}
                 onOpenWorkspace={() => {
                   setSelectedWorkspaceId(group.workspace.id)
@@ -1038,8 +902,7 @@ function App() {
                 onDeleteTask={(task) => void handleDeleteTask(task)}
                 onReveal={() => {
                   setSelectedWorkspaceId(group.workspace.id)
-                  setError(null)
-                  void revealWorkspace(group.workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+                  void handleRevealWorkspace(group.workspace)
                 }}
                 onRename={() => void handleRenameWorkspace(group.workspace)}
                 onReauthorize={() => void handleReauthorizeWorkspace(group.workspace)}
@@ -1239,8 +1102,7 @@ function App() {
             onUploadClick={() => fileInputRef.current?.click()}
             onAdd={() => void handleAuthorizeWorkspace()}
             onReveal={(workspace) => {
-              setError(null)
-              void revealWorkspace(workspace.id).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+              void handleRevealWorkspace(workspace)
             }}
             onRename={(workspace) => void handleRenameWorkspace(workspace)}
             onReauthorize={(workspace) => void handleReauthorizeWorkspace(workspace)}
