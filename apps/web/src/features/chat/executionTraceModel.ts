@@ -15,6 +15,13 @@ export type TodoStepItem = StepView & {
   source: 'hermes' | 'inferred'
 }
 
+type ParsedTodoStep = {
+  label: string
+  detail: string
+  mode: AgentWorkMode
+  status?: TodoStepStatus
+}
+
 export type TraceKind = 'thinking' | 'search' | 'file' | 'tool' | 'status' | 'done' | 'stopped' | 'error'
 
 export type TraceRowView = {
@@ -401,121 +408,59 @@ function explicitHermesDecomposition(task: Task): TodoStepItem[] {
     ...arrayStepValues(planEvent.todos),
     ...arrayStepValues(planEvent.items)
   ]
-  const parsedSteps = rawSteps.length ? rawSteps : parsePlanLines(eventSummary(planEvent))
+  const parsedSteps: ParsedTodoStep[] = rawSteps.length ? rawSteps : parsePlanLines(eventSummary(planEvent))
   if (!parsedSteps.length) return []
 
   const activeIndex = explicitActiveStepIndex(parsedSteps.length, task)
-  return parsedSteps.slice(0, 8).map((step, index) => ({
-    label: normalizeStepTitle(step.label || step.detail, step.mode),
+  return parsedSteps.slice(0, 6).map((step, index) => ({
+    label: normalizeHermesTodoTitle(step.label || step.detail, step.mode),
     detail: normalizeStepDetail(step.detail || step.label),
-    status: explicitStepStatus(index, activeIndex, task),
+    status: step.status ?? explicitStepStatus(index, activeIndex, task),
     mode: step.mode,
     source: 'hermes' as const
   }))
 }
 
 function inferredTaskDecomposition(task: Task): TodoStepItem[] {
-  const events = taskRunEvents(task)
-  const steps: TodoStepItem[] = []
-  const thinkingEvents = events.filter((event) => event.type === 'thinking' || event.type === 'step' || event.type === 'status')
-  const firstPlanning = thinkingEvents.find((event) => meaningfulStepText(stepEventText(event)))
-  if (firstPlanning) {
-    const planningEventText = stepEventText(firstPlanning)
-    const planningTextForDisplay = stripBackendNoise(planningEventText) ? planningEventText : task.prompt
-    steps.push({
-      label: inferPlanningTitle(firstPlanning, task.prompt),
-      detail: normalizeStepDetail(planningTextForDisplay),
-      status: task.status === 'running' && steps.length === 0 ? 'running' : 'done',
-      mode: 'plan',
-      source: 'inferred'
-    })
-  } else if (events.length || task.status !== 'idle') {
-    steps.push({
-      label: intentTitleFromPrompt(task.prompt),
-      detail: intentDetailFromPrompt(task.prompt),
-      status: task.status === 'running' ? 'running' : 'done',
-      mode: 'plan',
-      source: 'inferred'
-    })
-  }
-
-  const startedTools = new Map<string, ExecutionEvent>()
-  for (const event of events) {
-    if (event.type === 'tool.started') {
-      const key = toolEventKey(event)
-      startedTools.set(key, event)
-      const toolKind = traceToolKind(toolDisplayName(event), event)
-      steps.push({
-        label: toolStepTitle(event, toolKind),
-        detail: normalizeStepDetail(toolPrimaryText(event) || eventSummary(event) || '工具开始执行'),
-        status: toolStillRunning(event, events) ? 'running' : 'done',
-        mode: 'react',
-        source: 'hermes'
-      })
-    }
-    if (event.type === 'tool.completed' && !startedTools.has(toolEventKey(event))) {
-      steps.push({
-        label: event.isError ? `处理异常：${humanToolName(toolDisplayName(event))}` : toolStepTitle(event, traceToolKind(toolDisplayName(event), event)),
-        detail: normalizeStepDetail(toolPrimaryText(event) || eventSummary(event)),
-        status: event.isError ? 'failed' : 'done',
-        mode: reflectionText(eventSummary(event)) ? 'reflection' : 'react',
-        source: 'hermes'
-      })
-    }
-    if ((event.type === 'thinking' || event.type === 'status') && reflectionText(stepEventText(event))) {
-      steps.push({
-        label: '检查与修正',
-        detail: normalizeStepDetail(stepEventText(event)),
-        status: task.status === 'running' ? 'running' : 'done',
-        mode: 'reflection',
-        source: 'hermes'
-      })
-    }
-    if (event.type === 'artifact.created') {
-      steps.push({
-        label: `生成产物：${shortArtifactName(String(event.name ?? '文件'))}`,
-        detail: normalizeStepDetail(eventSummary(event) || '文件已加入产物区'),
-        status: 'done',
-        mode: 'result',
-        source: 'hermes'
-      })
-    }
-  }
-
   if (task.status === 'completed') {
-    steps.push({
-      label: resultTitleForTask(task),
-      detail: resultDetailForTask(task),
+    return [{
+      label: '任务已完成',
+      detail: task.artifacts.length ? `${task.artifacts.length} 个文件已加入产物区` : 'Hermes 未返回结构化计划，结果见对话区。',
       status: 'done',
       mode: 'result',
-      source: 'hermes'
-    })
-  } else if (task.status === 'failed') {
-    steps.push({
+      source: 'inferred'
+    }]
+  }
+  if (task.status === 'failed') {
+    return [{
       label: '处理失败',
       detail: compactStepDetail(task.error || 'Hermes 返回失败状态'),
       status: 'failed',
       mode: 'reflection',
-      source: 'hermes'
-    })
-  } else if (task.status === 'stopped') {
-    steps.push({
+      source: 'inferred'
+    }]
+  }
+  if (task.status === 'stopped') {
+    return [{
       label: '任务停止',
       detail: '用户主动停止了这次执行',
       status: 'stopped',
       mode: 'result',
-      source: 'hermes'
-    })
+      source: 'inferred'
+    }]
   }
-
-  const compacted = dedupeTodoSteps(steps)
-  if (task.status === 'running' && compacted.length && !compacted.some((step) => step.status === 'running')) {
-    compacted[compacted.length - 1] = { ...compacted[compacted.length - 1], status: 'running' }
-  }
-  return compacted.slice(-8)
+  return [{
+    label: task.status === 'idle' ? '等待开始' : '等待 Hermes 规划',
+    detail: task.status === 'idle'
+      ? intentDetailFromPrompt(task.prompt)
+      : 'Hermes 还没有返回结构化任务计划。工具调用会出现在过程资源中，不再混入任务拆解。',
+    status: task.status === 'running' ? 'running' : 'pending',
+    mode: 'plan',
+    source: 'inferred'
+  }]
 }
 
-function arrayStepValues(value: unknown): Array<{ label: string; detail: string; mode: AgentWorkMode }> {
+function arrayStepValues(value: unknown): ParsedTodoStep[] {
   if (!Array.isArray(value)) return []
   return value
     .map((item, index) => {
@@ -524,14 +469,26 @@ function arrayStepValues(value: unknown): Array<{ label: string; detail: string;
       }
       if (!item || typeof item !== 'object') return null
       const record = item as Record<string, unknown>
-      const label = String(record.title ?? record.label ?? record.name ?? `步骤 ${index + 1}`)
-      const detail = String(record.detail ?? record.description ?? record.summary ?? label)
-      return { label: compactStepDetail(label, 28), detail: compactStepDetail(detail), mode: inferModeFromText(`${label} ${detail}`) }
+      const label = String(record.title ?? record.content ?? record.label ?? record.name ?? `步骤 ${index + 1}`)
+      const detail = String(record.detail ?? record.description ?? record.summary ?? record.content ?? label)
+      const status = normalizeTodoStatus(record.status)
+      return { label: compactStepDetail(label, 28), detail: compactStepDetail(detail), mode: inferModeFromText(`${label} ${detail}`), status }
     })
-    .filter((item): item is { label: string; detail: string; mode: AgentWorkMode } => Boolean(item))
+    .filter((item): item is ParsedTodoStep => Boolean(item))
 }
 
-function parsePlanLines(text: string): Array<{ label: string; detail: string; mode: AgentWorkMode }> {
+function normalizeTodoStatus(value: unknown): TodoStepStatus | undefined {
+  const status = String(value ?? '').toLowerCase()
+  if (status === 'completed' || status === 'done') return 'done'
+  if (status === 'in_progress' || status === 'running') return 'running'
+  if (status === 'pending' || status === 'todo') return 'pending'
+  if (status === 'cancelled' || status === 'canceled' || status === 'skipped') return 'skipped'
+  if (status === 'failed' || status === 'error') return 'failed'
+  if (status === 'stopped') return 'stopped'
+  return undefined
+}
+
+function parsePlanLines(text: string): ParsedTodoStep[] {
   if (!/(plan|todo|步骤|计划|拆解|规划)/i.test(text)) return []
   return text
     .split(/\n+/)
@@ -631,6 +588,12 @@ function normalizeStepTitle(value: string, mode: AgentWorkMode) {
   if (mode === 'result') return '整理结果'
   if (mode === 'react') return '执行操作'
   return compactStepDetail(text, 18)
+}
+
+function normalizeHermesTodoTitle(value: string, mode: AgentWorkMode) {
+  const text = stripBackendNoise(value)
+  if (!text) return mode === 'result' ? '整理结果' : mode === 'reflection' ? '检查与修正' : '明确任务目标'
+  return compactStepDetail(text, 28)
 }
 
 function looksLikeUserStepTitle(text: string) {

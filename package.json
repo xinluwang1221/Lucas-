@@ -13,6 +13,7 @@
     "build:web": "tsc -p apps/web/tsconfig.json && vite build apps/web",
     "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p apps/api/tsconfig.json",
     "test:hermes-connection": "tsx apps/api/test/hermes_message_connection.test.ts",
+    "test:task-decomposition": "tsx apps/web/test/task_decomposition.test.ts",
     "smoke:hermes-real": "tsx apps/api/test/hermes_real_gateway_smoke.ts"
   },
   "dependencies": {

@@ -8,6 +8,8 @@ type ExecutionEvent = {
   type: string
   choice?: string
   command?: string
+  name?: string
+  todos?: Array<{ id: string; content: string; status: string }>
 }
 
 type Task = {
@@ -86,6 +88,9 @@ async function main() {
     const completed = await waitForTaskFromStream(baseUrl, created.id, (task) => task.status === 'completed')
     assert.equal(completed.status, 'completed')
     assert.ok(completed.events?.some((event) => event.type === 'approval.resolved' && event.choice === 'once'))
+    const todoEvent = completed.events?.find((event) => event.type === 'tool.completed' && event.name === 'todo')
+    assert.equal(todoEvent?.todos?.length, 3)
+    assert.equal(todoEvent?.todos?.[1]?.status, 'in_progress')
     assert.match(completed.executionView?.response ?? '', /Cowork gateway 测试完成/)
     assert.ok(completed.messages?.some((message) => message.role === 'assistant' && /Cowork gateway 测试完成/.test(message.content)))
 
@@ -151,6 +156,15 @@ def event(event_type, payload=None, session_id=SESSION_ID):
 def run_turn():
     time.sleep(0.08)
     event("message.delta", {"text": "收到。"})
+    time.sleep(0.04)
+    todos = [
+        {"id": "1", "content": "确认审批命令的安全范围", "status": "completed"},
+        {"id": "2", "content": "执行通过审批的命令", "status": "in_progress"},
+        {"id": "3", "content": "汇总执行结果并回复用户", "status": "pending"},
+    ]
+    event("tool.start", {"tool_id": "todo-1", "name": "todo", "context": {"todos": todos}})
+    time.sleep(0.04)
+    event("tool.complete", {"tool_id": "todo-1", "name": "todo", "summary": "规划 3 个步骤", "todos": todos})
     time.sleep(0.08)
     event("approval.request", {
         "command": "curl -s https://example.test/package.json",

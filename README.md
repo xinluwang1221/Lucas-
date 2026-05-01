@@ -35,13 +35,19 @@ Hermes 消息连接测试：
 npm run test:hermes-connection
 ```
 
+任务拆解展示测试：
+
+```bash
+npm run test:task-decomposition
+```
+
 真实 Hermes gateway smoke：
 
 ```bash
 npm run smoke:hermes-real
 ```
 
-`test:hermes-connection` 使用 fake gateway，适合每次开发后跑；`smoke:hermes-real` 会调用本机真实 Hermes 和当前模型配置，适合升级 Hermes、修改模型配置或排查 Failed to fetch / 无返回时跑。
+`test:hermes-connection` 使用 fake gateway，适合每次开发后跑；`test:task-decomposition` 确保右侧任务拆解只使用 Hermes `todo` 计划，不把工具日志伪装成步骤；`smoke:hermes-real` 会调用本机真实 Hermes 和当前模型配置，适合升级 Hermes、修改模型配置或排查 Failed to fetch / 无返回时跑。
 
 ## Hermes 本机路径
 

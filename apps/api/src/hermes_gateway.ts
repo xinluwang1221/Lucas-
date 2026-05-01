@@ -585,6 +585,7 @@ function convertGatewayEvent(
       name: payload.name,
       result: payload.summary ?? payload.inline_diff ?? '',
       summary: payload.summary,
+      todos: payload.todos,
       inlineDiff: payload.inline_diff,
       sessionId,
       gatewaySessionId
@@ -696,12 +697,13 @@ function contextEventFromUsage(value: unknown, sessionId?: string): HermesBridge
 
 function promptWithCoworkSkillContext(prompt: string, enabledSkills?: string[]) {
   const skills = [...new Set((enabledSkills ?? []).map((item) => item.trim()).filter(Boolean))].slice(0, 80)
-  if (!skills.length) return prompt
-  return [
-    `[Hermes Cowork 工作区提示：当前前端启用的技能范围为 ${skills.join(', ')}。如果任务相关，优先使用这些技能；除非用户明确要求，避免使用未启用的技能。]`,
-    '',
-    prompt
-  ].join('\n')
+  const hints = [
+    'Hermes Cowork 工作区提示：如果任务需要多步执行、调研、文件处理、代码修改、飞书操作或数据分析，请先调用 todo 工具生成 3-6 个与用户目标直接相关的步骤；执行过程中及时更新 todo 状态。不要把底层工具调用当成任务计划。如果缺少关键输入，先向用户提问确认。',
+    skills.length
+      ? `当前前端启用的技能范围为 ${skills.join(', ')}。如果任务相关，优先使用这些技能；除非用户明确要求，避免使用未启用的技能。`
+      : ''
+  ].filter(Boolean)
+  return [`[${hints.join(' ')}]`, '', prompt].join('\n')
 }
 
 function numberValue(value: unknown, fallback = 0) {
