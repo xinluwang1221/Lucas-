@@ -14,14 +14,16 @@ import {
   stopHermesMcpServe,
   testHermesMcpServer,
   uninstallBackgroundServices,
-  updateHermesMcpServer,
-  type BackgroundServiceStatus,
-  type HermesMcpConfig,
-  type HermesMcpInstallResult,
-  type HermesMcpManualConfigRequest,
-  type HermesMcpRecommendations,
-  type HermesMcpServeStatus,
-  type HermesMcpTestResult
+  updateHermesMcpServer
+} from './mcpApi'
+import type {
+  BackgroundServiceStatus,
+  HermesMcpConfig,
+  HermesMcpInstallResult,
+  HermesMcpManualConfigRequest,
+  HermesMcpRecommendations,
+  HermesMcpServeStatus,
+  HermesMcpTestResult
 } from '../../lib/api'
 
 export function useMcpState() {

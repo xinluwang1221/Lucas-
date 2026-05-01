@@ -19,7 +19,9 @@ import {
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
   installHermesMcpServer,
-  searchHermesMcpMarketplace,
+  searchHermesMcpMarketplace
+} from './mcpApi'
+import {
   type BackgroundServiceStatus,
   type HermesMcpConfig,
   type HermesMcpInstallResult,
