@@ -99,6 +99,7 @@ import {
   workModeLabel
 } from './features/chat/executionTraceModel'
 import { latestUserMessageId } from './features/chat/messageUtils'
+import { useTaskStream, type TaskStreamStatus } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
@@ -183,7 +184,6 @@ import {
   Task,
   testHermesMcpServer,
   taskExportUrl,
-  taskStreamUrl,
   tasksExportUrl,
   Skill,
   SkillFile,
@@ -226,7 +226,6 @@ type SettingsTab =
   | 'about'
 
 type ViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
-type TaskStreamStatus = 'idle' | 'connecting' | 'live' | 'fallback'
 
 const examples = [
   {
@@ -424,8 +423,6 @@ function App() {
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
-  const [taskStreamStatus, setTaskStreamStatus] = useState<TaskStreamStatus>('idle')
-  const [taskStreamUpdatedAt, setTaskStreamUpdatedAt] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [workspacePicking, setWorkspacePicking] = useState(false)
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
@@ -736,6 +733,14 @@ function App() {
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
   const composerRunningTask = selectedTask?.status === 'running' ? selectedTask : runningTask
+  const { taskStreamStatus, taskStreamUpdatedAt } = useTaskStream({
+    selectedTaskId,
+    selectedTaskStatus: selectedTask?.status,
+    hasRunningTask: Boolean(runningTask),
+    refresh,
+    onTaskUpdate: (task) => setState((current) => mergeStreamedTask(current, task)),
+    onRefreshError: (cause) => setError(cause instanceof Error ? cause.message : String(cause))
+  })
   const composerModels = useMemo(() => configuredModelOptionsForComposer(models), [models])
   const selectedModel = composerModels.find((model) => resolveModelSelectionKey(model) === selectedModelId) ?? composerModels[0] ?? {
     id: 'auto',
@@ -836,49 +841,6 @@ function App() {
     selectedTask?.messages.length,
     selectedTask?.artifacts.length
   ])
-
-  useEffect(() => {
-    void refresh().catch((cause) => setError(cause.message))
-    const interval = window.setInterval(() => {
-      void refresh().catch(() => undefined)
-    }, runningTask ? 900 : 1800)
-    return () => window.clearInterval(interval)
-  }, [Boolean(runningTask)])
-
-  useEffect(() => {
-    if (!selectedTaskId || selectedTask?.status !== 'running') {
-      setTaskStreamStatus('idle')
-      setTaskStreamUpdatedAt(null)
-      return
-    }
-
-    setTaskStreamStatus('connecting')
-    setTaskStreamUpdatedAt(null)
-    const source = new EventSource(taskStreamUrl(selectedTaskId))
-    source.addEventListener('open', () => {
-      setTaskStreamStatus('live')
-      setTaskStreamUpdatedAt(new Date().toISOString())
-    })
-    source.addEventListener('task', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { task?: Task }
-        if (!payload.task) return
-        setState((current) => mergeStreamedTask(current, payload.task!))
-        setTaskStreamStatus('live')
-        setTaskStreamUpdatedAt(new Date().toISOString())
-      } catch {
-        // Ignore malformed SSE payloads; the polling fallback will refresh state.
-      }
-    })
-    source.addEventListener('task.deleted', () => {
-      void refresh().catch(() => undefined)
-    })
-    source.addEventListener('error', () => {
-      setTaskStreamStatus('fallback')
-    })
-
-    return () => source.close()
-  }, [selectedTaskId, selectedTask?.status])
 
   useEffect(() => {
     if (!selectedWorkspaceId) return
