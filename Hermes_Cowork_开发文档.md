@@ -512,6 +512,12 @@ HC_EVENT\t
 - 负责品牌区、新建任务入口、工作区树、技能/定时任务/调度入口和账号菜单展示。
 - 只通过 props 消费任务、工作区、账号菜单和导航动作；后续调整左侧栏层级、入口排序、工作区会话展示时，优先改这里和 `SidebarWorkspaceNode.tsx`。
 
+`apps/web/src/features/layout/SecondaryViews.tsx`
+
+- 次级页面组件集合，已从 `App.tsx` 抽离。
+- 负责定时任务页、调度页、任务模板页，以及模板图标渲染。
+- 后续调整“定时任务日报”“调度入口能力归类”“任务模板沉淀方式”时，优先改这里；不要把这些次级页重新写回 `App.tsx`。
+
 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`
 
 - 前端文件预览 feature 模块，已从 `App.tsx` 抽离。
@@ -1289,7 +1295,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
 7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts` 和 `useHermesRuntimeState.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态都不再留在 `App.tsx`；后续如继续深化，再把设置 API service 和持久化迁移从总逻辑里拆出。
-8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts` 和 `AppSidebar.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化和左侧栏 UI 从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级和响应式规则优先改 layout 模块与 `styles/shell.css`。
+8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 10. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
