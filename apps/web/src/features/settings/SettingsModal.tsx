@@ -4,6 +4,7 @@ import {
   Globe2,
   Info,
   MessageSquarePlus,
+  Palette,
   Plug,
   Settings,
   Shield,
@@ -31,6 +32,7 @@ import { ModelSettingsSection } from './models'
 import {
   AccountSettingsSection,
   AboutSettingsSection,
+  AppearanceSettingsSection,
   CloudRuntimeSettingsSection,
   ConversationSettingsSection,
   GeneralSettingsSection,
@@ -186,6 +188,7 @@ export function SettingsModal({
   const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode; group?: 'main' | 'tools' | 'about' }> = [
     { id: 'account', label: '账号', icon: <User size={15} />, group: 'main' },
     { id: 'general', label: '通用', icon: <Settings size={15} />, group: 'main' },
+    { id: 'appearance', label: '外观', icon: <Palette size={15} />, group: 'main' },
     { id: 'mcp', label: 'MCP', icon: <Plug size={15} />, group: 'tools' },
     { id: 'models', label: '模型', icon: <Bot size={15} />, group: 'tools' },
     { id: 'conversation', label: '对话流', icon: <MessageSquarePlus size={15} />, group: 'tools' },
@@ -205,7 +208,7 @@ export function SettingsModal({
           <span className="local-badge">本机</span>
         </div>
         <div className="settings-nav">
-          {tabs.map((item, index) => (
+          {tabs.map((item) => (
             <button
               className={tab === item.id ? 'active' : ''}
               key={item.id}
@@ -213,7 +216,7 @@ export function SettingsModal({
             >
               {item.icon}
               {item.label}
-              {(index === 1 || index === 6) && <span className="settings-divider" />}
+              {(item.id === 'appearance' || item.id === 'cloud') && <span className="settings-divider" />}
             </button>
           ))}
         </div>
@@ -231,6 +234,14 @@ export function SettingsModal({
             theme={theme}
             prefs={prefs}
             onLanguageChange={onLanguageChange}
+            onThemeChange={onThemeChange}
+            onPrefChange={onPrefChange}
+          />
+        )}
+        {tab === 'appearance' && (
+          <AppearanceSettingsSection
+            theme={theme}
+            prefs={prefs}
             onThemeChange={onThemeChange}
             onPrefChange={onPrefChange}
           />

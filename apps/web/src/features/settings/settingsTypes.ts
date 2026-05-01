@@ -3,6 +3,7 @@ import type { McpScope } from './mcp'
 export type SettingsTab =
   | 'account'
   | 'general'
+  | 'appearance'
   | 'mcp'
   | 'models'
   | 'conversation'
@@ -24,6 +25,16 @@ export type McpServer = {
 
 export type SettingsPrefs = {
   linkOpenMode: string
+  appearanceAccentColor: string
+  appearanceBackgroundColor: string
+  appearanceForegroundColor: string
+  appearanceUiFont: string
+  appearanceCodeFont: string
+  appearanceTranslucentSidebar: boolean
+  appearanceContrast: number
+  appearanceUiFontSize: number
+  appearanceCodeFontSize: number
+  appearanceFontSmoothing: boolean
   mcpScope: McpScope
   mcpServers: McpServer[]
   autoRunMcp: boolean
@@ -48,6 +59,16 @@ export type SettingsPrefs = {
 
 export const defaultSettingsPrefs: SettingsPrefs = {
   linkOpenMode: '始终询问',
+  appearanceAccentColor: '#2f8f56',
+  appearanceBackgroundColor: '#f7f8f5',
+  appearanceForegroundColor: '#171a16',
+  appearanceUiFont: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif',
+  appearanceCodeFont: '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace',
+  appearanceTranslucentSidebar: true,
+  appearanceContrast: 52,
+  appearanceUiFontSize: 14,
+  appearanceCodeFontSize: 12,
+  appearanceFontSmoothing: true,
   mcpScope: 'local',
   mcpServers: [
     { id: 'playwright', name: 'Playwright', logo: 'P', status: 'ready', enabled: true },

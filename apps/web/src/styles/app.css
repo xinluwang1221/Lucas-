@@ -13,7 +13,7 @@
 .mono-copy {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: var(--text-caption);
   line-height: 1.55;
 }
 
@@ -23,7 +23,7 @@
 
 .mono-copy {
   word-break: break-all;
-  font-family: "SF Mono", Menlo, monospace;
+  font-family: var(--font-code);
 }
 
 .sidebar-foot {
@@ -48,13 +48,13 @@
   min-width: 0;
   padding: 4px 5px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.58);
+  background: var(--sidebar-elevated);
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
 }
 
 .sidebar-user-button:hover {
-  background: rgba(49, 92, 66, 0.09);
+  background: var(--accent-soft);
   border-color: var(--line);
 }
 
@@ -63,7 +63,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-caption);
 }
 
 .sidebar-settings-cue {
@@ -1120,15 +1120,17 @@
 
 .topbar h1 {
   margin: 0;
-  font-family: "Hoefler Text", Georgia, serif;
-  font-size: 23px;
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: var(--text-title);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: var(--line-height-tight);
 }
 
 .topbar p {
   margin: 6px 0 0;
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: var(--text-caption);
 }
 
 .topbar-actions {
@@ -1142,19 +1144,19 @@
   width: 36px;
   height: 36px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.76);
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 
 .topbar-icon-button:hover {
   border-color: var(--line-strong);
-  background: #fffdf7;
+  background: var(--surface-subtle);
 }
 
 .ghost-button {
   padding: 0 13px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.76);
+  background: var(--surface);
   border: 1px solid var(--line);
 }
 
@@ -1398,7 +1400,7 @@
   min-width: 0;
   min-height: 100vh;
   padding: 20px 18px;
-  background: rgba(247, 244, 235, 0.94);
+  background: var(--background);
   border-left: 1px solid var(--line);
   overflow: auto;
   container: inspector / inline-size;
@@ -1415,6 +1417,7 @@
   gap: 9px;
   min-height: 26px;
   font-weight: 700;
+  font-size: var(--text-section);
 }
 
 .inspector-title-button {
@@ -1437,20 +1440,22 @@
 .inspector-title-block p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--text-micro);
   line-height: 1.42;
 }
 
 .inspector-card {
   padding: 16px;
-  background: rgba(255, 253, 247, 0.78);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
 }
 
 .inspector-card h3 {
   margin: 0 0 13px;
-  font-size: 13px;
+  font-size: var(--text-body);
+  font-weight: 760;
 }
 
 .inspector-disclosure {

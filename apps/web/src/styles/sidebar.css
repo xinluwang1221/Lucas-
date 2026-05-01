@@ -5,7 +5,7 @@
   min-width: 0;
   min-height: 100vh;
   padding: 20px 16px;
-  background: rgba(236, 232, 219, 0.92);
+  background: var(--sidebar);
   border-right: 1px solid var(--line);
   container: sidebar / inline-size;
 }
@@ -44,15 +44,15 @@
   width: 34px;
   height: 34px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.92);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 
 .sidebar-restore-button:hover {
   border-color: var(--line-strong);
-  background: #fffdf7;
+  background: var(--surface);
 }
 
 .brand-mark {
@@ -68,14 +68,16 @@
 
 .brand strong {
   display: block;
-  font-size: 16px;
+  font-size: var(--text-section);
+  font-weight: 760;
+  line-height: var(--line-height-tight);
 }
 
 .brand span {
   display: block;
   margin-top: 2px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--text-caption);
 }
 
 .primary-nav,
@@ -96,7 +98,8 @@
   width: 100%;
   padding: 0 12px;
   color: var(--panel);
-  background: var(--moss);
+  background: var(--accent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .secondary-nav {
@@ -113,7 +116,7 @@
 
 .secondary-nav:hover,
 .secondary-nav.active {
-  background: rgba(49, 92, 66, 0.11);
+  background: var(--accent-soft);
 }
 
 .sidebar-nav-group {

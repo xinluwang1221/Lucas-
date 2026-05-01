@@ -1050,19 +1050,19 @@
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   line-height: 1.68;
-  box-shadow: 0 10px 26px rgba(56, 49, 35, 0.07);
+  box-shadow: var(--shadow-soft);
 }
 
 .message.assistant:not(.pending) .message-body {
   padding: 0;
-  color: #242821;
+  color: var(--foreground);
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  font-size: 15px;
+  font-size: var(--text-body);
   line-height: 1.78;
 }
 
@@ -1075,13 +1075,14 @@
 .message-markdown h3,
 .message-markdown h4 {
   margin: 0 0 10px;
-  font-family: "Hoefler Text", Georgia, serif;
+  font-family: var(--font-ui);
   line-height: 1.2;
+  letter-spacing: 0;
 }
 
 .message-markdown h1 {
   margin-bottom: 16px;
-  font-size: 31px;
+  font-size: var(--text-display);
   font-weight: 800;
 }
 
@@ -1089,22 +1090,22 @@
   margin-top: 30px;
   margin-bottom: 14px;
   padding-top: 18px;
-  border-top: 1px solid rgba(128, 112, 82, 0.24);
-  font-size: 25px;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-title);
   font-weight: 760;
 }
 
 .message-markdown h3 {
   margin-top: 26px;
   margin-bottom: 12px;
-  font-size: 19px;
+  font-size: var(--text-section);
   font-weight: 760;
 }
 
 .message-markdown h4 {
   margin-top: 18px;
   margin-bottom: 9px;
-  font-size: 15px;
+  font-size: var(--text-body);
   font-weight: 760;
 }
 
@@ -1482,7 +1483,7 @@
   margin: 0 auto 24px;
   background: var(--panel);
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 
@@ -1513,8 +1514,8 @@
 }
 
 .composer:focus-within {
-  border-color: rgba(49, 92, 66, 0.72);
-  box-shadow: 0 0 0 3px rgba(49, 92, 66, 0.13), var(--shadow);
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
 }
 
 .composer textarea {
@@ -1527,6 +1528,7 @@
   background: transparent;
   border: 0;
   outline: 0;
+  font-size: var(--text-body);
   line-height: 1.55;
 }
 

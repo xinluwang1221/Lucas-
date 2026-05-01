@@ -59,10 +59,8 @@ export function AccountSettingsSection({
 
 export function GeneralSettingsSection({
   language,
-  theme,
   prefs,
   onLanguageChange,
-  onThemeChange,
   onPrefChange
 }: {
   language: string
@@ -75,9 +73,6 @@ export function GeneralSettingsSection({
   return (
     <SettingsSection title="通用">
       <SettingsBlock title="基础设置">
-        <SettingsControlRow title="主题" detail="选择主题">
-          <SelectControl value={theme} options={['亮色', '跟随系统', '暗色']} onChange={onThemeChange} />
-        </SettingsControlRow>
         <SettingsControlRow title="语言" detail="选择您喜欢的按钮标签和应用内其他文本的语言">
           <SelectControl value={language} options={['简体中文', '英文']} onChange={onLanguageChange} />
         </SettingsControlRow>
@@ -94,6 +89,138 @@ export function GeneralSettingsSection({
       <SettingsBlock title="数据管理">
         <SettingsControlRow title="浏览器数据" detail="浏览器中的站点数据（如 Cookies、本地存储等）">
           <button className="settings-danger-button">清除</button>
+        </SettingsControlRow>
+      </SettingsBlock>
+    </SettingsSection>
+  )
+}
+
+export function AppearanceSettingsSection({
+  theme,
+  prefs,
+  onThemeChange,
+  onPrefChange
+}: {
+  theme: string
+  prefs: SettingsPrefs
+  onThemeChange: (value: string) => void
+  onPrefChange: PrefChange
+}) {
+  return (
+    <SettingsSection title="外观">
+      <div className="appearance-preview-card">
+        <div className="appearance-preview-header">
+          <div>
+            <strong>界面层级预览</strong>
+            <span>一级标题、区域标题、正文、说明和代码会跟随这里的主题设置。</span>
+          </div>
+          <div className="settings-segmented">
+            {['亮色', '暗色', '跟随系统'].map((option) => (
+              <button key={option} className={theme === option ? 'active' : ''} onClick={() => onThemeChange(option)}>
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="appearance-preview-body">
+          <div className="appearance-preview-pane before">
+            <span>分散样式</span>
+            <code>{'font-size: 13px;'}</code>
+            <code>{'background: #f1efef;'}</code>
+            <code>{'border: #d8d1bd;'}</code>
+          </div>
+          <div className="appearance-preview-pane after">
+            <span>统一 token</span>
+            <code>{'font-size: var(--text-body);'}</code>
+            <code>{'background: var(--surface);'}</code>
+            <code>{'border: var(--border);'}</code>
+          </div>
+        </div>
+      </div>
+
+      <SettingsBlock title="浅色主题">
+        <SettingsControlRow title="强调色" detail="用于主按钮、进度、选中态和关键状态。">
+          <ColorControl
+            value={prefs.appearanceAccentColor}
+            onChange={(value) => onPrefChange('appearanceAccentColor', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="背景" detail="应用最底层背景色。">
+          <ColorControl
+            value={prefs.appearanceBackgroundColor}
+            onChange={(value) => onPrefChange('appearanceBackgroundColor', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="前景" detail="主要文字颜色。">
+          <ColorControl
+            value={prefs.appearanceForegroundColor}
+            onChange={(value) => onPrefChange('appearanceForegroundColor', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="UI 字体" detail="全局界面字体栈。">
+          <SelectControl
+            value={prefs.appearanceUiFont}
+            options={[
+              '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif',
+              '"Avenir Next", "PingFang SC", ui-sans-serif, sans-serif',
+              '"Inter", "PingFang SC", ui-sans-serif, sans-serif'
+            ]}
+            onChange={(value) => onPrefChange('appearanceUiFont', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="代码字体" detail="代码块、路径和命令使用的字体。">
+          <SelectControl
+            value={prefs.appearanceCodeFont}
+            options={[
+              '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace',
+              '"JetBrains Mono", "SFMono-Regular", ui-monospace, monospace',
+              'ui-monospace, Menlo, Monaco, Consolas, monospace'
+            ]}
+            onChange={(value) => onPrefChange('appearanceCodeFont', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="半透明侧边栏" detail="让侧栏和主工作区的层级更轻。">
+          <Toggle
+            checked={prefs.appearanceTranslucentSidebar}
+            onChange={(value) => onPrefChange('appearanceTranslucentSidebar', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="对比度" detail="用于后续进一步控制边框、阴影和背景层级。">
+          <div className="settings-range-control">
+            <input
+              type="range"
+              min={20}
+              max={90}
+              value={prefs.appearanceContrast}
+              onChange={(event) => onPrefChange('appearanceContrast', Number(event.target.value))}
+            />
+            <span>{prefs.appearanceContrast}</span>
+          </div>
+        </SettingsControlRow>
+      </SettingsBlock>
+
+      <SettingsBlock title="字体">
+        <SettingsControlRow title="UI 字号" detail="正文基准字号，标题和说明会按层级自动推导。">
+          <NumberControl
+            value={prefs.appearanceUiFontSize}
+            min={12}
+            max={18}
+            onChange={(value) => onPrefChange('appearanceUiFontSize', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="代码字体大小" detail="代码块和命令片段的基准字号。">
+          <NumberControl
+            value={prefs.appearanceCodeFontSize}
+            min={11}
+            max={16}
+            onChange={(value) => onPrefChange('appearanceCodeFontSize', value)}
+          />
+        </SettingsControlRow>
+        <SettingsControlRow title="字体平滑" detail="使用 macOS 原生字体抗锯齿。">
+          <Toggle
+            checked={prefs.appearanceFontSmoothing}
+            onChange={(value) => onPrefChange('appearanceFontSmoothing', value)}
+          />
         </SettingsControlRow>
       </SettingsBlock>
     </SettingsSection>
@@ -229,6 +356,41 @@ export function ConversationSettingsSection({
         </SettingsControlRow>
       </SettingsBlock>
     </SettingsSection>
+  )
+}
+
+function ColorControl({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="appearance-color-control">
+      <input type="color" value={value} onChange={(event) => onChange(event.target.value)} aria-label="选择颜色" />
+      <span>{value.toUpperCase()}</span>
+    </label>
+  )
+}
+
+function NumberControl({
+  value,
+  min,
+  max,
+  onChange
+}: {
+  value: number
+  min: number
+  max: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label className="settings-number-with-unit">
+      <input
+        className="settings-number-input"
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <span>px</span>
+    </label>
   )
 }
 

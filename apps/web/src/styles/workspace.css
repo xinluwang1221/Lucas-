@@ -54,7 +54,7 @@
   flex-direction: column;
   min-width: 0;
   max-height: 100vh;
-  background: rgba(255, 253, 247, 0.72);
+  background: var(--background);
   container: workspace-main / inline-size;
 }
 
@@ -74,15 +74,17 @@
 
 .product-page-head h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: var(--text-display);
+  font-weight: 800;
   letter-spacing: 0;
+  line-height: var(--line-height-tight);
 }
 
 .product-page-head p {
   max-width: 620px;
   margin: 10px 0 0;
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: var(--text-body);
   line-height: 1.7;
 }
 
@@ -93,9 +95,9 @@
   height: 44px;
   padding: 0 13px;
   color: var(--ink-soft);
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
 }
 
 .product-search input {
@@ -123,9 +125,9 @@
   min-height: 58px;
   padding: 12px 14px;
   color: var(--ink);
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   text-align: left;
 }
 
@@ -501,9 +503,10 @@
 .workspace-section {
   margin-top: 18px;
   padding: 16px;
-  background: rgba(255, 253, 247, 0.74);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
 }
 
 .workspace-section-head {
@@ -517,7 +520,8 @@
 .workspace-section-head h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 16px;
+  font-size: var(--text-section);
+  font-weight: 760;
 }
 
 .workspace-section-head p {

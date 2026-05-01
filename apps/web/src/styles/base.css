@@ -7,11 +7,26 @@ body {
   min-width: 1100px;
   min-height: 100vh;
   color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  line-height: var(--line-height-body);
   background:
-    linear-gradient(90deg, rgba(23, 26, 22, 0.035) 1px, transparent 1px),
-    linear-gradient(rgba(23, 26, 22, 0.03) 1px, transparent 1px),
-    var(--paper);
-  background-size: 28px 28px;
+    linear-gradient(90deg, rgba(23, 26, 22, 0.018) 1px, transparent 1px),
+    linear-gradient(rgba(23, 26, 22, 0.016) 1px, transparent 1px),
+    var(--background);
+  background-size: 32px 32px;
+}
+
+:root[data-theme-mode="dark"] body {
+  background:
+    linear-gradient(90deg, rgba(241, 245, 238, 0.018) 1px, transparent 1px),
+    linear-gradient(rgba(241, 245, 238, 0.014) 1px, transparent 1px),
+    var(--background);
+}
+
+:root[data-font-smoothing="true"] body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body.resizing-panels {
@@ -29,6 +44,14 @@ textarea {
   font: inherit;
 }
 
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-code);
+  font-size: var(--code-font-size);
+}
+
 button {
   border: 0;
   cursor: pointer;
@@ -39,6 +62,6 @@ input:focus-visible,
 textarea:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 2px solid rgba(40, 93, 145, 0.72);
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
   outline-offset: 2px;
 }
