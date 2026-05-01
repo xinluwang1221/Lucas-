@@ -500,6 +500,12 @@ HC_EVENT\t
 - 界面语言规范：Hermes Cowork 的按钮、标题、状态、表头、空状态和说明文案默认使用简体中文；GitHub、MCP、Hermes、OpenAI 等品牌/协议名、配置键、命令行片段和第三方返回内容可保留原文。
 - 输入框键盘操作：`Enter` 发送，`Shift + Enter` 换行；点击“新建任务”和模板卡片后会自动聚焦输入框。
 
+`apps/web/src/features/layout/usePanelLayout.ts`
+
+- 三栏布局状态 hook，已从 `App.tsx` 抽离。
+- 负责左右侧栏折叠状态、左右面板宽度、拖拽调整、窗口 resize 后的宽度约束和本地持久化。
+- 后续继续优化“两个侧栏隐藏后主对话区与右侧工作区比例”“三栏自动适应区域大小”“拖拽手感和最小宽度”时，优先改这里和 `apps/web/src/styles/shell.css`。
+
 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`
 
 - 前端文件预览 feature 模块，已从 `App.tsx` 抽离。
@@ -1265,8 +1271,9 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
 7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts` 和 `useHermesRuntimeState.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态都不再留在 `App.tsx`；后续如继续深化，再把设置 API service 和持久化迁移从总逻辑里拆出。
-8. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
-9. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束和本地持久化从 `App.tsx` 迁出；后续三栏视觉比例和响应式规则优先改这个 hook 与 `styles/shell.css`。
+9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
+10. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 
