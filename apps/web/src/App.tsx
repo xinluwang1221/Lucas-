@@ -1,13 +1,10 @@
 import {
   ChevronDown,
-  FileText,
   FolderOpen,
   Loader2,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  Play,
-  Settings,
   Upload,
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -23,6 +20,11 @@ import { usePanelLayout } from './features/layout/usePanelLayout'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
+import {
+  FragmentWithTrace,
+  LiveExecutionPanel,
+  taskStreamLabel
+} from './features/chat/ChatExecutionViews'
 import { MessageBody } from './features/chat/MessageBody'
 import {
   ContextResourcesCard,
@@ -51,26 +53,10 @@ import {
   McpMarketplaceModal as SettingsMcpMarketplaceModal
 } from './features/settings/mcp'
 import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
-import {
-  InlineExecutionTracePanel,
-  LiveExecutionPanelView,
-  traceIcon
-} from './features/chat/ExecutionTracePanels'
-import {
-  compactTraceRows,
-  executionTraceRows,
-  fallbackLiveTraceRow,
-  groupTraceRows,
-  liveTraceRows,
-  taskElapsedLabel,
-  taskStepItems,
-  traceSummaryParts,
-  workModeLabel
-} from './features/chat/executionTraceModel'
 import { latestUserMessageId } from './features/chat/messageUtils'
 import { mergeStreamedTask } from './features/chat/taskState'
 import { useTaskContext } from './features/chat/useTaskContext'
-import { useTaskStream, type TaskStreamStatus } from './features/chat/useTaskStream'
+import { useTaskStream } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
@@ -85,7 +71,6 @@ import {
   HermesMcpConfig,
   HermesReasoningConfigureRequest,
   getState,
-  Message,
   ModelOption,
   setHermesDefaultModel,
   setHermesFallbackProviders,
@@ -1058,6 +1043,7 @@ function App() {
               message={message}
               task={selectedTask}
               traceAfterMessageId={latestUserMessageId(selectedTask)}
+              formatTime={formatTime}
             />
           ))}
 
@@ -1070,7 +1056,12 @@ function App() {
                   <span className={`stream-pill ${taskStreamStatus}`}>{taskStreamLabel(taskStreamStatus)}</span>
                 </div>
               </div>
-              <LiveExecutionPanel task={selectedTask} streamStatus={taskStreamStatus} streamUpdatedAt={taskStreamUpdatedAt} />
+              <LiveExecutionPanel
+                task={selectedTask}
+                streamStatus={taskStreamStatus}
+                streamUpdatedAt={taskStreamUpdatedAt}
+                formatTime={formatTime}
+              />
               <div className="live-answer-block">
                 <div className="live-answer-label">
                   <span>{selectedTask.liveResponse ? '正在生成回答' : '等待最终回答'}</span>
@@ -1344,97 +1335,6 @@ function App() {
       )}
     </div>
   )
-}
-
-function FragmentWithTrace({
-  message,
-  task,
-  traceAfterMessageId
-}: {
-  message: Message
-  task: Task | undefined
-  traceAfterMessageId?: string
-}) {
-  return (
-    <>
-      <article className={`message ${message.role}`}>
-        <div className="message-meta">
-          {message.role === 'user' ? '你' : 'Hermes'}
-          <span>{formatTime(message.createdAt)}</span>
-        </div>
-        <MessageBody role={message.role} content={message.content} />
-      </article>
-      {task && task.status !== 'running' && message.id === traceAfterMessageId && <InlineExecutionTrace task={task} />}
-    </>
-  )
-}
-
-function LiveExecutionPanel({
-  task,
-  streamStatus,
-  streamUpdatedAt
-}: {
-  task: Task
-  streamStatus: TaskStreamStatus
-  streamUpdatedAt: string | null
-}) {
-  const rows = liveTraceRows(task)
-  const currentRow = rows.at(-1) ?? fallbackLiveTraceRow(task)
-  const previousRows = rows.slice(-5, -1)
-  const steps = taskStepItems(task).slice(-4)
-
-  return (
-    <LiveExecutionPanelView
-      currentRow={currentRow}
-      previousRows={previousRows}
-      steps={steps}
-      streamStatus={streamStatus}
-      streamLabel={taskStreamLabel(streamStatus)}
-      streamDescription={taskStreamDescription(streamStatus, streamUpdatedAt)}
-      formatTime={formatTime}
-      workModeLabel={workModeLabel}
-    />
-  )
-}
-
-function InlineExecutionTrace({ task }: { task: Task }) {
-  const rows = executionTraceRows(task)
-  if (!rows.length) return null
-
-  const visibleRows = compactTraceRows(task, rows)
-  const groups = groupTraceRows(visibleRows)
-  const lastRow = rows[rows.length - 1]
-  const showCurrentRow = task.status === 'running' && lastRow
-  const summaryParts = traceSummaryParts(task, rows)
-  const summaryLabel = task.status === 'running' ? '处理中' : '已处理'
-
-  return (
-    <InlineExecutionTracePanel
-      taskStatus={task.status}
-      summaryLabel={summaryLabel}
-      elapsedLabel={taskElapsedLabel(task)}
-      summaryParts={summaryParts}
-      currentRow={showCurrentRow ? lastRow : undefined}
-      groups={groups}
-      formatTime={formatTime}
-    />
-  )
-}
-
-function taskStreamLabel(status: TaskStreamStatus) {
-  return {
-    idle: '未连接',
-    connecting: '连接中',
-    live: '实时同步',
-    fallback: '轮询兜底'
-  }[status]
-}
-
-function taskStreamDescription(status: TaskStreamStatus, updatedAt: string | null) {
-  if (status === 'live') return updatedAt ? `最近同步 ${formatTime(updatedAt)}` : '事件流已连接'
-  if (status === 'connecting') return '正在连接 Hermes 任务事件流'
-  if (status === 'fallback') return '事件流暂不可用，正在用轮询刷新'
-  return '任务运行时会自动连接事件流'
 }
 
 function formatTime(value: string) {
