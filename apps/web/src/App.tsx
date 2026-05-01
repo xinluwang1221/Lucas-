@@ -1,32 +1,21 @@
 import {
   Archive,
   ArchiveRestore,
-  Brain,
   CheckCircle2,
   ChevronDown,
   Circle,
-  FileArchive,
   FileText,
-  Folder,
-  FolderSync,
   FolderOpen,
-  Globe2,
-  Hammer,
-  Languages,
   Loader2,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
-  Palette,
-  Pencil,
   Play,
   Settings,
   Square,
   Star,
-  Tags,
   Trash2,
   Upload,
-  Wrench,
   XCircle
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -104,7 +93,6 @@ import {
   HermesMcpConfig,
   HermesReasoningConfigureRequest,
   getState,
-  HermesRuntime,
   Message,
   ModelOption,
   setHermesDefaultModel,
@@ -118,7 +106,6 @@ import {
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
-  ReactNode
 } from 'react'
 
 const emptyState: AppState = {
@@ -1367,36 +1354,6 @@ function App() {
   )
 }
 
-function WorkspaceContextGroup({
-  title,
-  emptyText,
-  items,
-  icon
-}: {
-  title: string
-  emptyText: string
-  items: string[]
-  icon: ReactNode
-}) {
-  return (
-    <div className="workspace-context-group">
-      <h3>{title}</h3>
-      {items.length ? (
-        <ul>
-          {items.map((item) => (
-            <li key={item}>
-              {icon}
-              <span title={item}>{shortReference(item)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>{emptyText}</p>
-      )}
-    </div>
-  )
-}
-
 function FragmentWithTrace({
   message,
   task,
@@ -1533,60 +1490,6 @@ function TaskRow({
       >
         <Trash2 size={14} />
       </button>
-    </div>
-  )
-}
-
-function shortReference(value: string) {
-  try {
-    const url = new URL(value)
-    return url.hostname.replace(/^www\./, '')
-  } catch {
-    const parts = value.split(/[\\/]/).filter(Boolean)
-    return parts.slice(-2).join('/')
-  }
-}
-
-function RuntimePanel({ runtime }: { runtime: HermesRuntime | null }) {
-  if (!runtime) {
-    return <p className="muted-copy">正在读取 Hermes 状态...</p>
-  }
-
-  const environment = runtime.parsed.Environment ?? {}
-  const gateway = runtime.parsed['Gateway Service'] ?? {}
-  const sessions = runtime.parsed.Sessions ?? {}
-  const messaging = runtime.parsed['Messaging Platforms'] ?? {}
-  const configuredPlatforms = Object.entries(messaging)
-    .filter(([, value]) => !String(value).toLowerCase().includes('not configured'))
-    .map(([name]) => name)
-
-  return (
-    <div className="runtime-panel">
-      <div className="runtime-grid">
-        <span>桥接方式</span>
-        <strong title={runtime.bridgeMode}>{runtime.bridgeMode}</strong>
-        <span>模型</span>
-        <strong title={environment.Model}>{environment.Model ?? '未知'}</strong>
-        <span>服务商</span>
-        <strong title={environment.Provider}>{environment.Provider ?? '未知'}</strong>
-        <span>网关</span>
-        <strong title={gateway.Status}>{gateway.Status ?? '未知'}</strong>
-        <span>会话</span>
-        <strong title={sessions.Active}>{sessions.Active ?? '未知'}</strong>
-      </div>
-
-      {configuredPlatforms.length > 0 && (
-        <p className="runtime-platforms">已配置平台：{configuredPlatforms.join('、')}</p>
-      )}
-
-      <details className="runtime-details">
-        <summary>版本与路径</summary>
-        <pre>{runtime.versionText}</pre>
-        <pre>{runtime.paths.hermesBin}</pre>
-        <pre>{runtime.paths.hermesPythonBin}</pre>
-      </details>
-
-      <p className="runtime-updated">更新于 {formatTime(runtime.updatedAt)}</p>
     </div>
   )
 }
