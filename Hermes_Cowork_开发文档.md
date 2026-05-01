@@ -642,6 +642,12 @@ HC_EVENT\t
 - 负责模型列表、当前选中模型、Hermes 当前模型概览、模型目录、刷新目录状态、模型通知和模型错误状态。
 - 提供统一的 `applyModelResponse()`，后续所有模型 API 返回的 `ModelListResponse` 都应通过这里更新，避免多入口模型状态不一致。
 
+`apps/web/src/features/settings/useModelConfigForm.ts`
+
+- 模型配置表单 hook，已从 `App.tsx` 抽离。
+- 负责“配置模型服务”弹窗开关、供应商切换时复用已保存 Base URL/API 模式、模型字段状态、保存中状态、提交后选回 `auto` 并刷新模型列表。
+- 后续修复“底部入口和设置入口模型表不一致”“同供应商重复填 Key”“新增模型后当前模型丢失”等问题时，优先检查这里和 `useModelState.ts`。
+
 `apps/web/src/features/settings/mcp.tsx`
 
 - MCP 设置 feature 模块，已从 `App.tsx` 抽离。
@@ -1188,7 +1194,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts` 和文件状态 hook `useWorkspaceFiles.ts`；后续如继续深化，再拆 workspace 操作 hook/provider。
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
-4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx` 和 `apps/web/src/features/settings/useModelState.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组和模型数据状态都在 settings 模块；后续如继续深化，再把模型配置表单和保存流程拆成独立 hook。
+4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关和 Connectors 摘要都在这个模块；后续如继续深化，再把 MCP API 请求和市场搜索状态拆成 `mcpApi` / hook。
 6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 7. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。

@@ -69,12 +69,10 @@ import {
   ModelConfigModal,
   ModelSettingsSection,
   configuredModelOptionsForComposer,
-  defaultModelApiMode,
   groupModelOptionsForMenu,
-  hermesProviderId,
-  providerSavedModelConfig
 } from './features/settings/models'
 import { useModelState } from './features/settings/useModelState'
+import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import {
   ConnectorsView as McpConnectorsView,
   ManualMcpModal as SettingsManualMcpModal,
@@ -121,7 +119,6 @@ import {
   AppState,
   Artifact,
   BackgroundServiceStatus,
-  configureHermesModel,
   configureHermesReasoning,
   configureHermesMcpServer,
   deleteHermesModelProvider,
@@ -457,14 +454,6 @@ function App() {
   const [skillFileContent, setSkillFileContent] = useState('')
   const [skillFileError, setSkillFileError] = useState<string | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const [modelPanelOpen, setModelPanelOpen] = useState(false)
-  const [newModelId, setNewModelId] = useState('')
-  const [newModelLabel, setNewModelLabel] = useState('')
-  const [newModelProvider, setNewModelProvider] = useState('')
-  const [newModelBaseUrl, setNewModelBaseUrl] = useState('')
-  const [newModelApiKey, setNewModelApiKey] = useState('')
-  const [newModelApiMode, setNewModelApiMode] = useState('chat_completions')
-  const [modelPanelSaving, setModelPanelSaving] = useState(false)
   const {
     models,
     modelCatalog,
@@ -482,6 +471,33 @@ function App() {
     refreshModels,
     refreshModelCatalogState
   } = useModelState()
+  const {
+    modelPanelOpen,
+    modelPanelSaving,
+    newModelId,
+    newModelLabel,
+    newModelProvider,
+    newModelBaseUrl,
+    newModelApiKey,
+    newModelApiMode,
+    setNewModelId,
+    setNewModelLabel,
+    setNewModelBaseUrl,
+    setNewModelApiKey,
+    setNewModelApiMode,
+    selectNewModelProvider,
+    openModelConfigPanel,
+    closeModelConfigPanel,
+    handleAddModel
+  } = useModelConfigForm({
+    hermesModel,
+    modelCatalog,
+    applyModelResponse,
+    refreshModels,
+    setModelNotice,
+    setHermesModelError,
+    onModelMenuClose: () => setModelMenuOpen(false)
+  })
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -997,29 +1013,6 @@ function App() {
     }
   }
 
-  function selectNewModelProvider(providerId: string) {
-    const savedConfig = providerSavedModelConfig(providerId, hermesModel)
-    setNewModelProvider(providerId)
-    setNewModelId('')
-    setNewModelLabel('')
-    setNewModelBaseUrl(savedConfig.baseUrl)
-    setNewModelApiKey('')
-    setNewModelApiMode(savedConfig.apiMode || defaultModelApiMode(providerId))
-  }
-
-  function openModelConfigPanel(providerId = hermesModel?.provider || '', modelId = '') {
-    setModelNotice(null)
-    const knownProviderId = modelCatalog.some((provider) => provider.id === providerId) ? providerId : ''
-    selectNewModelProvider(knownProviderId)
-    const providerModels = modelCatalog.find((provider) => provider.id === knownProviderId)?.models ?? []
-    const defaultModel = modelId || (hermesProviderId(knownProviderId) === hermesProviderId(hermesModel?.provider ?? '') ? hermesModel?.defaultModel ?? '' : '')
-    if (defaultModel) {
-      setNewModelId(defaultModel)
-      setNewModelLabel(providerModels.includes(defaultModel) ? defaultModel : 'custom')
-    }
-    setModelPanelOpen(true)
-  }
-
   function handleUseSkill(skill: Skill) {
     setComposerSkillNames((current) => current.includes(skill.name) ? current : [...current, skill.name])
     setPrompt((current) => {
@@ -1045,43 +1038,6 @@ function App() {
     setSelectedTaskId(null)
     setPrompt(task.prompt)
     focusComposer()
-  }
-
-  async function handleAddModel(event: FormEvent) {
-    event.preventDefault()
-    const id = newModelId.trim() || newModelLabel.trim()
-    const provider = hermesProviderId(newModelProvider)
-    if (!id || !provider) return
-    setModelNotice(null)
-    setHermesModelError(null)
-    setModelPanelSaving(true)
-    try {
-      const response = await configureHermesModel({
-        provider,
-        modelId: id,
-        baseUrl: newModelBaseUrl.trim() || undefined,
-        apiKey: newModelApiKey.trim() || undefined,
-        apiMode: newModelApiMode
-      })
-      await selectModel('auto')
-      applyModelResponse(response, 'auto')
-      setNewModelId('')
-      setNewModelLabel('')
-      setNewModelProvider('')
-      setNewModelBaseUrl('')
-      setNewModelApiKey('')
-      setNewModelApiMode('chat_completions')
-      setModelPanelOpen(false)
-      setModelMenuOpen(false)
-      setModelNotice(`已配置 Hermes 默认模型：${id}`)
-      await refreshModels()
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setModelNotice(message)
-      setHermesModelError(message)
-    } finally {
-      setModelPanelSaving(false)
-    }
   }
 
   function updateSettingsPref<K extends keyof SettingsPrefs>(key: K, value: SettingsPrefs[K]) {
@@ -2023,9 +1979,7 @@ function App() {
       />
 
       {modelPanelOpen && (
-        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
-          if (!modelPanelSaving) setModelPanelOpen(false)
-        })}>
+        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(closeModelConfigPanel)}>
           <ModelConfigModal
             modelCatalog={modelCatalog}
             hermesModel={hermesModel}
@@ -2038,7 +1992,7 @@ function App() {
             notice={modelNotice}
             saving={modelPanelSaving}
             catalogRefreshing={modelCatalogRefreshing}
-            onClose={() => setModelPanelOpen(false)}
+            onClose={closeModelConfigPanel}
             onSubmit={handleAddModel}
             onProviderChange={selectNewModelProvider}
             onModelIdChange={setNewModelId}
