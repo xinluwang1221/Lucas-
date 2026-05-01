@@ -1,4 +1,4 @@
-import { BookOpen, Plug, Plus, RefreshCw, Search } from 'lucide-react'
+import { BookOpen, CheckCircle2, Monitor, PauseCircle, Plug, Plus, RefreshCw, Search } from 'lucide-react'
 import type { HermesMcpConfig, Skill } from '../../lib/api'
 import { ConnectorsView as McpConnectorsView } from '../settings/mcp'
 import { shortenSkillPath, sourceLabel } from './skillFormatters'
@@ -43,16 +43,16 @@ export function SkillsView({
   onOpenMcpMarketplace: () => void
 }) {
   const normalizedQuery = query.trim().toLowerCase()
-  const installedSkills = skills
-  const marketSkills = skills.filter((skill) => skill.source === 'plugin' || skill.source === 'system')
-  const activeSkills = (tab === 'installed' ? installedSkills : marketSkills).filter((skill) => {
+  const enabledSkills = skills.filter((skill) => skill.enabled)
+  const activeSkills = (tab === 'installed' ? enabledSkills : skills).filter((skill) => {
     if (!normalizedQuery) return true
     return `${skill.name} ${skill.description} ${skill.source} ${skill.path}`.toLowerCase().includes(normalizedQuery)
   })
-  const enabledCount = skills.filter((skill) => skill.enabled).length
+  const enabledCount = enabledSkills.length
+  const disabledCount = Math.max(0, skills.length - enabledCount)
   const sections = [
     {
-      title: tab === 'market' ? '技能市场' : '内置与插件',
+      title: '插件与系统',
       skills: activeSkills.filter((skill) => skill.source === 'plugin' || skill.source === 'system')
     },
     {
@@ -66,11 +66,11 @@ export function SkillsView({
       <aside className="customize-sidebar">
         <button className={customizeTab === 'skills' ? 'active' : ''} onClick={() => onCustomizeTabChange('skills')}>
           <BookOpen size={15} />
-          Skills
+          技能
         </button>
         <button className={customizeTab === 'connectors' ? 'active' : ''} onClick={() => onCustomizeTabChange('connectors')}>
           <Plug size={15} />
-          Connectors
+          连接器
         </button>
         <div className="customize-plugin-box">
           <strong>能力来源</strong>
@@ -106,7 +106,7 @@ export function SkillsView({
         </div>
 
         <header className="skills-hero">
-          <h1>{customizeTab === 'skills' ? 'Skills' : 'Connectors'}</h1>
+          <h1>{customizeTab === 'skills' ? '技能' : '连接器'}</h1>
           <p>
             {customizeTab === 'skills'
               ? '安装和管理技能，扩展 Hermes Cowork 的本机工作方法。'
@@ -116,36 +116,48 @@ export function SkillsView({
 
         {customizeTab === 'skills' ? (
           <>
+            {notice && <div className="skill-notice">{notice}</div>}
+
+            <div className="skills-summary">
+              <div className="skills-summary-card">
+                <span className="skills-summary-icon enabled"><CheckCircle2 size={20} /></span>
+                <div>
+                  <span>已启用</span>
+                  <strong>{enabledCount}</strong>
+                  <small>个技能</small>
+                </div>
+              </div>
+              <div className="skills-summary-card">
+                <span className="skills-summary-icon local"><Monitor size={20} /></span>
+                <div>
+                  <span>本机可用</span>
+                  <strong>{skills.length}</strong>
+                  <small>个技能</small>
+                </div>
+              </div>
+              <div className="skills-summary-card">
+                <span className="skills-summary-icon disabled"><PauseCircle size={20} /></span>
+                <div>
+                  <span>未启用</span>
+                  <strong>{disabledCount}</strong>
+                  <small>个技能</small>
+                </div>
+              </div>
+            </div>
+
             <div className="skills-toolbar">
               <div className="skills-tabs" role="tablist" aria-label="技能视图">
                 <button className={tab === 'market' ? 'active' : ''} onClick={() => onTabChange('market')}>
-                  技能市场
+                  全部 <span>{skills.length}</span>
                 </button>
                 <button className={tab === 'installed' ? 'active' : ''} onClick={() => onTabChange('installed')}>
-                  已安装 <span>{installedSkills.length}</span>
+                  已启用 <span>{enabledCount}</span>
                 </button>
               </div>
               <label className="skills-search">
                 <Search size={15} />
                 <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索技能" />
               </label>
-            </div>
-
-            {notice && <div className="skill-notice">{notice}</div>}
-
-            <div className="skills-summary">
-              <div>
-                <strong>{enabledCount}</strong>
-                <span>已启用</span>
-              </div>
-              <div>
-                <strong>{skills.length}</strong>
-                <span>本机可用</span>
-              </div>
-              <div>
-                <strong>{skills.filter((skill) => skill.source === 'user' || skill.source === 'uploaded').length}</strong>
-                <span>来自用户</span>
-              </div>
             </div>
 
             <div className="skills-content">
@@ -155,9 +167,9 @@ export function SkillsView({
                   <h2>{section.title}</h2>
                   <div className="skill-grid">
                     {section.skills.map((skill) => (
-                      <article className="skill-card" key={skill.id}>
+                      <article className={skill.enabled ? 'skill-card enabled' : 'skill-card'} key={skill.id}>
                         <button className="skill-open" onClick={() => onOpenSkill(skill)}>
-                          <div className="skill-icon">
+                          <div className={`skill-icon ${skill.source}`}>
                             <BookOpen size={23} />
                           </div>
                           <div className="skill-card-body">

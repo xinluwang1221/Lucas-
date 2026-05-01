@@ -1,4 +1,5 @@
 import { FileText, LogOut, Play } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
@@ -144,92 +145,242 @@ export function AppearanceSettingsSection({
         </div>
       </div>
 
-      <SettingsBlock title="浅色主题">
-        <SettingsControlRow title="强调色" detail="用于主按钮、进度、选中态和关键状态。">
-          <ColorControl
-            value={prefs.appearanceAccentColor}
-            onChange={(value) => onPrefChange('appearanceAccentColor', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="背景" detail="应用最底层背景色。">
-          <ColorControl
-            value={prefs.appearanceBackgroundColor}
-            onChange={(value) => onPrefChange('appearanceBackgroundColor', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="前景" detail="主要文字颜色。">
-          <ColorControl
-            value={prefs.appearanceForegroundColor}
-            onChange={(value) => onPrefChange('appearanceForegroundColor', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="UI 字体" detail="全局界面字体栈。">
-          <SelectControl
-            value={prefs.appearanceUiFont}
-            options={[
-              '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif',
-              '"Avenir Next", "PingFang SC", ui-sans-serif, sans-serif',
-              '"Inter", "PingFang SC", ui-sans-serif, sans-serif'
-            ]}
-            onChange={(value) => onPrefChange('appearanceUiFont', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="代码字体" detail="代码块、路径和命令使用的字体。">
-          <SelectControl
-            value={prefs.appearanceCodeFont}
-            options={[
-              '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace',
-              '"JetBrains Mono", "SFMono-Regular", ui-monospace, monospace',
-              'ui-monospace, Menlo, Monaco, Consolas, monospace'
-            ]}
-            onChange={(value) => onPrefChange('appearanceCodeFont', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="半透明侧边栏" detail="让侧栏和主工作区的层级更轻。">
-          <Toggle
-            checked={prefs.appearanceTranslucentSidebar}
-            onChange={(value) => onPrefChange('appearanceTranslucentSidebar', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="对比度" detail="用于后续进一步控制边框、阴影和背景层级。">
-          <div className="settings-range-control">
-            <input
-              type="range"
-              min={20}
-              max={90}
-              value={prefs.appearanceContrast}
-              onChange={(event) => onPrefChange('appearanceContrast', Number(event.target.value))}
+      <div className="appearance-config-grid">
+        <section className="appearance-config-card">
+          <h3>主题与色彩</h3>
+          <div className="appearance-config-list">
+            <AppearanceColorRow
+              title="主色"
+              detail="用于按钮、链接、进度和选中态。"
+              value={prefs.appearanceAccentColor}
+              onChange={(value) => onPrefChange('appearanceAccentColor', value)}
             />
-            <span>{prefs.appearanceContrast}</span>
+            <AppearanceColorRow
+              title="强调色"
+              detail="用于高亮、焦点和关键状态。"
+              value={prefs.appearanceAccentStrongColor}
+              onChange={(value) => onPrefChange('appearanceAccentStrongColor', value)}
+            />
+            <AppearanceColorRow
+              title="背景"
+              detail="应用最底层背景色。"
+              value={prefs.appearanceBackgroundColor}
+              onChange={(value) => onPrefChange('appearanceBackgroundColor', value)}
+            />
+            <AppearanceColorRow
+              title="表面"
+              detail="卡片、弹窗和面板背景色。"
+              value={prefs.appearanceSurfaceColor}
+              onChange={(value) => onPrefChange('appearanceSurfaceColor', value)}
+            />
+            <AppearanceColorRow
+              title="文本"
+              detail="主要内容和标题颜色。"
+              value={prefs.appearanceForegroundColor}
+              onChange={(value) => onPrefChange('appearanceForegroundColor', value)}
+            />
+            <AppearanceColorRow
+              title="次要文本"
+              detail="说明、元信息和弱化文本颜色。"
+              value={prefs.appearanceMutedColor}
+              onChange={(value) => onPrefChange('appearanceMutedColor', value)}
+            />
           </div>
-        </SettingsControlRow>
-      </SettingsBlock>
+        </section>
 
-      <SettingsBlock title="字体">
-        <SettingsControlRow title="UI 字号" detail="正文基准字号，标题和说明会按层级自动推导。">
-          <NumberControl
-            value={prefs.appearanceUiFontSize}
-            min={12}
-            max={18}
-            onChange={(value) => onPrefChange('appearanceUiFontSize', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="代码字体大小" detail="代码块和命令片段的基准字号。">
-          <NumberControl
-            value={prefs.appearanceCodeFontSize}
-            min={11}
-            max={16}
-            onChange={(value) => onPrefChange('appearanceCodeFontSize', value)}
-          />
-        </SettingsControlRow>
-        <SettingsControlRow title="字体平滑" detail="使用 macOS 原生字体抗锯齿。">
-          <Toggle
-            checked={prefs.appearanceFontSmoothing}
-            onChange={(value) => onPrefChange('appearanceFontSmoothing', value)}
-          />
-        </SettingsControlRow>
-      </SettingsBlock>
+        <div className="appearance-config-stack">
+          <section className="appearance-config-card">
+            <h3>字体设置</h3>
+            <div className="appearance-config-list">
+              <AppearanceControlRow title="界面字体" detail="影响界面和大部分文本的显示效果。">
+                <AppearanceSelectControl
+                  value={prefs.appearanceUiFont}
+                  options={UI_FONT_OPTIONS}
+                  onChange={(value) => onPrefChange('appearanceUiFont', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="等宽字体" detail="用于代码块、命令、表格等宽场景。">
+                <AppearanceSelectControl
+                  value={prefs.appearanceCodeFont}
+                  options={CODE_FONT_OPTIONS}
+                  onChange={(value) => onPrefChange('appearanceCodeFont', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="字体大小" detail="调整界面正文的基准大小。">
+                <AppearanceSelectControl
+                  value={String(prefs.appearanceUiFontSize)}
+                  options={UI_FONT_SIZE_OPTIONS}
+                  onChange={(value) => onPrefChange('appearanceUiFontSize', Number(value))}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="代码字体大小" detail="调整代码和命令片段的基准大小。">
+                <AppearanceSelectControl
+                  value={String(prefs.appearanceCodeFontSize)}
+                  options={CODE_FONT_SIZE_OPTIONS}
+                  onChange={(value) => onPrefChange('appearanceCodeFontSize', Number(value))}
+                />
+              </AppearanceControlRow>
+            </div>
+          </section>
+
+          <section className="appearance-config-card">
+            <h3>界面选项</h3>
+            <div className="appearance-config-list">
+              <AppearanceControlRow title="半透明侧边栏" detail="开启后，侧栏更接近 macOS 轻量层级。">
+                <Toggle
+                  checked={prefs.appearanceTranslucentSidebar}
+                  onChange={(value) => onPrefChange('appearanceTranslucentSidebar', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="圆角强度" detail="调节卡片、按钮等元素的圆角大小。">
+                <AppearanceRangeControl
+                  min={4}
+                  max={16}
+                  value={prefs.appearanceCornerRadius}
+                  suffix="px"
+                  onChange={(value) => onPrefChange('appearanceCornerRadius', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="对比度" detail="控制边框、阴影和背景层级。">
+                <AppearanceRangeControl
+                  min={20}
+                  max={90}
+                  value={prefs.appearanceContrast}
+                  onChange={(value) => onPrefChange('appearanceContrast', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="紧凑模式" detail="减少行高与面板留白，提高信息密度。">
+                <Toggle
+                  checked={prefs.appearanceCompactMode}
+                  onChange={(value) => onPrefChange('appearanceCompactMode', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="动画效果" detail="关闭后，界面切换和悬停动效会尽量减少。">
+                <Toggle
+                  checked={prefs.appearanceMotionEnabled}
+                  onChange={(value) => onPrefChange('appearanceMotionEnabled', value)}
+                />
+              </AppearanceControlRow>
+              <AppearanceControlRow title="字体平滑" detail="使用 macOS 原生字体抗锯齿。">
+                <Toggle
+                  checked={prefs.appearanceFontSmoothing}
+                  onChange={(value) => onPrefChange('appearanceFontSmoothing', value)}
+                />
+              </AppearanceControlRow>
+            </div>
+          </section>
+        </div>
+      </div>
     </SettingsSection>
+  )
+}
+
+const UI_FONT_OPTIONS = [
+  {
+    label: 'SF Pro Text',
+    value: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif'
+  },
+  { label: 'Avenir Next', value: '"Avenir Next", "PingFang SC", ui-sans-serif, sans-serif' },
+  { label: 'PingFang SC', value: '"PingFang SC", -apple-system, BlinkMacSystemFont, ui-sans-serif, sans-serif' }
+]
+
+const CODE_FONT_OPTIONS = [
+  {
+    label: 'SF Mono',
+    value: '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace'
+  },
+  { label: 'JetBrains Mono', value: '"JetBrains Mono", "SFMono-Regular", ui-monospace, monospace' },
+  { label: 'System Mono', value: 'ui-monospace, Menlo, Monaco, Consolas, monospace' }
+]
+
+const UI_FONT_SIZE_OPTIONS = [
+  { label: '小', value: '13' },
+  { label: '中（推荐）', value: '14' },
+  { label: '大', value: '15' }
+]
+
+const CODE_FONT_SIZE_OPTIONS = [
+  { label: '小', value: '11' },
+  { label: '中（推荐）', value: '12' },
+  { label: '大', value: '13' }
+]
+
+function AppearanceColorRow({
+  title,
+  detail,
+  value,
+  onChange
+}: {
+  title: string
+  detail: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <AppearanceControlRow title={title} detail={detail}>
+      <ColorControl value={value} onChange={onChange} />
+    </AppearanceControlRow>
+  )
+}
+
+function AppearanceControlRow({
+  title,
+  detail,
+  children
+}: {
+  title: string
+  detail: string
+  children: ReactNode
+}) {
+  return (
+    <div className="appearance-config-row">
+      <div>
+        <strong>{title}</strong>
+        <span>{detail}</span>
+      </div>
+      <div className="appearance-config-action">{children}</div>
+    </div>
+  )
+}
+
+function AppearanceSelectControl({
+  value,
+  options,
+  onChange
+}: {
+  value: string
+  options: Array<{ label: string; value: string }>
+  onChange: (value: string) => void
+}) {
+  return (
+    <select className="appearance-select-control" value={value} onChange={(event) => onChange(event.target.value)}>
+      {options.map((option) => (
+        <option value={option.value} key={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function AppearanceRangeControl({
+  min,
+  max,
+  value,
+  suffix = '',
+  onChange
+}: {
+  min: number
+  max: number
+  value: number
+  suffix?: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="appearance-range-control">
+      <input type="range" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <span>{value}{suffix}</span>
+    </div>
   )
 }
 
@@ -370,32 +521,6 @@ function ColorControl({ value, onChange }: { value: string; onChange: (value: st
     <label className="appearance-color-control">
       <input type="color" value={value} onChange={(event) => onChange(event.target.value)} aria-label="选择颜色" />
       <span>{value.toUpperCase()}</span>
-    </label>
-  )
-}
-
-function NumberControl({
-  value,
-  min,
-  max,
-  onChange
-}: {
-  value: number
-  min: number
-  max: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <label className="settings-number-with-unit">
-      <input
-        className="settings-number-input"
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <span>px</span>
     </label>
   )
 }

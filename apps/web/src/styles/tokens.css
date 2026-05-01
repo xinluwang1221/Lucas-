@@ -83,3 +83,18 @@
 :root[data-theme-mode="dark"][data-sidebar-translucent="true"] {
   --sidebar: rgba(23, 27, 22, 0.74);
 }
+
+:root[data-compact-mode="true"] {
+  --text-body: 13px;
+  --text-caption: 11px;
+  --ui-font-size: 13px;
+}
+
+:root[data-motion-enabled="false"] *,
+:root[data-motion-enabled="false"] *::before,
+:root[data-motion-enabled="false"] *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}

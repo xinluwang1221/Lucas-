@@ -26,12 +26,18 @@ export type McpServer = {
 export type SettingsPrefs = {
   linkOpenMode: string
   appearanceAccentColor: string
+  appearanceAccentStrongColor: string
   appearanceBackgroundColor: string
+  appearanceSurfaceColor: string
   appearanceForegroundColor: string
+  appearanceMutedColor: string
   appearanceUiFont: string
   appearanceCodeFont: string
   appearanceTranslucentSidebar: boolean
   appearanceContrast: number
+  appearanceCornerRadius: number
+  appearanceCompactMode: boolean
+  appearanceMotionEnabled: boolean
   appearanceUiFontSize: number
   appearanceCodeFontSize: number
   appearanceFontSmoothing: boolean
@@ -60,12 +66,18 @@ export type SettingsPrefs = {
 export const defaultSettingsPrefs: SettingsPrefs = {
   linkOpenMode: '始终询问',
   appearanceAccentColor: '#2f8f56',
-  appearanceBackgroundColor: '#f7f8f5',
+  appearanceAccentStrongColor: '#1f7a43',
+  appearanceBackgroundColor: '#fbfcfa',
+  appearanceSurfaceColor: '#ffffff',
   appearanceForegroundColor: '#171a16',
+  appearanceMutedColor: '#606a5f',
   appearanceUiFont: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif',
   appearanceCodeFont: '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace',
   appearanceTranslucentSidebar: true,
   appearanceContrast: 52,
+  appearanceCornerRadius: 8,
+  appearanceCompactMode: false,
+  appearanceMotionEnabled: true,
   appearanceUiFontSize: 14,
   appearanceCodeFontSize: 12,
   appearanceFontSmoothing: true,

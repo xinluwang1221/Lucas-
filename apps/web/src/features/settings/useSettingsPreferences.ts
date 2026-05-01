@@ -100,19 +100,29 @@ export function useSettingsPreferences() {
       root.dataset.themeMode = mode
       root.dataset.sidebarTranslucent = settingsPrefs.appearanceTranslucentSidebar ? 'true' : 'false'
       root.dataset.fontSmoothing = settingsPrefs.appearanceFontSmoothing ? 'true' : 'false'
+      root.dataset.compactMode = settingsPrefs.appearanceCompactMode ? 'true' : 'false'
+      root.dataset.motionEnabled = settingsPrefs.appearanceMotionEnabled ? 'true' : 'false'
       root.style.setProperty('--accent', settingsPrefs.appearanceAccentColor)
+      root.style.setProperty('--accent-strong', settingsPrefs.appearanceAccentStrongColor)
       if (mode === 'dark') {
         root.style.removeProperty('--background')
+        root.style.removeProperty('--surface')
         root.style.removeProperty('--foreground')
+        root.style.removeProperty('--muted')
       } else {
         root.style.setProperty('--background', settingsPrefs.appearanceBackgroundColor)
+        root.style.setProperty('--surface', settingsPrefs.appearanceSurfaceColor)
         root.style.setProperty('--foreground', settingsPrefs.appearanceForegroundColor)
+        root.style.setProperty('--muted', settingsPrefs.appearanceMutedColor)
       }
       root.style.setProperty('--font-ui', settingsPrefs.appearanceUiFont)
       root.style.setProperty('--font-code', settingsPrefs.appearanceCodeFont)
       root.style.setProperty('--ui-font-size', `${settingsPrefs.appearanceUiFontSize}px`)
       root.style.setProperty('--code-font-size', `${settingsPrefs.appearanceCodeFontSize}px`)
       root.style.setProperty('--theme-contrast', String(settingsPrefs.appearanceContrast))
+      root.style.setProperty('--radius-card', `${settingsPrefs.appearanceCornerRadius}px`)
+      root.style.setProperty('--radius-panel', `${settingsPrefs.appearanceCornerRadius}px`)
+      root.style.setProperty('--radius-control', `${Math.max(4, settingsPrefs.appearanceCornerRadius - 1)}px`)
     }
 
     applyAppearance()
