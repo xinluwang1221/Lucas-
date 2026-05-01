@@ -588,6 +588,12 @@ HC_EVENT\t
 - 负责较早对话收起、最新用户消息定位和任务结果文本兜底选择。
 - 后续修复“用户气泡消失”“旧上下文展示错位”等问题时，先检查这里的规则。
 
+`apps/web/src/features/chat/useTaskSelection.ts`
+
+- 对话/任务选择派生状态 hook，已从 `App.tsx` 抽离。
+- 负责当前工作区、当前任务、运行中任务、侧栏工作区任务分组、任务过滤、归档统计、当前消息可见/隐藏集合、关联 Hermes session 的统一派生。
+- 后续如果要改“工作区和最近重复”“归档显示位置”“任务列表搜索/筛选”“多入口选中任务不同步”，优先改这里，不要在 `App.tsx` 里再写第二套过滤和分组规则。
+
 `apps/web/src/features/settings/models.tsx`
 
 - 模型设置 feature 模块，已从 `App.tsx` 抽离。
@@ -1139,7 +1145,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts` 和 workspace API service `workspaceApi.ts`；后续如继续深化，再拆 workspace hook/provider。
-3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx` 和 `messageUtils.ts`；后续如继续深化，再把 chat 数据订阅/任务选择逻辑拆成 hook/provider。
+3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts` 和 `useTaskSelection.ts`；后续如继续深化，再把 chat 数据订阅/运行流事件拆成 hook/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化和 MiMo 版本分组都在这个模块；后续如继续深化，再把模型状态请求和保存流程拆成 `modelsApi` / hook。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关和 Connectors 摘要都在这个模块；后续如继续深化，再把 MCP API 请求和市场搜索状态拆成 `mcpApi` / hook。
 6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。

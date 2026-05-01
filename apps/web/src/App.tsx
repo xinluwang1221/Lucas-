@@ -98,11 +98,8 @@ import {
   traceSummaryParts,
   workModeLabel
 } from './features/chat/executionTraceModel'
-import {
-  hiddenTaskMessages,
-  latestUserMessageId,
-  visibleTaskMessages
-} from './features/chat/messageUtils'
+import { latestUserMessageId } from './features/chat/messageUtils'
+import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { artifactPreviewTarget, previewRawUrl, workspacePreviewTarget } from './features/workspace/previewTargets'
@@ -718,18 +715,26 @@ function App() {
     }
   }
 
-  const selectedWorkspace = useMemo(
-    () => state.workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
-    [selectedWorkspaceId, state.workspaces]
-  )
-
-  const selectedTask = useMemo(
-    () => (selectedTaskId ? state.tasks.find((task) => task.id === selectedTaskId) : undefined),
-    [selectedTaskId, state.tasks]
-  )
+  const {
+    selectedWorkspace,
+    selectedTask,
+    runningTask,
+    sidebarWorkspaceGroups,
+    selectedTaskMessages,
+    selectedTaskHiddenMessages,
+    selectedHermesSession
+  } = useTaskSelection({
+    state,
+    selectedWorkspaceId,
+    selectedTaskId,
+    taskSearch,
+    taskScope,
+    taskWorkspaceScope,
+    selectedTaskTag,
+    hermesSessions
+  })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
-  const runningTask = state.tasks.find((task) => task.status === 'running')
   const composerRunningTask = selectedTask?.status === 'running' ? selectedTask : runningTask
   const composerModels = useMemo(() => configuredModelOptionsForComposer(models), [models])
   const selectedModel = composerModels.find((model) => resolveModelSelectionKey(model) === selectedModelId) ?? composerModels[0] ?? {
@@ -739,59 +744,6 @@ function App() {
     source: 'auto'
   }
   const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
-
-  const filteredTasks = useMemo(() => {
-    const keyword = taskSearch.trim().toLowerCase()
-    return state.tasks.filter((task) => {
-      if (taskWorkspaceScope === 'current' && task.workspaceId !== selectedWorkspaceId) return false
-      if (taskScope === 'active' && task.archivedAt) return false
-      if (taskScope === 'archived' && !task.archivedAt) return false
-      if (selectedTaskTag !== 'all' && !(task.tags ?? []).includes(selectedTaskTag)) return false
-      if (!keyword) return true
-      return `${task.title} ${task.prompt} ${task.status} ${task.hermesSessionId ?? ''} ${(task.tags ?? []).join(' ')}`.toLowerCase().includes(keyword)
-    })
-  }, [state.tasks, taskSearch, taskScope, taskWorkspaceScope, selectedWorkspaceId, selectedTaskTag])
-
-	  const sidebarWorkspaceGroups = useMemo(() => {
-	    return state.workspaces.map((workspace) => ({
-	      workspace,
-	      tasks: state.tasks
-	        .filter((task) => task.workspaceId === workspace.id && !task.archivedAt)
-	        .slice()
-	        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-	        .slice(0, 8),
-	      archivedTasks: state.tasks
-	        .filter((task) => task.workspaceId === workspace.id && task.archivedAt)
-	        .slice()
-	        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-	        .slice(0, 16)
-	    }))
-	  }, [state.workspaces, state.tasks])
-
-  const taskGroups = useMemo(() => {
-    return state.workspaces
-      .map((workspace) => ({
-        workspace,
-        tasks: filteredTasks.filter((task) => task.workspaceId === workspace.id)
-      }))
-      .filter((group) => group.tasks.length > 0 || (taskWorkspaceScope === 'current' && group.workspace.id === selectedWorkspaceId))
-  }, [filteredTasks, state.workspaces, taskWorkspaceScope, selectedWorkspaceId])
-
-  const scopedTasks = state.tasks.filter((task) =>
-    taskWorkspaceScope === 'current' ? task.workspaceId === selectedWorkspaceId : true
-  )
-  const scopeFilteredTasks = scopedTasks.filter((task) => {
-    if (taskScope === 'active' && task.archivedAt) return false
-    if (taskScope === 'archived' && !task.archivedAt) return false
-    return true
-  })
-  const activeTaskCount = scopedTasks.filter((task) => !task.archivedAt).length
-  const archivedTaskCount = scopedTasks.filter((task) => task.archivedAt).length
-  const selectedTaskMessages = selectedTask ? visibleTaskMessages(selectedTask) : []
-  const selectedTaskHiddenMessages = selectedTask ? hiddenTaskMessages(selectedTask, selectedTaskMessages) : []
-  const selectedHermesSession = selectedTask?.hermesSessionId
-    ? hermesSessions.find((session) => session.id === selectedTask.hermesSessionId)
-    : undefined
 
   async function refreshSelectedTaskContext(task = selectedTask) {
     if (!task) {
