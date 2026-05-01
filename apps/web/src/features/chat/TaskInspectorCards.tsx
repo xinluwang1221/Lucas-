@@ -66,14 +66,20 @@ export function TaskProgressCard({
           </div>
         </div>
       </div>
-      <div className="task-progress-meter" aria-label={`任务进度 ${progress.doneCount}/${progress.totalCount}`}>
-        <span style={{ width: `${progress.percent}%` }} />
-      </div>
-      <div className="task-progress-copy">
-        <strong>{progress.totalCount ? `${progress.doneCount}/${progress.totalCount} 步` : '等待计划'}</strong>
-        <span>{taskElapsedLabel(task)}</span>
-      </div>
-      <TodoSteps task={task} />
+      {progress.totalCount ? (
+        <>
+          <div className="task-progress-meter" aria-label={`任务进度 ${progress.doneCount}/${progress.totalCount}`}>
+            <span style={{ width: `${progress.percent}%` }} />
+          </div>
+          <div className="task-progress-copy">
+            <strong>{`${progress.doneCount}/${progress.totalCount} 步`}</strong>
+            <span>{taskElapsedLabel(task)}</span>
+          </div>
+          <TodoSteps task={task} />
+        </>
+      ) : (
+        <EmptyInspectorState title="暂无任务拆解" detail="Hermes 暂未返回面向目标的任务计划，过程会显示在对话区。" />
+      )}
       {showStreamState && (
         <div className={`task-stream-state ${streamStatus}`}>
           <span />

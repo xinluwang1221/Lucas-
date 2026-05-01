@@ -123,17 +123,23 @@ export function AppearanceSettingsSection({
           </div>
         </div>
         <div className="appearance-preview-body">
-          <div className="appearance-preview-pane before">
-            <span>分散样式</span>
-            <code>{'font-size: 13px;'}</code>
-            <code>{'background: #f1efef;'}</code>
-            <code>{'border: #d8d1bd;'}</code>
+          <div className="appearance-preview-sidebar">
+            <strong>Hermes Cowork</strong>
+            <span>本机智能体工作台</span>
+            <em>新建任务</em>
           </div>
-          <div className="appearance-preview-pane after">
-            <span>统一 token</span>
-            <code>{'font-size: var(--text-body);'}</code>
-            <code>{'background: var(--surface);'}</code>
-            <code>{'border: var(--border);'}</code>
+          <div className="appearance-preview-main">
+            <h4>任务标题层级</h4>
+            <p>正文用于承载 Hermes 的回答，说明文字保持克制，不抢主要内容。</p>
+            <code>~/workspaces/default</code>
+          </div>
+          <div className="appearance-preview-inspector">
+            <h4>工作区</h4>
+            <ol>
+              <li>任务拆解</li>
+              <li>任务产出物</li>
+              <li>上下文资源</li>
+            </ol>
           </div>
         </div>
       </div>

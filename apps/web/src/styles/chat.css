@@ -1479,7 +1479,7 @@
 
 .composer {
   flex: 0 0 auto;
-  width: min(880px, calc(100% - 56px));
+  width: min(820px, calc(100% - 56px));
   margin: 0 auto 24px;
   background: var(--panel);
   border: 1px solid var(--line-strong);
@@ -1520,10 +1520,10 @@
 
 .composer textarea {
   width: 100%;
-  min-height: 108px;
-  max-height: 184px;
+  min-height: 88px;
+  max-height: 168px;
   resize: none;
-  padding: 16px 18px;
+  padding: 15px 18px;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -1541,7 +1541,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 52px;
+  min-height: 48px;
   padding: 8px 10px;
   border-top: 1px solid var(--line);
 }

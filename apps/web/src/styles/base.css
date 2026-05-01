@@ -11,16 +11,16 @@ body {
   font-size: var(--ui-font-size);
   line-height: var(--line-height-body);
   background:
-    linear-gradient(90deg, rgba(23, 26, 22, 0.018) 1px, transparent 1px),
-    linear-gradient(rgba(23, 26, 22, 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 26, 22, 0.012) 1px, transparent 1px),
+    linear-gradient(rgba(23, 26, 22, 0.01) 1px, transparent 1px),
     var(--background);
-  background-size: 32px 32px;
+  background-size: 36px 36px;
 }
 
 :root[data-theme-mode="dark"] body {
   background:
-    linear-gradient(90deg, rgba(241, 245, 238, 0.018) 1px, transparent 1px),
-    linear-gradient(rgba(241, 245, 238, 0.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(241, 245, 238, 0.012) 1px, transparent 1px),
+    linear-gradient(rgba(241, 245, 238, 0.01) 1px, transparent 1px),
     var(--background);
 }
 
