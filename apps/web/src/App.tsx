@@ -8,6 +8,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useAppState } from './features/app/useAppState'
 import { AppSidebar } from './features/layout/AppSidebar'
 import {
   DispatchView,
@@ -37,14 +38,7 @@ import {
   configuredModelOptionsForComposer,
   groupModelOptionsForMenu,
 } from './features/settings/models'
-import {
-  configureHermesReasoning,
-  deleteHermesModelProvider,
-  deleteModel,
-  selectModel,
-  setHermesDefaultModel,
-  setHermesFallbackProviders
-} from './features/settings/modelApi'
+import { useModelActions } from './features/settings/useModelActions'
 import { useModelState } from './features/settings/useModelState'
 import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import { useMcpState } from './features/settings/useMcpState'
@@ -73,10 +67,7 @@ import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
 import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
 import type { WorkspaceFile } from './features/workspace/workspaceApi'
 import {
-  AppState,
   HermesMcpConfig,
-  HermesReasoningConfigureRequest,
-  getState,
   ModelOption,
   Task,
   Skill,
@@ -85,18 +76,6 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react'
-
-const emptyState: AppState = {
-  workspaces: [],
-  tasks: [],
-  messages: [],
-  artifacts: [],
-  skillSettings: {},
-  modelSettings: {
-    selectedModelId: 'auto',
-    customModels: []
-  }
-}
 
 type ViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
 
@@ -170,7 +149,15 @@ function closeOnBackdropMouseDown(onClose: () => void) {
 }
 
 function App() {
-  const [state, setState] = useState<AppState>(emptyState)
+  const {
+    state,
+    setState,
+    selectedWorkspaceId,
+    setSelectedWorkspaceId,
+    selectedTaskId,
+    setSelectedTaskId,
+    refresh
+  } = useAppState()
   const [viewMode, setViewMode] = useState<ViewMode>('tasks')
   const {
     leftSidebarCollapsed,
@@ -182,8 +169,6 @@ function App() {
     startPaneResize,
     panelLayoutStyle
   } = usePanelLayout()
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('default')
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined)
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
@@ -326,23 +311,6 @@ function App() {
   const conversationRef = useRef<HTMLElement | null>(null)
   const conversationEndRef = useRef<HTMLDivElement | null>(null)
   const conversationFollowRef = useRef(true)
-  const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
-  const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
-
-  const refresh = async () => {
-    const next = await getState()
-    setState(next)
-    if (selectedTaskIdRef.current === undefined && next.tasks.length > 0) {
-      setSelectedTaskId(next.tasks[0].id)
-      selectedTaskIdRef.current = next.tasks[0].id
-    }
-    if (!next.workspaces.some((workspace) => workspace.id === selectedWorkspaceIdRef.current)) {
-      const fallbackWorkspaceId = next.workspaces[0]?.id ?? 'default'
-      setSelectedWorkspaceId(fallbackWorkspaceId)
-      selectedWorkspaceIdRef.current = fallbackWorkspaceId
-    }
-  }
-
   const {
     selectedWorkspace,
     selectedTask,
@@ -453,6 +421,23 @@ function App() {
   }
   const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
   const {
+    handleSelectModel,
+    handleConfigureReasoning,
+    handleSetHermesDefaultModel,
+    handleDeleteModel,
+    handleSetHermesFallbackProviders,
+    handleDeleteHermesModelProvider
+  } = useModelActions({
+    resolveModelSelectionKey,
+    applyModelResponse,
+    refreshModels,
+    setSelectedModelId,
+    setModelMenuOpen,
+    setHermesModelUpdating,
+    setHermesModelError,
+    setModelNotice
+  })
+  const {
     isSubmitting,
     stoppingTaskId,
     submitPrompt,
@@ -477,14 +462,6 @@ function App() {
     setComposerSkillNames,
     setSelectedTaskId
   })
-
-  useEffect(() => {
-    selectedTaskIdRef.current = selectedTaskId
-  }, [selectedTaskId])
-
-  useEffect(() => {
-    selectedWorkspaceIdRef.current = selectedWorkspaceId
-  }, [selectedWorkspaceId])
 
   useEffect(() => {
     conversationFollowRef.current = true
@@ -564,96 +541,6 @@ function App() {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
     event.preventDefault()
     void submitPrompt()
-  }
-
-  async function handleSelectModel(model: ModelOption) {
-    setModelNotice(null)
-    const modelKey = resolveModelSelectionKey(model)
-    await selectModel(modelKey)
-    setSelectedModelId(modelKey)
-    setModelMenuOpen(false)
-    await refreshModels()
-  }
-
-  async function handleConfigureReasoning(request: HermesReasoningConfigureRequest, notice: string) {
-    setHermesModelUpdating('reasoning')
-    setHermesModelError(null)
-    setModelNotice(null)
-    try {
-      const response = await configureHermesReasoning(request)
-      applyModelResponse(response)
-      setModelNotice(notice)
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause)
-      setHermesModelError(message)
-      setModelNotice(message)
-    } finally {
-      setHermesModelUpdating(null)
-    }
-  }
-
-  async function handleSetHermesDefaultModel(modelId: string, provider?: string) {
-    setHermesModelUpdating(`${provider ?? 'current'}:${modelId}`)
-    setHermesModelError(null)
-    try {
-      const response = await setHermesDefaultModel(modelId, provider)
-      applyModelResponse(response)
-      setModelNotice(`Hermes 默认模型已更新为 ${modelId}`)
-    } catch (cause) {
-      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesModelUpdating(null)
-    }
-  }
-
-  async function handleDeleteModel(model: ModelOption) {
-    if (model.builtIn) return
-    const modelKey = resolveModelSelectionKey(model)
-    setHermesModelUpdating(`delete-model:${modelKey}`)
-    setHermesModelError(null)
-    setModelNotice(null)
-    try {
-      const response = await deleteModel(resolveModelSelectionKey(model))
-      applyModelResponse(response)
-      setModelMenuOpen(false)
-      setModelNotice(`已从已配置模型中移除：${model.label}`)
-    } catch (cause) {
-      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesModelUpdating(null)
-    }
-  }
-
-  async function handleSetHermesFallbackProviders(providers: string[]) {
-    setHermesModelUpdating('fallbacks')
-    setHermesModelError(null)
-    try {
-      const response = await setHermesFallbackProviders(providers)
-      applyModelResponse(response)
-      setModelNotice(providers.length ? '备用模型列表已更新' : '已关闭备用模型')
-    } catch (error) {
-      const cause = error instanceof Error ? error : new Error(String(error))
-      setHermesModelError(cause.message)
-    } finally {
-      setHermesModelUpdating(null)
-    }
-  }
-
-  async function handleDeleteHermesModelProvider(providerId: string, label: string) {
-    const ok = window.confirm(`删除 Hermes 模型服务“${label}”的 Cowork 可管理配置？如果它是当前默认模型，请先切换默认模型。`)
-    if (!ok) return
-    setHermesModelUpdating(`delete-provider:${providerId}`)
-    setHermesModelError(null)
-    setModelNotice(null)
-    try {
-      const response = await deleteHermesModelProvider(providerId)
-      applyModelResponse(response)
-      setModelNotice(`已移除模型服务配置：${label}`)
-    } catch (cause) {
-      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesModelUpdating(null)
-    }
   }
 
   function handleUseSkill(skill: Skill) {

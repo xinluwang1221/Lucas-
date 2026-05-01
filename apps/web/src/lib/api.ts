@@ -1,5 +1,3 @@
-import { request } from './http'
-
 export type Workspace = {
   id: string
   name: string
@@ -576,8 +574,4 @@ export type HermesAutoUpdateResult = {
   postTest?: HermesCompatibilityTestResult
   startedAt: string
   completedAt: string
-}
-
-export async function getState(): Promise<AppState> {
-  return request('/api/state')
 }
