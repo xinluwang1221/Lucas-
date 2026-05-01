@@ -1,9 +1,5 @@
 import {
-  Archive,
-  ArchiveRestore,
-  CheckCircle2,
   ChevronDown,
-  Circle,
   FileText,
   FolderOpen,
   Loader2,
@@ -12,11 +8,7 @@ import {
   PanelRightOpen,
   Play,
   Settings,
-  Square,
-  Star,
-  Trash2,
   Upload,
-  XCircle
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { AppSidebar } from './features/layout/AppSidebar'
@@ -1427,81 +1419,6 @@ function InlineExecutionTrace({ task }: { task: Task }) {
       formatTime={formatTime}
     />
   )
-}
-
-function StatusIcon({ status }: { status: Task['status'] }) {
-  if (status === 'running') return <Loader2 size={15} className="spin" />
-  if (status === 'completed') return <CheckCircle2 size={15} />
-  if (status === 'failed') return <XCircle size={15} />
-  if (status === 'stopped') return <Square size={15} />
-  return <Circle size={15} />
-}
-
-function TaskRow({
-  task,
-  active,
-  onSelect,
-  onPin,
-  onArchive,
-  onDelete
-}: {
-  task: Task
-  active: boolean
-  onSelect: () => void
-  onPin: () => void
-  onArchive: () => void
-  onDelete: () => void
-}) {
-  return (
-    <div
-      className={[
-        'task-row',
-        active ? 'active' : '',
-        task.pinned ? 'pinned' : '',
-        task.archivedAt ? 'archived' : ''
-      ].filter(Boolean).join(' ')}
-    >
-      <button className="task-card" onClick={onSelect}>
-        <StatusIcon status={task.status} />
-        <div className="task-card-main">
-          <span>{task.title}</span>
-          {(task.skillNames ?? []).length > 0 && <em>{task.skillNames?.join('、')}</em>}
-        </div>
-        <small>{formatTime(task.createdAt)}</small>
-      </button>
-      <button
-        className={task.pinned ? 'task-action active' : 'task-action'}
-        title={task.pinned ? '取消收藏' : '收藏置顶'}
-        onClick={onPin}
-      >
-        <Star size={14} />
-      </button>
-      <button
-        className="task-action"
-        title={task.archivedAt ? '移回活跃任务' : '归档任务'}
-        onClick={onArchive}
-      >
-        {task.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-      </button>
-      <button
-        className="task-delete"
-        title="删除任务记录"
-        onClick={onDelete}
-      >
-        <Trash2 size={14} />
-      </button>
-    </div>
-  )
-}
-
-function statusLabel(status: Task['status']) {
-  return {
-    idle: '未开始',
-    running: '运行中',
-    completed: '已完成',
-    failed: '失败',
-    stopped: '已停止'
-  }[status]
 }
 
 function taskStreamLabel(status: TaskStreamStatus) {
