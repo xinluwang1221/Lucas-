@@ -567,6 +567,12 @@ HC_EVENT\t
 - 负责新增工作区、重命名、重新授权、移除、上传文件、Finder 显示、工作区文件/任务产物 Reveal、把预览目标加入对话上下文等动作状态。
 - 后续修复“新增/重新授权入口不一致”“默认工作区移除规则”“上传后文件列表刷新”“文件预览上下文引用”“工作区动作错误提示”等问题时，优先改这里和 `workspaceApi.ts`。
 
+`apps/web/src/features/workspace/useWorkspaceDropzone.ts`
+
+- 工作区拖拽上传 hook，已从 `App.tsx` 抽离。
+- 负责拖入文件时的深度计数、遮罩显示、dropEffect 和落下后调用上传动作。
+- 后续做“拖入文件直接作为上下文”“上传进度”“拖拽区域细分”时，优先改这里和 `useWorkspaceActions.ts`。
+
 `apps/web/src/features/chat/MessageBody.tsx`
 
 - 对话消息正文渲染模块，已从 `App.tsx` 抽离。
@@ -1271,7 +1277,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 工程稳定阶段拆分顺序：
 
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
-2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts` 和工作区动作 hook `useWorkspaceActions.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
+2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts`、工作区动作 hook `useWorkspaceActions.ts` 和拖拽上传 hook `useWorkspaceDropzone.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。

@@ -101,6 +101,7 @@ import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
+import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
 import type { WorkspaceFile } from './features/workspace/workspaceApi'
 import {
   AppState,
@@ -124,7 +125,6 @@ import {
   Skill,
 } from './lib/api'
 import type {
-  DragEvent as ReactDragEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode
@@ -237,7 +237,6 @@ function App() {
   const [taskScope, setTaskScope] = useState<'active' | 'archived' | 'all'>('active')
   const [taskWorkspaceScope, setTaskWorkspaceScope] = useState<'current' | 'all'>('current')
   const [selectedTaskTag, setSelectedTaskTag] = useState('all')
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const {
     runtime,
     hermesUpdate,
@@ -373,7 +372,6 @@ function App() {
   const conversationRef = useRef<HTMLElement | null>(null)
   const conversationEndRef = useRef<HTMLDivElement | null>(null)
   const conversationFollowRef = useRef(true)
-  const dragDepthRef = useRef(0)
   const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
   const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
 
@@ -476,6 +474,10 @@ function App() {
     },
     appendPrompt: appendPromptSnippet,
     onError: setError
+  })
+  const { isDraggingFiles, dropzoneHandlers } = useWorkspaceDropzone({
+    canDropFiles: Boolean(selectedWorkspace),
+    onUploadFiles: (files) => void handleUploadFiles(files)
   })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
@@ -740,35 +742,6 @@ function App() {
     }))
   }
 
-  function handleDragEnter(event: ReactDragEvent<HTMLDivElement>) {
-    if (!hasDraggedFiles(event)) return
-    event.preventDefault()
-    dragDepthRef.current += 1
-    setIsDraggingFiles(true)
-  }
-
-  function handleDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    if (!hasDraggedFiles(event)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = selectedWorkspace ? 'copy' : 'none'
-    setIsDraggingFiles(true)
-  }
-
-  function handleDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    if (!hasDraggedFiles(event)) return
-    event.preventDefault()
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
-    if (dragDepthRef.current === 0) setIsDraggingFiles(false)
-  }
-
-  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
-    if (!hasDraggedFiles(event)) return
-    event.preventDefault()
-    dragDepthRef.current = 0
-    setIsDraggingFiles(false)
-    void handleUploadFiles(Array.from(event.dataTransfer.files))
-  }
-
   function insertFileContext(file: WorkspaceFile) {
     appendPromptSnippet(`请读取这个文件并作为上下文：${file.path}`)
   }
@@ -787,10 +760,7 @@ function App() {
         leftSidebarCollapsed ? 'left-sidebar-collapsed' : '',
         viewMode === 'tasks' && rightSidebarCollapsed ? 'right-sidebar-collapsed' : ''
       ].filter(Boolean).join(' ')}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      {...dropzoneHandlers}
       style={panelLayoutStyle}
     >
       {isDraggingFiles && (
@@ -2033,10 +2003,6 @@ function TemplateIcon({ name }: { name: string }) {
   if (name === 'data') return <BarChart3 size={28} />
   if (name === 'files') return <FolderOpen size={28} />
   return <Hammer size={28} />
-}
-
-function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
-  return Array.from(event.dataTransfer.types).includes('Files')
 }
 
 function shortReference(value: string) {
