@@ -209,6 +209,26 @@ class HermesGatewayClient extends EventEmitter {
   lastStderr() {
     return this.stderr
   }
+
+  shutdown() {
+    const child = this.child
+    if (!child) return Promise.resolve()
+
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        if (this.child === child && !child.killed) child.kill('SIGKILL')
+        resolve()
+      }, 3000)
+      child.stdin?.destroy()
+      child.stdout?.destroy()
+      child.stderr?.destroy()
+      child.once('close', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      child.kill('SIGTERM')
+    })
+  }
 }
 
 const gateways = new Map<string, HermesGatewayClient>()
@@ -224,6 +244,12 @@ export function getHermesGateway(workspacePath: string) {
     gateways.set(key, gateway)
   }
   return gateway
+}
+
+export async function shutdownHermesGateways() {
+  const activeGateways = [...gateways.values()]
+  gateways.clear()
+  await Promise.all(activeGateways.map((gateway) => gateway.shutdown()))
 }
 
 export async function readHermesGatewayStatus(workspacePath: string) {

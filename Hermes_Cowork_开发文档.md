@@ -1352,6 +1352,22 @@ npm run typecheck
 npm run build:web
 ```
 
+Hermes 消息连接测试：
+
+```bash
+npm run test:hermes-connection
+```
+
+这个测试会启动隔离的 Cowork API 进程和 fake Hermes TUI gateway，验证 `/api/tasks`、`/api/tasks/:taskId/stream`、`approval.request`、`/api/tasks/:taskId/approval`、`approval.respond`、`approval.resolved` 和最终 `message.complete` 的完整链路。测试使用临时 `HERMES_COWORK_DATA_DIR` 和 `HERMES_COWORK_WORKSPACE_DIR`，不会写入用户真实任务记录。
+
+真实 Hermes gateway smoke：
+
+```bash
+npm run smoke:hermes-real
+```
+
+这个 smoke 会调用本机真实 Hermes TUI gateway 和当前模型配置，请求模型只回复 `COWORK_REAL_GATEWAY_OK`。它用于验证 Cowork 与 Hermes 的真实消息连接、模型凭据、流式返回和 gateway 生命周期，适合 Hermes 升级、模型配置变更或前端出现 `Failed to fetch` / 无返回时先跑。
+
 健康检查：
 
 ```bash

@@ -29,6 +29,20 @@ npm run typecheck
 npm run build:web
 ```
 
+Hermes 消息连接测试：
+
+```bash
+npm run test:hermes-connection
+```
+
+真实 Hermes gateway smoke：
+
+```bash
+npm run smoke:hermes-real
+```
+
+`test:hermes-connection` 使用 fake gateway，适合每次开发后跑；`smoke:hermes-real` 会调用本机真实 Hermes 和当前模型配置，适合升级 Hermes、修改模型配置或排查 Failed to fetch / 无返回时跑。
+
 ## Hermes 本机路径
 
 当前默认路径在 `apps/api/src/paths.ts` 中：
