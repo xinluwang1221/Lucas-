@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
+import { listModels, refreshModelCatalog } from './modelApi'
 import {
-  listModels,
-  refreshModelCatalog,
   type HermesModelCatalogProvider,
   type HermesModelOverview,
   type ModelListResponse,

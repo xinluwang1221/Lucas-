@@ -37,6 +37,14 @@ import {
   configuredModelOptionsForComposer,
   groupModelOptionsForMenu,
 } from './features/settings/models'
+import {
+  configureHermesReasoning,
+  deleteHermesModelProvider,
+  deleteModel,
+  selectModel,
+  setHermesDefaultModel,
+  setHermesFallbackProviders
+} from './features/settings/modelApi'
 import { useModelState } from './features/settings/useModelState'
 import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import { useMcpState } from './features/settings/useMcpState'
@@ -66,16 +74,10 @@ import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
 import type { WorkspaceFile } from './features/workspace/workspaceApi'
 import {
   AppState,
-  configureHermesReasoning,
-  deleteHermesModelProvider,
-  deleteModel,
   HermesMcpConfig,
   HermesReasoningConfigureRequest,
   getState,
   ModelOption,
-  setHermesDefaultModel,
-  setHermesFallbackProviders,
-  selectModel,
   Task,
   Skill,
 } from './lib/api'

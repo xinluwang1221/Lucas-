@@ -1,7 +1,6 @@
 import { useCallback, useState, type FormEvent } from 'react'
+import { configureHermesModel, selectModel } from './modelApi'
 import {
-  configureHermesModel,
-  selectModel,
   type HermesModelCatalogProvider,
   type HermesModelOverview,
   type ModelListResponse
