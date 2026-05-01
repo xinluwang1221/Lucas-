@@ -2,7 +2,7 @@
   display: block;
   padding: 0;
   overflow: hidden;
-  background: #eef0ee;
+  background: var(--surface-subtle);
 }
 
 .file-preview-panel {
@@ -10,7 +10,7 @@
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-height: 100vh;
   color: var(--ink);
-  background: #eef0ee;
+  background: var(--surface-subtle);
 }
 
 .file-preview-panel.compact {
@@ -49,8 +49,8 @@
   width: 28px;
   height: 28px;
   padding: 5px;
-  color: var(--moss);
-  background: rgba(80, 138, 92, 0.12);
+  color: var(--success);
+  background: var(--success-soft);
   border-radius: 7px;
 }
 
@@ -104,7 +104,7 @@
   min-height: 23px;
   padding: 0 8px;
   color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.9);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 10px;
@@ -131,13 +131,13 @@
   padding: 28px;
   color: var(--ink-soft);
   text-align: center;
-  background: rgba(255, 253, 247, 0.92);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
 }
 
 .file-preview-state svg {
-  color: var(--moss);
+  color: var(--success);
 }
 
 .file-preview-state strong {
@@ -161,10 +161,10 @@
   min-height: 820px;
   margin: 0 auto;
   padding: 64px 74px 78px;
-  color: #161916;
-  background: #ffffff;
-  border: 1px solid rgba(35, 39, 32, 0.08);
-  box-shadow: 0 12px 34px rgba(25, 29, 22, 0.08);
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
   line-height: 1.88;
 }
 
@@ -195,8 +195,8 @@
 .embedded-preview {
   width: 100%;
   min-height: calc(100vh - 150px);
-  background: #ffffff;
-  border: 1px solid rgba(35, 39, 32, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 6px;
 }
 
@@ -209,7 +209,7 @@
   place-items: center;
   min-height: 520px;
   padding: 22px;
-  background: rgba(255, 253, 247, 0.82);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -320,7 +320,7 @@ audio.media-preview-player {
   padding: 8px 12px;
   color: var(--ink-soft);
   background: var(--paper);
-  border-left: 3px solid var(--moss);
+  border-left: 3px solid var(--success);
   border-radius: 6px;
   white-space: pre-wrap;
 }
