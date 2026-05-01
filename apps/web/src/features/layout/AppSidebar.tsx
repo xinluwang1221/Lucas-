@@ -2,7 +2,6 @@ import {
   Bot,
   ChevronDown,
   Clock3,
-  ExternalLink,
   FolderPlus,
   Globe2,
   Hammer,
@@ -12,10 +11,18 @@ import {
   Settings,
   User
 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import type { Task, Workspace } from '../../lib/api'
 import { SidebarWorkspaceNode } from '../workspace/SidebarWorkspaceNode'
 
 type SidebarViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
+const THEME_OPTIONS = ['亮色', '暗色', '跟随系统']
+
+function getNextTheme(current: string) {
+  const currentIndex = THEME_OPTIONS.indexOf(current)
+  const safeIndex = currentIndex === -1 ? 0 : currentIndex
+  return THEME_OPTIONS[(safeIndex + 1) % THEME_OPTIONS.length]
+}
 
 type SidebarWorkspaceGroup = {
   workspace: Workspace
@@ -47,7 +54,7 @@ export function AppSidebar({
   onOpenSkills,
   onOpenScheduled,
   onOpenDispatch,
-  onOpenAccountSettings,
+  onThemeChange,
   onOpenSettings,
   onCloseAccountMenu,
   onToggleAccountMenu
@@ -75,11 +82,29 @@ export function AppSidebar({
   onOpenSkills: () => void
   onOpenScheduled: () => void
   onOpenDispatch: () => void
-  onOpenAccountSettings: () => void
+  onThemeChange: (value: string) => void
   onOpenSettings: () => void
   onCloseAccountMenu: () => void
   onToggleAccountMenu: () => void
 }) {
+  const accountFootRef = useRef<HTMLDivElement | null>(null)
+  const nextTheme = getNextTheme(theme)
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (!accountFootRef.current?.contains(target)) {
+        onCloseAccountMenu()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [accountMenuOpen, onCloseAccountMenu])
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -171,7 +196,7 @@ export function AppSidebar({
         </button>
       </div>
 
-      <div className="sidebar-foot">
+      <div className="sidebar-foot" ref={accountFootRef}>
         {accountMenuOpen && (
           <div className="account-popover">
             <div className="account-popover-user">
@@ -180,32 +205,31 @@ export function AppSidebar({
               </div>
               <strong>Lucas</strong>
             </div>
-            <button onClick={onOpenAccountSettings}>
-              管理账号
-              <ExternalLink size={13} />
-            </button>
-            <button>
+            <button type="button">
               <span>语言</span>
               <em>{language}</em>
               <ChevronDown size={13} />
             </button>
-            <button>
+            <button
+              type="button"
+              title={`切换主题：当前 ${theme}，点击后切到 ${nextTheme}`}
+              aria-label={`切换主题：当前 ${theme}，点击后切到 ${nextTheme}`}
+              onClick={() => onThemeChange(nextTheme)}
+            >
               <span>主题</span>
               <em>{theme}</em>
               <ChevronDown size={13} />
             </button>
-            <button onClick={onOpenSettings}>
+            <button type="button" onClick={onOpenSettings}>
               设置
-            </button>
-            <button className="account-logout" onClick={onCloseAccountMenu}>
-              退出登录
             </button>
           </div>
         )}
         <button
+          type="button"
           className="sidebar-user-button"
-          title="账号与设置"
-          aria-label="账号与设置"
+          title="本机偏好与设置"
+          aria-label="本机偏好与设置"
           onClick={onToggleAccountMenu}
         >
           <span className="account-avatar">

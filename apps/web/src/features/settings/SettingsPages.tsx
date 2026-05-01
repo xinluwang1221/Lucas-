@@ -1,4 +1,4 @@
-import { FileText, LogOut, Play } from 'lucide-react'
+import { FileText, Play } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type {
   HermesAutoUpdateResult,
@@ -30,15 +30,14 @@ export function AccountSettingsSection({
   onPrivacyChange: (value: boolean) => void
 }) {
   return (
-    <SettingsSection title="账号">
+    <SettingsSection title="本机">
       <div className="settings-block">
-        <h3>账户信息</h3>
+        <h3>本机身份</h3>
         <div className="account-card">
           <div>
             <strong>Lucas</strong>
-            <span>Hermes Cowork 本机账户</span>
+            <span>仅用于本机界面显示和本机配置，不涉及登录账户。</span>
           </div>
-          <button className="ghost-button">管理账号</button>
         </div>
       </div>
       <div className="settings-block">
@@ -50,10 +49,6 @@ export function AccountSettingsSection({
           <Toggle checked={privacyMode} onChange={onPrivacyChange} />
         </div>
       </div>
-      <button className="settings-logout">
-        <LogOut size={14} />
-        退出登录
-      </button>
     </SettingsSection>
   )
 }

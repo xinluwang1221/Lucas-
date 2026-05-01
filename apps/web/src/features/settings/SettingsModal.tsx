@@ -186,7 +186,7 @@ export function SettingsModal({
   const [pathDraft, setPathDraft] = useState('')
   const [ruleDraft, setRuleDraft] = useState('')
   const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode; group?: 'main' | 'tools' | 'about' }> = [
-    { id: 'account', label: '账号', icon: <User size={15} />, group: 'main' },
+    { id: 'account', label: '本机', icon: <User size={15} />, group: 'main' },
     { id: 'general', label: '通用', icon: <Settings size={15} />, group: 'main' },
     { id: 'appearance', label: '外观', icon: <Palette size={15} />, group: 'main' },
     { id: 'mcp', label: 'MCP', icon: <Plug size={15} />, group: 'tools' },

@@ -146,14 +146,6 @@
   font-style: normal;
 }
 
-.account-popover .account-logout {
-  display: flex;
-  justify-content: center;
-  margin-top: 8px;
-  color: var(--ink);
-  background: var(--paper-deep);
-}
-
 .skills-main {
   min-width: 0;
   max-height: 100vh;

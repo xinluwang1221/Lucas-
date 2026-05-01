@@ -643,11 +643,7 @@ function App() {
         }}
         onOpenScheduled={() => setViewMode('scheduled')}
         onOpenDispatch={() => setViewMode('dispatch')}
-        onOpenAccountSettings={() => {
-          setSettingsTab('account')
-          setSettingsOpen(true)
-          setAccountMenuOpen(false)
-        }}
+        onThemeChange={setTheme}
         onOpenSettings={() => {
           setSettingsOpen(true)
           setAccountMenuOpen(false)
