@@ -20,7 +20,6 @@ import {
   Palette,
   Pencil,
   Play,
-  Search,
   Settings,
   Square,
   Star,
@@ -36,6 +35,7 @@ import {
   DispatchView,
   IdeasView,
   ScheduledTasksView,
+  SearchTasksView,
   TemplateIcon
 } from './features/layout/SecondaryViews'
 import { usePanelLayout } from './features/layout/usePanelLayout'
@@ -1364,60 +1364,6 @@ function App() {
         </div>
       )}
     </div>
-  )
-}
-
-function SearchTasksView({
-  tasks,
-  query,
-  onQueryChange,
-  onOpenTask
-}: {
-  tasks: Task[]
-  query: string
-  onQueryChange: (value: string) => void
-  onOpenTask: (task: Task) => void
-}) {
-  const normalized = query.trim().toLowerCase()
-  const results = tasks.filter((task) => {
-    if (!normalized) return true
-    return [
-      task.title,
-      task.prompt,
-      task.error,
-      task.hermesSessionId,
-      task.executionView?.response,
-      task.executionView?.errors.join(' '),
-      (task.skillNames ?? []).join(' '),
-      (task.tags ?? []).join(' ')
-    ].filter(Boolean).join(' ').toLowerCase().includes(normalized)
-  })
-
-  return (
-    <section className="product-page">
-      <header className="product-page-head">
-        <div>
-          <h1>搜索</h1>
-          <p>从历史任务、技能、标签里快速找回工作现场。</p>
-        </div>
-      </header>
-      <label className="product-search">
-        <Search size={16} />
-        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索任务、技能或场景" />
-      </label>
-      <div className="product-list">
-        {!results.length && <p className="muted-copy">没有找到匹配任务。</p>}
-        {results.map((task) => (
-          <button className="product-task-result" key={task.id} onClick={() => onOpenTask(task)}>
-            <StatusIcon status={task.status} />
-            <div>
-              <strong>{task.title}</strong>
-              <span>{statusLabel(task.status)} · {formatTime(task.createdAt)}{task.skillNames?.length ? ` · ${task.skillNames.join('、')}` : ''}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-    </section>
   )
 }
 

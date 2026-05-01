@@ -515,8 +515,8 @@ HC_EVENT\t
 `apps/web/src/features/layout/SecondaryViews.tsx`
 
 - 次级页面组件集合，已从 `App.tsx` 抽离。
-- 负责定时任务页、调度页、任务模板页，以及模板图标渲染。
-- 后续调整“定时任务日报”“调度入口能力归类”“任务模板沉淀方式”时，优先改这里；不要把这些次级页重新写回 `App.tsx`。
+- 负责搜索页、定时任务页、调度页、任务模板页，以及模板图标渲染。
+- 后续调整“任务搜索”“定时任务日报”“调度入口能力归类”“任务模板沉淀方式”时，优先改这里；不要把这些次级页重新写回 `App.tsx`。
 
 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`
 

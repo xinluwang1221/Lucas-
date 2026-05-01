@@ -1,5 +1,7 @@
 import {
   BarChart3,
+  CheckCircle2,
+  Circle,
   Database,
   FolderOpen,
   Globe2,
@@ -8,14 +10,18 @@ import {
   MessageSquarePlus,
   Plug,
   Presentation,
-  RefreshCw
+  RefreshCw,
+  Search,
+  Square,
+  XCircle
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type {
   BackgroundServiceStatus,
   HermesMcpConfig,
   HermesMcpRecommendations,
-  Skill
+  Skill,
+  Task
 } from '../../lib/api'
 import { Toggle } from '../settings/settingsControls'
 
@@ -25,6 +31,60 @@ export type PromptExample = {
   prompt: string
   icon: string
   category: string
+}
+
+export function SearchTasksView({
+  tasks,
+  query,
+  onQueryChange,
+  onOpenTask
+}: {
+  tasks: Task[]
+  query: string
+  onQueryChange: (value: string) => void
+  onOpenTask: (task: Task) => void
+}) {
+  const normalized = query.trim().toLowerCase()
+  const results = tasks.filter((task) => {
+    if (!normalized) return true
+    return [
+      task.title,
+      task.prompt,
+      task.error,
+      task.hermesSessionId,
+      task.executionView?.response,
+      task.executionView?.errors.join(' '),
+      (task.skillNames ?? []).join(' '),
+      (task.tags ?? []).join(' ')
+    ].filter(Boolean).join(' ').toLowerCase().includes(normalized)
+  })
+
+  return (
+    <section className="product-page">
+      <header className="product-page-head">
+        <div>
+          <h1>搜索</h1>
+          <p>从历史任务、技能、标签里快速找回工作现场。</p>
+        </div>
+      </header>
+      <label className="product-search">
+        <Search size={16} />
+        <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索任务、技能或场景" />
+      </label>
+      <div className="product-list">
+        {!results.length && <p className="muted-copy">没有找到匹配任务。</p>}
+        {results.map((task) => (
+          <button className="product-task-result" key={task.id} onClick={() => onOpenTask(task)}>
+            <SearchTaskStatusIcon status={task.status} />
+            <div>
+              <strong>{task.title}</strong>
+              <span>{searchTaskStatusLabel(task.status)} · {formatTaskTime(task.createdAt)}{task.skillNames?.length ? ` · ${task.skillNames.join('、')}` : ''}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 export function ScheduledTasksView({
@@ -245,6 +305,31 @@ export function TemplateIcon({ name }: { name: string }) {
   if (name === 'data') return <BarChart3 size={28} />
   if (name === 'files') return <FolderOpen size={28} />
   return <Hammer size={28} />
+}
+
+function SearchTaskStatusIcon({ status }: { status: Task['status'] }) {
+  if (status === 'running') return <Loader2 size={15} className="spin" />
+  if (status === 'completed') return <CheckCircle2 size={15} />
+  if (status === 'failed') return <XCircle size={15} />
+  if (status === 'stopped') return <Square size={15} />
+  return <Circle size={15} />
+}
+
+function searchTaskStatusLabel(status: Task['status']) {
+  return {
+    idle: '未开始',
+    running: '运行中',
+    completed: '已完成',
+    failed: '失败',
+    stopped: '已停止'
+  }[status]
+}
+
+function formatTaskTime(value: string) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value))
 }
 
 function formatMaybeDate(value?: string) {
