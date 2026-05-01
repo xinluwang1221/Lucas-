@@ -661,6 +661,12 @@ HC_EVENT\t
 - 负责读取 Hermes MCP 配置、测试/启停/删除 MCP、手动新增和编辑、工具级选择、Hermes MCP serve 状态、每日推荐日报、后台服务安装状态。
 - 后续修复“MCP 状态刷新不一致”“市场安装后已安装列表不同步”“serve 状态误报”“推荐日报后台开关异常”等问题时，优先检查这里和 `apps/api/src/mcp.ts`。
 
+`apps/web/src/features/settings/HermesUpdatePanel.tsx`
+
+- “关于 Hermes Cowork > Hermes 后台更新”面板，已从 `App.tsx` 抽离。
+- 负责 Hermes 版本检查、升级结论、复测结果、自动更新结果、诊断详情和 GitHub 入口展示。
+- 后续修复“升级前复测”“自动更新按钮状态”“旧失败信息残留”“诊断信息过多”等问题时，优先改这里和 `apps/api/src/hermes_runtime.ts`。
+
 `apps/web/src/features/skills/SkillsView.tsx`
 
 - 技能主页面模块，已从 `App.tsx` 抽离。
@@ -1228,8 +1234,9 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
-7. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
-8. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+7. 第七刀开始：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`，关于页里的 Hermes 版本检查、复测和自动更新结果展示不再留在 `App.tsx`；后续继续拆设置弹窗主体、通用设置页、对话流设置页和规则页。
+8. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
+9. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 
