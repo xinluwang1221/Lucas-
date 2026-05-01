@@ -73,6 +73,7 @@ import {
 } from './features/settings/models'
 import { useModelState } from './features/settings/useModelState'
 import { useModelConfigForm } from './features/settings/useModelConfigForm'
+import { useMcpState } from './features/settings/useMcpState'
 import {
   ConnectorsView as McpConnectorsView,
   ManualMcpModal as SettingsManualMcpModal,
@@ -120,19 +121,12 @@ import {
   Artifact,
   BackgroundServiceStatus,
   configureHermesReasoning,
-  configureHermesMcpServer,
   deleteHermesModelProvider,
   deleteModel,
-  getBackgroundStatus,
-  getHermesMcpConfig,
-  getHermesMcpRecommendations,
   getHermesRuntime,
   getHermesSessions,
   getHermesUpdateStatus,
-  getHermesMcpServeStatus,
   HermesMcpConfig,
-  HermesMcpInstallResult,
-  HermesMcpManualConfigRequest,
   HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult,
@@ -145,33 +139,23 @@ import {
   HermesUpdateStatus,
   getState,
   HermesRuntime,
-  installBackgroundServices,
   listSkillFiles,
   listSkills,
   Message,
   ModelOption,
   readSkillFile,
-  refreshHermesMcpRecommendationsWithAi,
-  removeHermesMcpServer,
   revealArtifact,
   runHermesAutoUpdate,
   runHermesCompatibilityTest,
-  setHermesMcpServerEnabled,
-  setHermesMcpServerTools,
   setHermesDefaultModel,
   setHermesFallbackProviders,
   selectModel,
-  startHermesMcpServe,
-  stopHermesMcpServe,
   Task,
-  testHermesMcpServer,
   taskExportUrl,
   tasksExportUrl,
   Skill,
   SkillFile,
   toggleSkill,
-  uninstallBackgroundServices,
-  updateHermesMcpServer,
   uploadSkill,
 } from './lib/api'
 import type {
@@ -424,25 +408,41 @@ function App() {
   const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
   const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
-  const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
-  const [mcpError, setMcpError] = useState<string | null>(null)
-  const [mcpTestResults, setMcpTestResults] = useState<Record<string, HermesMcpTestResult>>({})
-  const [mcpTestingId, setMcpTestingId] = useState<string | null>(null)
-  const [mcpUpdatingId, setMcpUpdatingId] = useState<string | null>(null)
-  const [mcpDeletingId, setMcpDeletingId] = useState<string | null>(null)
-  const [mcpToolUpdatingId, setMcpToolUpdatingId] = useState<string | null>(null)
-  const [mcpServeStatus, setMcpServeStatus] = useState<HermesMcpServeStatus | null>(null)
-  const [mcpServeUpdating, setMcpServeUpdating] = useState(false)
-  const [mcpServeError, setMcpServeError] = useState<string | null>(null)
   const [mcpMarketplaceOpen, setMcpMarketplaceOpen] = useState(false)
   const [manualMcpOpen, setManualMcpOpen] = useState(false)
   const [editingMcp, setEditingMcp] = useState<HermesMcpConfig['servers'][number] | null>(null)
-  const [mcpRecommendations, setMcpRecommendations] = useState<HermesMcpRecommendations | null>(null)
-  const [mcpRecommendationsLoading, setMcpRecommendationsLoading] = useState(false)
-  const [mcpRecommendationsError, setMcpRecommendationsError] = useState<string | null>(null)
-  const [backgroundStatus, setBackgroundStatus] = useState<BackgroundServiceStatus | null>(null)
-  const [backgroundUpdating, setBackgroundUpdating] = useState(false)
-  const [backgroundError, setBackgroundError] = useState<string | null>(null)
+  const {
+    hermesMcp,
+    mcpError,
+    mcpTestResults,
+    mcpTestingId,
+    mcpUpdatingId,
+    mcpDeletingId,
+    mcpToolUpdatingId,
+    mcpServeStatus,
+    mcpServeUpdating,
+    mcpServeError,
+    mcpRecommendations,
+    mcpRecommendationsLoading,
+    mcpRecommendationsError,
+    backgroundStatus,
+    backgroundUpdating,
+    backgroundError,
+    refreshHermesMcp,
+    refreshMcpRecommendationsState,
+    handleRefreshMcpRecommendationsWithAi,
+    refreshBackgroundStatus,
+    refreshMcpServeStatus,
+    handleToggleMcpServe,
+    handleToggleBackgroundServices,
+    handleTestMcpServer,
+    handleMcpInstalled,
+    handleToggleMcpServer,
+    handleDeleteMcpServer,
+    handleManualMcpSubmit,
+    handleEditMcpSubmit,
+    handleSetMcpToolSelection
+  } = useMcpState()
   const [skills, setSkills] = useState<Skill[]>([])
   const [customizeTab, setCustomizeTab] = useState<'skills' | 'connectors'>('skills')
   const [skillTab, setSkillTab] = useState<'market' | 'installed'>('installed')
@@ -580,106 +580,6 @@ function App() {
   const refreshSkills = async () => {
     const nextSkills = await listSkills()
     setSkills(nextSkills)
-  }
-
-  const refreshHermesMcp = async () => {
-    setMcpError(null)
-    try {
-      setHermesMcp(await getHermesMcpConfig())
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  const refreshMcpRecommendationsState = async () => {
-    setMcpRecommendationsError(null)
-    try {
-      setMcpRecommendations(await getHermesMcpRecommendations())
-    } catch (cause) {
-      setMcpRecommendationsError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleRefreshMcpRecommendationsWithAi() {
-    setMcpRecommendationsLoading(true)
-    setMcpRecommendationsError(null)
-    try {
-      setMcpRecommendations(await refreshHermesMcpRecommendationsWithAi())
-    } catch (cause) {
-      setMcpRecommendationsError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpRecommendationsLoading(false)
-    }
-  }
-
-  async function refreshBackgroundStatus() {
-    setBackgroundError(null)
-    try {
-      setBackgroundStatus(await getBackgroundStatus())
-    } catch (cause) {
-      setBackgroundError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function refreshMcpServeStatus() {
-    setMcpServeError(null)
-    try {
-      setMcpServeStatus(await getHermesMcpServeStatus())
-    } catch (cause) {
-      setMcpServeError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleToggleMcpServe(shouldRun: boolean) {
-    setMcpServeUpdating(true)
-    setMcpServeError(null)
-    try {
-      setMcpServeStatus(shouldRun ? await startHermesMcpServe() : await stopHermesMcpServe())
-      window.setTimeout(() => void refreshMcpServeStatus(), 600)
-    } catch (cause) {
-      setMcpServeError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpServeUpdating(false)
-    }
-  }
-
-  async function handleToggleBackgroundServices(enabled: boolean) {
-    setBackgroundUpdating(true)
-    setBackgroundError(null)
-    try {
-      setBackgroundStatus(enabled ? await installBackgroundServices() : await uninstallBackgroundServices())
-    } catch (cause) {
-      setBackgroundError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBackgroundUpdating(false)
-    }
-  }
-
-  async function handleTestMcpServer(serverId: string) {
-    setMcpTestingId(serverId)
-    try {
-      const result = await testHermesMcpServer(serverId)
-      setMcpTestResults((current) => ({ ...current, [serverId]: result }))
-    } catch (cause) {
-      const result: HermesMcpTestResult = {
-        serverId,
-        ok: false,
-        elapsedMs: 0,
-        output: '',
-        error: cause instanceof Error ? cause.message : String(cause),
-        testedAt: new Date().toISOString()
-      }
-      setMcpTestResults((current) => ({ ...current, [serverId]: result }))
-    } finally {
-      setMcpTestingId(null)
-    }
-  }
-
-  function handleMcpInstalled(result: HermesMcpInstallResult) {
-    setHermesMcp(result.config)
-    if (result.testResult) {
-      setMcpTestResults((current) => ({ ...current, [result.installName]: result.testResult! }))
-    }
   }
 
   const {
@@ -1042,81 +942,6 @@ function App() {
 
   function updateSettingsPref<K extends keyof SettingsPrefs>(key: K, value: SettingsPrefs[K]) {
     setSettingsPrefs((current) => ({ ...current, [key]: value }))
-  }
-
-  async function handleToggleMcpServer(serverId: string, enabled: boolean) {
-    setMcpUpdatingId(serverId)
-    setMcpError(null)
-    try {
-      setHermesMcp(await setHermesMcpServerEnabled(serverId, enabled))
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpUpdatingId(null)
-    }
-  }
-
-  async function handleDeleteMcpServer(serverId: string) {
-    if (!window.confirm(`确定删除 MCP 服务「${serverId}」吗？删除前会自动备份 Hermes 配置。`)) return
-    setMcpDeletingId(serverId)
-    setMcpError(null)
-    try {
-      setHermesMcp(await removeHermesMcpServer(serverId))
-      setMcpTestResults((current) => {
-        const next = { ...current }
-        delete next[serverId]
-        return next
-      })
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpDeletingId(null)
-    }
-  }
-
-  async function handleManualMcpSubmit(config: HermesMcpManualConfigRequest) {
-    setMcpUpdatingId(config.name)
-    setMcpError(null)
-    try {
-      const result = await configureHermesMcpServer(config)
-      handleMcpInstalled(result)
-      setManualMcpOpen(false)
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpUpdatingId(null)
-    }
-  }
-
-  async function handleEditMcpSubmit(config: HermesMcpManualConfigRequest) {
-    if (!editingMcp) return
-    setMcpUpdatingId(editingMcp.id)
-    setMcpError(null)
-    try {
-      const result = await updateHermesMcpServer(editingMcp.id, config)
-      setHermesMcp(result.config)
-      if (result.testResult) {
-        setMcpTestResults((current) => ({ ...current, [result.serverId]: result.testResult! }))
-      }
-      setEditingMcp(null)
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpUpdatingId(null)
-    }
-  }
-
-  async function handleSetMcpToolSelection(serverId: string, mode: 'all' | 'include' | 'exclude', tools: string[]) {
-    setMcpToolUpdatingId(serverId)
-    setMcpError(null)
-    try {
-      const result = await setHermesMcpServerTools(serverId, { mode, tools })
-      setHermesMcp(result.config)
-    } catch (cause) {
-      setMcpError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpToolUpdatingId(null)
-    }
   }
 
   function handleAddSettingsRule(rule: string) {
@@ -2103,7 +1928,7 @@ function App() {
             initialServer={editingMcp}
             isSaving={mcpUpdatingId === editingMcp.id}
             onClose={() => setEditingMcp(null)}
-            onSubmit={(config) => void handleEditMcpSubmit(config)}
+            onSubmit={(config) => void handleEditMcpSubmit(editingMcp.id, config, () => setEditingMcp(null))}
           />
         </div>
       )}
@@ -2116,7 +1941,7 @@ function App() {
             mode="create"
             isSaving={Boolean(mcpUpdatingId)}
             onClose={() => setManualMcpOpen(false)}
-            onSubmit={(config) => void handleManualMcpSubmit(config)}
+            onSubmit={(config) => void handleManualMcpSubmit(config, () => setManualMcpOpen(false))}
           />
         </div>
       )}

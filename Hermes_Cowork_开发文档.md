@@ -654,6 +654,12 @@ HC_EVENT\t
 - 负责“设置 > MCP”的本地服务、Hermes Server、每日推荐、云端四个 Tab，以及 MCP 市场、手动配置/编辑、服务详情、工具开关、连接器摘要。
 - 后续修复“MCP 页面拥挤”“市场分类与推荐日报”“已安装 MCP 说明/图标/工具级开关”“Hermes mcp serve 诊断”等问题时，优先改这里和 `apps/api/src/mcp.ts`，不要在 `App.tsx` 里新增第二套 MCP UI。
 
+`apps/web/src/features/settings/useMcpState.ts`
+
+- MCP 设置数据和动作 hook，已从 `App.tsx` 抽离。
+- 负责读取 Hermes MCP 配置、测试/启停/删除 MCP、手动新增和编辑、工具级选择、Hermes MCP serve 状态、每日推荐日报、后台服务安装状态。
+- 后续修复“MCP 状态刷新不一致”“市场安装后已安装列表不同步”“serve 状态误报”“推荐日报后台开关异常”等问题时，优先检查这里和 `apps/api/src/mcp.ts`。
+
 `apps/web/src/lib/http.ts`
 
 - 前端通用 HTTP 基础层，已从 `lib/api.ts` 分离。
@@ -1195,7 +1201,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts` 和文件状态 hook `useWorkspaceFiles.ts`；后续如继续深化，再拆 workspace 操作 hook/provider。
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
-5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关和 Connectors 摘要都在这个模块；后续如继续深化，再把 MCP API 请求和市场搜索状态拆成 `mcpApi` / hook。
+5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 7. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
