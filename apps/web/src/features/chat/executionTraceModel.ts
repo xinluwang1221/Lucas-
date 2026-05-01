@@ -61,18 +61,7 @@ export function taskStepItems(task: Task): TodoStepItem[] {
   const explicitSteps = explicitHermesDecomposition(task)
   if (explicitSteps.length) return explicitSteps
 
-  const dynamicSteps = inferredTaskDecomposition(task)
-  if (dynamicSteps.length) return dynamicSteps
-
-  return [
-    {
-      label: intentTitleFromPrompt(task.prompt),
-      detail: intentDetailFromPrompt(task.prompt),
-      status: task.status === 'running' ? 'running' : 'done',
-      mode: 'plan',
-      source: 'inferred'
-    }
-  ]
+  return inferredTaskDecomposition(task)
 }
 
 export function workModeLabel(mode: AgentWorkMode | string) {
@@ -84,6 +73,14 @@ export function workModeLabel(mode: AgentWorkMode | string) {
 
 export function taskProgressSummary(task: Task) {
   const steps = taskStepItems(task)
+  if (!steps.length) {
+    return {
+      currentLabel: '暂无任务拆解',
+      doneCount: 0,
+      totalCount: 0,
+      percent: 0
+    }
+  }
   const activeStep = steps.find((step) => ['running', 'failed', 'stopped'].includes(step.status))
     ?? steps.filter((step) => step.status === 'done').at(-1)
     ?? steps[0]
@@ -410,6 +407,7 @@ function explicitHermesDecomposition(task: Task): TodoStepItem[] {
   ]
   const parsedSteps: ParsedTodoStep[] = rawSteps.length ? rawSteps : parsePlanLines(eventSummary(planEvent))
   if (!parsedSteps.length) return []
+  if (isOperationalTodoList(parsedSteps)) return []
 
   const activeIndex = explicitActiveStepIndex(parsedSteps.length, task)
   return parsedSteps.slice(0, 6).map((step, index) => ({
@@ -422,42 +420,7 @@ function explicitHermesDecomposition(task: Task): TodoStepItem[] {
 }
 
 function inferredTaskDecomposition(task: Task): TodoStepItem[] {
-  if (task.status === 'completed') {
-    return [{
-      label: '任务已完成',
-      detail: task.artifacts.length ? `${task.artifacts.length} 个文件已加入产物区` : 'Hermes 未返回结构化计划，结果见对话区。',
-      status: 'done',
-      mode: 'result',
-      source: 'inferred'
-    }]
-  }
-  if (task.status === 'failed') {
-    return [{
-      label: '处理失败',
-      detail: compactStepDetail(task.error || 'Hermes 返回失败状态'),
-      status: 'failed',
-      mode: 'reflection',
-      source: 'inferred'
-    }]
-  }
-  if (task.status === 'stopped') {
-    return [{
-      label: '任务停止',
-      detail: '用户主动停止了这次执行',
-      status: 'stopped',
-      mode: 'result',
-      source: 'inferred'
-    }]
-  }
-  return [{
-    label: task.status === 'idle' ? '等待开始' : '等待 Hermes 规划',
-    detail: task.status === 'idle'
-      ? intentDetailFromPrompt(task.prompt)
-      : 'Hermes 还没有返回结构化任务计划。工具调用会出现在过程资源中，不再混入任务拆解。',
-    status: task.status === 'running' ? 'running' : 'pending',
-    mode: 'plan',
-    source: 'inferred'
-  }]
+  return []
 }
 
 function arrayStepValues(value: unknown): ParsedTodoStep[] {
@@ -486,6 +449,20 @@ function normalizeTodoStatus(value: unknown): TodoStepStatus | undefined {
   if (status === 'failed' || status === 'error') return 'failed'
   if (status === 'stopped') return 'stopped'
   return undefined
+}
+
+function isOperationalTodoList(steps: ParsedTodoStep[]) {
+  if (steps.length > 6) return true
+  const operationalCount = steps.filter((step) => isOperationalTodoStep(step)).length
+  return operationalCount > 0 && operationalCount / steps.length >= 0.5
+}
+
+function isOperationalTodoStep(step: ParsedTodoStep) {
+  const text = `${step.label} ${step.detail}`.replace(/\s+/g, ' ').trim()
+  if (!text) return false
+  if (step.mode === 'react') return true
+  return /^(读取文件|查看文件|处理文件|文件活动|调用工具|工具调用|检索资料|搜索资料|网页搜索|运行命令|命令执行|整理结果)$/i.test(step.label)
+    || /(skill_view|read_file|write_file|search_files|terminal|browser_|mcp_|处理工作区文件|工具执行|工具调用|命令空间|csv-analyzer|sqlite\.js)/i.test(text)
 }
 
 function parsePlanLines(text: string): ParsedTodoStep[] {

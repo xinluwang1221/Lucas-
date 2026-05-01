@@ -70,7 +70,7 @@ export function TaskProgressCard({
         <span style={{ width: `${progress.percent}%` }} />
       </div>
       <div className="task-progress-copy">
-        <strong>{progress.doneCount}/{progress.totalCount} 步</strong>
+        <strong>{progress.totalCount ? `${progress.doneCount}/${progress.totalCount} 步` : '等待计划'}</strong>
         <span>{taskElapsedLabel(task)}</span>
       </div>
       <TodoSteps task={task} />
@@ -238,6 +238,15 @@ export function TaskArtifactsCard({
 
 function TodoSteps({ task }: { task: Task }) {
   const steps = taskStepItems(task)
+
+  if (!steps.length) {
+    return (
+      <EmptyInspectorState
+        title="暂无任务拆解"
+        detail="Hermes 当前只返回了执行过程，已显示在对话区的过程流里。"
+      />
+    )
+  }
 
   return (
     <ol className="todo-steps">

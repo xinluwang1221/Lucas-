@@ -39,8 +39,7 @@ const toolOnlyTask = taskWithEvents('running', [
 ])
 
 const toolOnlySteps = taskStepItems(toolOnlyTask)
-assert.equal(toolOnlySteps.length, 1)
-assert.equal(toolOnlySteps[0].label, '等待 Hermes 规划')
+assert.equal(toolOnlySteps.length, 0)
 assert.doesNotMatch(toolOnlySteps.map((step) => step.label).join('\n'), /工具|搜索|读取/)
 
 const todoTask = taskWithEvents('running', [
@@ -72,5 +71,32 @@ const progress = taskProgressSummary(todoTask)
 assert.equal(progress.doneCount, 1)
 assert.equal(progress.totalCount, 3)
 assert.equal(progress.currentLabel, '调研 Hermes MCP 能力')
+
+const operationalTodoTask = taskWithEvents('completed', [
+  {
+    id: 'operational-todo',
+    type: 'tool.completed',
+    createdAt: now,
+    name: 'todo',
+    summary: '更新执行清单',
+    todos: [
+      { id: '1', content: '读取文件', status: 'completed' },
+      { id: '2', content: '调用工具：MCP 调用', status: 'completed' },
+      { id: '3', content: '调用工具：命令执行', status: 'completed' },
+      { id: '4', content: '检索资料', status: 'completed' },
+      { id: '5', content: '调用工具：工具调用', status: 'completed' },
+      { id: '6', content: '读取文件', status: 'completed' },
+      { id: '7', content: '调用工具：工具调用', status: 'completed' },
+      { id: '8', content: '整理结果', status: 'completed' }
+    ]
+  }
+])
+
+const operationalSteps = taskStepItems(operationalTodoTask)
+assert.equal(operationalSteps.length, 0)
+
+const emptyProgress = taskProgressSummary(operationalTodoTask)
+assert.equal(emptyProgress.currentLabel, '暂无任务拆解')
+assert.equal(emptyProgress.totalCount, 0)
 
 console.log('Task decomposition test passed')

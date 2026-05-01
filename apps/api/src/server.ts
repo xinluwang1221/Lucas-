@@ -2745,6 +2745,16 @@ function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
   }
   if (event.type.startsWith('tool.')) {
     if (isInternalProgressEvent(event)) return null
+    if (isTodoToolEvent(event)) {
+      return {
+        id: event.id,
+        kind: 'thinking',
+        title: '执行清单更新',
+        detail: todoActivityDetail(event),
+        createdAt: event.createdAt,
+        source: event.synthetic ? 'synthetic' : 'hermes'
+      }
+    }
     const name = humanToolName(String(event.name ?? inferredToolName(event)))
     return {
       id: event.id,
@@ -2874,6 +2884,25 @@ function activityToolDetail(event: ExecutionEvent) {
   if (event.type === 'tool.started') return safeJson(event.args ?? event.kwargs ?? '工具开始执行').slice(0, 180)
   if (event.type === 'tool.completed') return event.isError ? '工具返回错误' : safeJson(event.result ?? '工具执行完成').slice(0, 180)
   return safeJson(event).slice(0, 180)
+}
+
+function isTodoToolEvent(event: ExecutionEvent) {
+  return String(event.name ?? '').toLowerCase() === 'todo' && Array.isArray(event.todos)
+}
+
+function todoActivityDetail(event: ExecutionEvent) {
+  const todos = Array.isArray(event.todos) ? event.todos : []
+  const labels = todos
+    .map((item) => {
+      if (!item || typeof item !== 'object') return ''
+      const record = item as Record<string, unknown>
+      const content = String(record.content ?? record.title ?? record.label ?? '').replace(/\s+/g, ' ').trim()
+      const status = String(record.status ?? '').replace(/_/g, ' ')
+      return content ? `${status ? `${status}: ` : ''}${content}` : ''
+    })
+    .filter(Boolean)
+    .slice(0, 6)
+  return labels.length ? labels.join(' / ') : eventPrimaryText(event) || 'Hermes 更新了执行清单'
 }
 
 function humanToolName(name: string) {
