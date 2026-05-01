@@ -600,6 +600,18 @@ HC_EVENT\t
 - 负责运行中任务 SSE 连接、实时 task payload 合并回调、连接状态、最近同步时间，以及 getState 轮询兜底。
 - 后续修复“流式输出不更新”“任务区和对话区不同步”“上下文资源延迟刷新”“事件流失败后如何降级”等问题时，优先改这里和后端 stream API。
 
+`apps/web/src/features/chat/useTaskContext.ts`
+
+- 当前任务上下文资源 hook，已从 `App.tsx` 抽离。
+- 负责读取 Hermes context snapshot、上下文加载/错误/压缩状态、手动刷新和手动压缩。
+- 后续修复“上下文资源和本轮过程资源重叠”“上下文中文件占比不清楚”“压缩后资源区不同步”等问题时，优先改这里和 `TaskInspectorCards.tsx`。
+
+`apps/web/src/features/chat/taskState.ts`
+
+- 对话任务状态合并工具，已从 `App.tsx` 抽离。
+- 负责把 Hermes stream 回来的 task payload 合并进全局 `AppState`，并按 id 去重、按创建时间排序 messages/artifacts。
+- 后续如果 stream payload 需要增量 patch、事件去重、artifact 去重策略调整，优先改这里。
+
 `apps/web/src/features/settings/models.tsx`
 
 - 模型设置 feature 模块，已从 `App.tsx` 抽离。
@@ -1151,7 +1163,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts` 和 workspace API service `workspaceApi.ts`；后续如继续深化，再拆 workspace hook/provider。
-3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts` 和 `useTaskStream.ts`；后续如继续深化，再把任务操作、上下文资源请求拆成 hook/provider。
+3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts` 和 `taskState.ts`；后续如继续深化，再把任务操作拆成 hook/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化和 MiMo 版本分组都在这个模块；后续如继续深化，再把模型状态请求和保存流程拆成 `modelsApi` / hook。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关和 Connectors 摘要都在这个模块；后续如继续深化，再把 MCP API 请求和市场搜索状态拆成 `mcpApi` / hook。
 6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。

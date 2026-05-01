@@ -99,6 +99,8 @@ import {
   workModeLabel
 } from './features/chat/executionTraceModel'
 import { latestUserMessageId } from './features/chat/messageUtils'
+import { mergeStreamedTask } from './features/chat/taskState'
+import { useTaskContext } from './features/chat/useTaskContext'
 import { useTaskStream, type TaskStreamStatus } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
@@ -124,7 +126,6 @@ import {
   archiveTask,
   Artifact,
   BackgroundServiceStatus,
-  compressTaskContext,
   configureHermesModel,
   configureHermesReasoning,
   configureHermesMcpServer,
@@ -137,7 +138,6 @@ import {
   getHermesMcpRecommendations,
   getHermesRuntime,
   getHermesSessions,
-  getTaskContext,
   getHermesUpdateStatus,
   getHermesMcpServeStatus,
   HermesMcpConfig,
@@ -152,7 +152,6 @@ import {
   HermesSessionSummary,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
-  HermesContextSnapshot,
   HermesUpdateStatus,
   getState,
   HermesRuntime,
@@ -449,10 +448,6 @@ function App() {
   const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
   const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
-  const [selectedTaskContext, setSelectedTaskContext] = useState<HermesContextSnapshot | null>(null)
-  const [contextLoading, setContextLoading] = useState(false)
-  const [contextCompressing, setContextCompressing] = useState(false)
-  const [contextError, setContextError] = useState<string | null>(null)
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
   const [mcpTestResults, setMcpTestResults] = useState<Record<string, HermesMcpTestResult>>({})
@@ -730,6 +725,17 @@ function App() {
     selectedTaskTag,
     hermesSessions
   })
+  const {
+    selectedTaskContext,
+    contextLoading,
+    contextCompressing,
+    contextError,
+    refreshSelectedTaskContext,
+    compressSelectedTaskContext
+  } = useTaskContext({
+    selectedTask,
+    refreshAppState: refresh
+  })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
   const composerRunningTask = selectedTask?.status === 'running' ? selectedTask : runningTask
@@ -750,75 +756,9 @@ function App() {
   }
   const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
 
-  async function refreshSelectedTaskContext(task = selectedTask) {
-    if (!task) {
-      setSelectedTaskContext(null)
-      setContextError(null)
-      return
-    }
-    setContextLoading(true)
-    setContextError(null)
-    try {
-      const context = await getTaskContext(task.id)
-      if (selectedTaskIdRef.current === task.id) {
-        setSelectedTaskContext(context)
-      }
-    } catch (cause) {
-      if (selectedTaskIdRef.current === task.id) {
-        setContextError(cause instanceof Error ? cause.message : String(cause))
-      }
-    } finally {
-      if (selectedTaskIdRef.current === task.id) {
-        setContextLoading(false)
-      }
-    }
-  }
-
-  async function handleCompressSelectedTaskContext() {
-    if (!selectedTask || selectedTask.status === 'running') return
-    setContextCompressing(true)
-    setContextError(null)
-    try {
-      const result = await compressTaskContext(selectedTask.id)
-      setSelectedTaskContext(result.context)
-      await refresh()
-    } catch (cause) {
-      setContextError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setContextCompressing(false)
-    }
-  }
-
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId
   }, [selectedTaskId])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!selectedTask) {
-      setSelectedTaskContext(null)
-      setContextError(null)
-      setContextLoading(false)
-      return () => {
-        cancelled = true
-      }
-    }
-    setContextLoading(true)
-    setContextError(null)
-    void getTaskContext(selectedTask.id)
-      .then((context) => {
-        if (!cancelled) setSelectedTaskContext(context)
-      })
-      .catch((cause) => {
-        if (!cancelled) setContextError(cause instanceof Error ? cause.message : String(cause))
-      })
-      .finally(() => {
-        if (!cancelled) setContextLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedTask?.id, selectedTask?.status, selectedTask?.hermesSessionId, selectedTask?.events?.length])
 
   useEffect(() => {
     selectedWorkspaceIdRef.current = selectedWorkspaceId
@@ -2287,7 +2227,7 @@ function App() {
               compressing={contextCompressing}
               workspaceFiles={workspaceFiles}
               onRefresh={() => void refreshSelectedTaskContext()}
-              onCompress={() => void handleCompressSelectedTaskContext()}
+              onCompress={() => void compressSelectedTaskContext()}
             />
           </>
         )}
@@ -3994,38 +3934,6 @@ function shortReference(value: string) {
     const parts = value.split(/[\\/]/).filter(Boolean)
     return parts.slice(-2).join('/')
   }
-}
-
-function mergeStreamedTask(current: AppState, task: Task): AppState {
-  const exists = current.tasks.some((item) => item.id === task.id)
-  const tasks = exists
-    ? current.tasks.map((item) => (item.id === task.id ? task : item))
-    : [task, ...current.tasks]
-
-  const mergedTaskMessages = dedupeByIdAndSort([
-    ...current.messages.filter((message) => message.taskId !== task.id),
-    ...(task.messages ?? [])
-  ])
-  const mergedTaskArtifacts = dedupeByIdAndSort([
-    ...current.artifacts.filter((artifact) => artifact.taskId !== task.id),
-    ...(task.artifacts ?? [])
-  ])
-
-  return {
-    ...current,
-    tasks,
-    messages: mergedTaskMessages,
-    artifacts: mergedTaskArtifacts
-  }
-}
-
-function dedupeByIdAndSort<T extends { id: string; createdAt: string }>(items: T[]) {
-  const records = new Map<string, T>()
-  for (const item of items) {
-    const key = `${item.id}`
-    records.set(key, item)
-  }
-  return [...records.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
 }
 
 function RuntimePanel({ runtime }: { runtime: HermesRuntime | null }) {
