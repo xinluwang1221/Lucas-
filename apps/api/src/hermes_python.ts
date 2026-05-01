@@ -20,6 +20,17 @@ export type HermesBridgeResult = {
   events: HermesBridgeEvent[]
 }
 
+export type HermesContextCommandResult = {
+  exitCode: number | null
+  error?: string
+  sessionId?: string
+  context?: HermesBridgeEvent
+  compressed?: HermesBridgeEvent
+  stdout: string
+  stderr: string
+  events: HermesBridgeEvent[]
+}
+
 export function runHermesPythonBridge(params: {
   taskId: string
   prompt: string
@@ -143,6 +154,135 @@ export function runHermesPythonBridge(params: {
           finalResponse = typeof event.finalResponse === 'string' ? event.finalResponse : finalResponse
           sessionId = typeof event.sessionId === 'string' ? event.sessionId : sessionId
           bridgeError = typeof event.error === 'string' ? event.error : bridgeError
+        }
+        params.onEvent?.(event)
+      } catch {
+        // Ignore malformed bridge lines; raw output remains available.
+      }
+    }
+  })
+}
+
+export function runHermesContextCommand(params: {
+  taskId: string
+  cwd: string
+  mode: 'context' | 'compress'
+  sessionId?: string
+  model?: string
+  provider?: string
+  focusTopic?: string
+  onEvent?: (event: HermesBridgeEvent) => void
+}): Promise<HermesContextCommandResult> {
+  const bridgePath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'hermes_bridge.py')
+  const args = [
+    bridgePath,
+    '--mode',
+    params.mode,
+    '--prompt',
+    '',
+    '--cwd',
+    params.cwd,
+    '--task-id',
+    params.taskId
+  ]
+
+  if (params.sessionId) {
+    args.push('--session-id', params.sessionId)
+  }
+  if (params.model) {
+    args.push('--model', params.model)
+  }
+  if (params.provider) {
+    args.push('--provider', params.provider)
+  }
+  if (params.focusTopic) {
+    args.push('--focus-topic', params.focusTopic)
+  }
+
+  return new Promise((resolve) => {
+    const child = spawn(hermesPythonBin, args, {
+      cwd: hermesAgentDir,
+      env: {
+        ...process.env,
+        HERMES_AGENT_DIR: hermesAgentDir,
+        PYTHONUNBUFFERED: '1'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let lineBuffer = ''
+    let commandError = ''
+    let sessionId = params.sessionId
+    let context: HermesBridgeEvent | undefined
+    let compressed: HermesBridgeEvent | undefined
+    const events: HermesBridgeEvent[] = []
+
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+      lineBuffer += chunk
+      const lines = lineBuffer.split(/\n/)
+      lineBuffer = lines.pop() ?? ''
+      for (const line of lines) {
+        handleLine(line)
+      }
+    })
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+
+    child.on('close', (exitCode) => {
+      if (lineBuffer) handleLine(lineBuffer)
+      resolve({
+        exitCode,
+        error: commandError,
+        sessionId,
+        context,
+        compressed,
+        stdout,
+        stderr,
+        events
+      })
+    })
+
+    child.on('error', (error) => {
+      stderr += `\n${error.message}`
+      resolve({
+        exitCode: 1,
+        error: commandError || error.message,
+        sessionId,
+        context,
+        compressed,
+        stdout,
+        stderr,
+        events
+      })
+    })
+
+    function handleLine(line: string) {
+      if (!line.startsWith(eventPrefix)) return
+      try {
+        const event = JSON.parse(line.slice(eventPrefix.length)) as HermesBridgeEvent
+        events.push(event)
+        if (typeof event.sessionId === 'string') {
+          sessionId = event.sessionId
+        }
+        if (event.type === 'context.updated') {
+          context = event
+        }
+        if (event.type === 'context.compressed') {
+          compressed = event
+          if (event.context && typeof event.context === 'object') {
+            context = event.context as HermesBridgeEvent
+          }
+        }
+        if (event.type === 'task.failed') {
+          commandError = typeof event.error === 'string' ? event.error : commandError
         }
         params.onEvent?.(event)
       } catch {

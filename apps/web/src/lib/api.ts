@@ -1,3 +1,5 @@
+import { apiUrl, jsonHeaders, parseError, request } from './http'
+
 export type Workspace = {
   id: string
   name: string
@@ -8,14 +10,6 @@ export type Workspace = {
 export type PickedWorkspaceDirectory = {
   name: string
   path: string
-}
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787'
-
-function apiUrl(path: string) {
-  if (/^https?:\/\//i.test(path)) return path
-  if (!path.startsWith('/api')) return path
-  return `${API_BASE}${path}`
 }
 
 export type Message = {
@@ -139,6 +133,8 @@ export type ModelOption = {
   builtIn?: boolean
   description?: string
   source?: 'auto' | 'current' | 'custom' | 'catalog'
+  selectedModelKey?: string
+  runtimeModelId?: string
 }
 
 export type ModelSettings = {
@@ -183,6 +179,15 @@ export type HermesModelCatalogRefreshSource = {
   message: string
 }
 
+export type HermesReasoningEffort = '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
+export type HermesReasoningSettings = {
+  effort: HermesReasoningEffort
+  effectiveEffort: Exclude<HermesReasoningEffort, ''>
+  showReasoning: boolean
+  delegationEffort: HermesReasoningEffort
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string
@@ -194,6 +199,7 @@ export type HermesModelOverview = {
   fallbackProviders: string[]
   credentials: HermesModelCredential[]
   providers: HermesModelProvider[]
+  reasoning: HermesReasoningSettings
   updatedAt: string
 }
 
@@ -214,6 +220,12 @@ export type HermesModelConfigureRequest = {
   baseUrl?: string
   apiKey?: string
   apiMode?: string
+}
+
+export type HermesReasoningConfigureRequest = {
+  effort?: HermesReasoningEffort
+  showReasoning?: boolean
+  delegationEffort?: HermesReasoningEffort
 }
 
 export type Skill = {
@@ -267,6 +279,43 @@ export type HermesSessionsResponse = {
   sessionsDir: string
   sessions: HermesSessionSummary[]
   updatedAt: string
+}
+
+export type HermesContextSnapshot = {
+  sessionId?: string
+  model?: string
+  contextUsed: number
+  contextMax: number
+  contextPercent: number
+  contextSource: 'api' | 'estimated' | 'unknown'
+  thresholdPercent: number
+  targetRatio: number
+  protectLast: number
+  compressionCount: number
+  compressionEnabled: boolean
+  canCompress: boolean
+  messageCount: number
+  status: 'empty' | 'unknown' | 'ok' | 'warn' | 'danger'
+  statusLabel: string
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    reasoningTokens: number
+    apiCalls: number
+  }
+  updatedAt: string
+}
+
+export type HermesContextCompressResult = {
+  ok: boolean
+  oldSessionId?: string
+  newSessionId?: string
+  removed: number
+  skipped?: boolean
+  reason?: string
+  context: HermesContextSnapshot
 }
 
 export type HermesMcpServer = {
@@ -529,8 +578,6 @@ export type HermesAutoUpdateResult = {
   completedAt: string
 }
 
-const jsonHeaders = { 'Content-Type': 'application/json' }
-
 export async function getState(): Promise<AppState> {
   return request('/api/state')
 }
@@ -557,6 +604,16 @@ export async function runHermesAutoUpdate(): Promise<HermesAutoUpdateResult> {
 
 export async function getHermesSessions(): Promise<HermesSessionsResponse> {
   return request('/api/hermes/sessions')
+}
+
+export async function getTaskContext(taskId: string): Promise<HermesContextSnapshot> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}/context`)
+}
+
+export async function compressTaskContext(taskId: string): Promise<HermesContextCompressResult> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}/context/compress`, {
+    method: 'POST'
+  })
 }
 
 export async function getHermesMcpConfig(): Promise<HermesMcpConfig> {
@@ -711,6 +768,14 @@ export async function configureHermesModel(requestBody: HermesModelConfigureRequ
   })
 }
 
+export async function configureHermesReasoning(requestBody: HermesReasoningConfigureRequest): Promise<ModelListResponse> {
+  return request('/api/models/reasoning', {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify(requestBody)
+  })
+}
+
 export async function deleteHermesModelProvider(providerId: string): Promise<ModelListResponse> {
   return request(`/api/models/providers/${encodeURIComponent(providerId)}`, {
     method: 'DELETE'
@@ -769,8 +834,18 @@ export async function createTask(workspaceId: string, prompt: string, modelId?: 
   })
 }
 
-export async function sendTaskMessage(taskId: string, prompt: string, modelId?: string, skillNames: string[] = []) {
-  return request(`/api/tasks/${taskId}/messages`, {
+export type SendTaskMessageResponse = {
+  ok: true
+  task: Task
+}
+
+export async function sendTaskMessage(
+  taskId: string,
+  prompt: string,
+  modelId?: string,
+  skillNames: string[] = []
+): Promise<SendTaskMessageResponse> {
+  return request<SendTaskMessageResponse>(`/api/tasks/${taskId}/messages`, {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({ prompt, modelId, skillNames })
@@ -831,77 +906,8 @@ export function artifactRawUrl(artifactId: string) {
   return apiUrl(`/api/artifacts/${artifactId}/raw`)
 }
 
-export async function addWorkspace(name: string, path: string): Promise<Workspace> {
-  return request('/api/workspaces', {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify({ name, path })
-  })
-}
-
-export async function pickWorkspaceDirectory(): Promise<PickedWorkspaceDirectory> {
-  return request('/api/system/pick-directory', { method: 'POST' })
-}
-
-export async function updateWorkspace(workspaceId: string, payload: { name?: string; path?: string }): Promise<Workspace> {
-  return request(`/api/workspaces/${workspaceId}`, {
-    method: 'PATCH',
-    headers: jsonHeaders,
-    body: JSON.stringify(payload)
-  })
-}
-
-export async function deleteWorkspace(workspaceId: string): Promise<{ ok: boolean; removedTaskCount: number }> {
-  return request(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
-}
-
-export async function uploadFile(workspaceId: string, file: File) {
-  const form = new FormData()
-  form.append('file', file)
-  return request(`/api/workspaces/${workspaceId}/files`, {
-    method: 'POST',
-    body: form
-  })
-}
-
-export async function listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
-  return request(`/api/workspaces/${workspaceId}/files`)
-}
-
-export async function listWorkspaceTree(workspaceId: string, relativePath = ''): Promise<WorkspaceTree> {
-  const query = relativePath ? `?path=${encodeURIComponent(relativePath)}` : ''
-  return request(`/api/workspaces/${workspaceId}/tree${query}`)
-}
-
-export async function revealWorkspace(workspaceId: string) {
-  return request(`/api/workspaces/${workspaceId}/reveal`, { method: 'POST' })
-}
-
-export async function revealWorkspaceFile(workspaceId: string, relativePath: string) {
-  return request(`/api/workspaces/${workspaceId}/files/reveal`, {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify({ path: relativePath })
-  })
-}
-
-export function workspaceFileRawUrl(workspaceId: string, relativePath: string) {
-  return apiUrl(`/api/workspaces/${workspaceId}/files/raw?path=${encodeURIComponent(relativePath)}`)
-}
-
 export async function revealArtifact(artifactId: string) {
   return request(`/api/artifacts/${artifactId}/reveal`, { method: 'POST' })
-}
-
-export async function previewWorkspaceFile(workspaceId: string, relativePath: string): Promise<string> {
-  const response = await fetch(
-    apiUrl(`/api/workspaces/${workspaceId}/files/preview?path=${encodeURIComponent(relativePath)}`)
-  )
-  if (!response.ok) {
-    const error = await parseError(response)
-    throw new Error(error)
-  }
-  return response.text()
 }
 
 export async function previewArtifact(artifactId: string): Promise<string> {
@@ -911,22 +917,4 @@ export async function previewArtifact(artifactId: string): Promise<string> {
     throw new Error(error)
   }
   return response.text()
-}
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(url), init)
-  if (!response.ok) {
-    const error = await parseError(response)
-    throw new Error(error)
-  }
-  return response.json()
-}
-
-async function parseError(response: Response) {
-  try {
-    const data = await response.json()
-    return data.error || response.statusText
-  } catch {
-    return response.statusText
-  }
 }

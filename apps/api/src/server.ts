@@ -4,25 +4,54 @@ import type { Response } from 'express'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFile, execFileSync, spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import multer from 'multer'
 import { findChangedArtifacts, takeSnapshot } from './artifacts.js'
 import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgroundServices } from './background.js'
+import { readPreviewBody, sendInlineFile } from './file_preview.js'
 import { cleanHermesOutput } from './hermes.js'
-import { HermesBridgeEvent, runHermesPythonBridge } from './hermes_python.js'
+import { runHermesContextCommand } from './hermes_python.js'
+import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
-import { configureHermesModel, listModelOptions, normalizeModelId, readHermesDefaultModel, readHermesModelCatalog, readHermesModelOverview, refreshHermesModelCatalog, removeHermesModelProvider, selectedModelOption, setHermesDefaultModel, setHermesFallbackProviders } from './models.js'
+import {
+  configureHermesModel,
+  configureHermesReasoning,
+  findModelBySelectionId,
+  listModelOptions,
+  modelSelectionKey,
+  normalizeModelId,
+  normalizeProviderId,
+  readHermesDefaultModel,
+  readHermesModelCatalog,
+  readHermesModelOverview,
+  refreshHermesModelCatalog,
+  removeHermesModelProvider,
+  selectedModelOption,
+  setHermesDefaultModel,
+  setHermesFallbackProviders
+} from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, ModelOption, ModelSettings, Task } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, ModelOption, ModelSettings, Task } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
 const upload = multer({ dest: path.join(process.cwd(), 'data', 'uploads') })
-const runningTasks = new Map<string, ReturnType<typeof import('node:child_process').spawn>>()
+const runningTasks = new Map<string, HermesRuntimeHandle>()
 const taskStreamClients = new Map<string, Set<Response>>()
+const maxStoredExecutionEvents = 180
+const TASK_STREAM_BROADCAST_MS = 180
+const taskStreamBroadcastTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function stopRunningTask(taskId: string) {
+  const handle = runningTasks.get(taskId)
+  if (!handle) return false
+  handle.stop()
+  runningTasks.delete(taskId)
+  return true
+}
 
 app.use(cors({ origin: ['http://127.0.0.1:5173', 'http://localhost:5173'] }))
 app.use(express.json({ limit: '2mb' }))
@@ -33,13 +62,16 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/hermes/runtime', async (_req, res) => {
   try {
+    const workspacePath = store.snapshot.workspaces[0]?.path ?? process.cwd()
     const [versionText, statusText] = await Promise.all([
       runHermesCommand(['version']),
       runHermesCommand(['status'])
     ])
+    const adapter = await readHermesRuntimeAdapterStatus(workspacePath)
 
     res.json({
-      bridgeMode: 'python-bridge',
+      bridgeMode: adapter.activeMode,
+      adapter,
       paths: {
         hermesBin,
         hermesAgentDir,
@@ -311,28 +343,17 @@ app.post('/api/hermes/mcp/:serverId/enabled', (req, res) => {
 
 app.get('/api/models', (_req, res) => {
   const settings = store.snapshot.modelSettings
-  res.json({
-    selectedModelId: settings.selectedModelId,
-    models: listModelOptions(settings),
-    hermes: readHermesModelOverview(settings),
-    catalog: readHermesModelCatalog()
-  })
+  res.json(modelListResponse(settings))
 })
 
 app.post('/api/models/catalog/refresh', async (_req, res) => {
   try {
     const refreshResult = await refreshHermesModelCatalog()
     const settings = store.snapshot.modelSettings
-    res.json({
-      selectedModelId: settings.selectedModelId,
-      models: listModelOptions(settings),
-      hermes: readHermesModelOverview(settings),
-      catalog: refreshResult.catalog,
-      catalogRefresh: {
-        sources: refreshResult.sources,
-        updatedAt: refreshResult.updatedAt
-      }
-    })
+    res.json(modelListResponse(settings, refreshResult.catalog, {
+      sources: refreshResult.sources,
+      updatedAt: refreshResult.updatedAt
+    }))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -340,7 +361,8 @@ app.post('/api/models/catalog/refresh', async (_req, res) => {
 
 app.post('/api/models/select', (req, res) => {
   const { modelId } = req.body as { modelId?: string }
-  const model = listModelOptions(store.snapshot.modelSettings).find((item) => item.id === modelId)
+  const options = listModelOptions(store.snapshot.modelSettings)
+  const model = findModelBySelectionId(options, modelId || '')
   if (!model) {
     res.status(404).json({ error: 'model not found' })
     return
@@ -351,9 +373,9 @@ app.post('/api/models/select', (req, res) => {
   }
 
   store.update((state) => {
-    state.modelSettings.selectedModelId = model.id
+    state.modelSettings.selectedModelId = model.selectedModelKey ?? modelSelectionKey(model)
   })
-  res.json({ ok: true, selectedModelId: model.id })
+  res.json({ ok: true, selectedModelId: model.selectedModelKey ?? modelSelectionKey(model) })
 })
 
 app.post('/api/models', (req, res) => {
@@ -377,10 +399,14 @@ app.post('/api/models', (req, res) => {
       model,
       ...state.modelSettings.customModels.filter((item) => item.id !== model.id)
     ]
-    state.modelSettings.selectedModelId = model.id
+    state.modelSettings.selectedModelId = modelSelectionKey(model)
   })
 
-  res.status(201).json(model)
+  res.status(201).json({
+    ...model,
+    selectedModelKey: modelSelectionKey(model),
+    runtimeModelId: model.id
+  })
 })
 
 app.delete('/api/models/:modelId', (req, res) => {
@@ -392,10 +418,25 @@ app.delete('/api/models/:modelId', (req, res) => {
 
   let removed = false
   store.update((state) => {
-    const nextModels = state.modelSettings.customModels.filter((model) => model.id !== modelId)
+    const nextModels = state.modelSettings.customModels.filter((model) => {
+      const normalizedModelId = modelId || ''
+      const key = modelSelectionKey(model)
+      return model.id !== normalizedModelId && key !== normalizedModelId
+    })
     removed = nextModels.length !== state.modelSettings.customModels.length
+    const selectedModelId = state.modelSettings.selectedModelId
+    const deletedModel = state.modelSettings.customModels.filter((model) => {
+      const key = modelSelectionKey(model)
+      return model.id === modelId || key === modelId
+    })
+    const selectedWasRemoved = deletedModel.some((model) => {
+      const key = modelSelectionKey(model)
+      return key === selectedModelId || model.id === selectedModelId
+    })
     state.modelSettings.customModels = nextModels
-    if (state.modelSettings.selectedModelId === modelId) {
+    if (selectedWasRemoved) {
+      state.modelSettings.selectedModelId = 'auto'
+    } else if (selectedModelId === `${modelId}`) {
       state.modelSettings.selectedModelId = 'auto'
     }
   })
@@ -406,12 +447,7 @@ app.delete('/api/models/:modelId', (req, res) => {
   }
 
   const settings = store.snapshot.modelSettings
-  res.json({
-    selectedModelId: settings.selectedModelId,
-    models: listModelOptions(settings),
-    hermes: readHermesModelOverview(settings),
-    catalog: readHermesModelCatalog()
-  })
+  res.json(modelListResponse(settings))
 })
 
 function rememberConfiguredModels(
@@ -423,7 +459,13 @@ function rememberConfiguredModels(
     const id = normalizeModelId(candidate.model ?? candidate.modelId ?? '')
     const provider = typeof candidate.provider === 'string' ? candidate.provider.trim() : ''
     if (!id || id === 'auto') continue
-    const existing = settings.customModels.find((model) => model.id === id)
+    const providerKey = normalizeProviderId(provider)
+    const candidateKey = providerKey ? `${providerKey}:${id}` : id
+    const existing = settings.customModels.find((model) => {
+      const key = modelSelectionKey(model)
+      if (model.id !== id) return false
+      return !providerKey || key === candidateKey
+    })
     additions.push({
       id,
       label: existing?.label || id,
@@ -437,8 +479,9 @@ function rememberConfiguredModels(
   const seen = new Set<string>()
   settings.customModels = [...additions, ...settings.customModels]
     .filter((model) => {
-      if (seen.has(model.id)) return false
-      seen.add(model.id)
+      const key = modelSelectionKey(model)
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
     })
 }
@@ -449,6 +492,96 @@ function providerLabelForModelOption(provider: string) {
   if (provider === 'deepseek') return 'DeepSeek'
   if (provider === 'zai') return 'Z.AI / GLM'
   return provider
+}
+
+function effectiveSelectedModelId(settings: ModelSettings) {
+  const selected = selectedModelOption(settings)
+  return selected?.selectedModelKey ?? (selected ? modelSelectionKey(selected) : 'auto')
+}
+
+function modelListResponse(
+  settings: ModelSettings,
+  catalog = readHermesModelCatalog(),
+  catalogRefresh?: { sources: unknown[]; updatedAt: string }
+) {
+  return {
+    selectedModelId: effectiveSelectedModelId(settings),
+    models: listModelOptions(settings),
+    hermes: withRecentModelFailureSignals(readHermesModelOverview(settings)),
+    catalog,
+    ...(catalogRefresh ? { catalogRefresh } : {})
+  }
+}
+
+function withRecentModelFailureSignals(overview: HermesModelOverview): HermesModelOverview {
+  const failures = recentModelAuthFailures()
+  if (!failures.size) return overview
+  return {
+    ...overview,
+    credentials: overview.credentials.map((credential) => {
+      const detail = failures.get(normalizeProviderId(credential.id))
+      if (!detail) return credential
+      return {
+        ...credential,
+        detail: appendStatusDetail(credential.detail, detail)
+      }
+    }),
+    providers: overview.providers.map((provider) => {
+      const detail = failures.get(normalizeProviderId(provider.id))
+      if (!detail) return provider
+      return {
+        ...provider,
+        credentialSummary: appendStatusDetail(provider.credentialSummary, detail)
+      }
+    })
+  }
+}
+
+function recentModelAuthFailures() {
+  const failures = new Map<string, string>()
+  const recentTasks = [...store.snapshot.tasks]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 50)
+  for (const task of recentTasks) {
+    const text = [
+      task.error,
+      task.stderr,
+      task.stdout,
+      ...(task.events ?? []).map((event) => [
+        event.error,
+        event.message,
+        event.summary,
+        event.detail,
+        event.text
+      ].filter(Boolean).join(' '))
+    ].filter(Boolean).join('\n')
+    if (!/(HTTP\s*401|invalid api key|unauthorized|forbidden|authenticationerror)/i.test(text)) continue
+    for (const provider of authFailureProviders(text, task.provider)) {
+      if (provider && !failures.has(provider)) {
+        failures.set(provider, '最近任务验证失败：HTTP 401 / Invalid API Key，请重新填写 Key')
+      }
+    }
+  }
+  return failures
+}
+
+function authFailureProviders(text: string, fallbackProvider?: string) {
+  const providers = new Set<string>()
+  for (const match of text.matchAll(/\bProvider:\s*([A-Za-z0-9:._-]+)/gi)) {
+    const provider = normalizeProviderId(match[1])
+    if (provider) providers.add(provider)
+  }
+  if (!providers.size) {
+    const fallback = normalizeProviderId(fallbackProvider ?? '')
+    if (fallback) providers.add(fallback)
+  }
+  return [...providers]
+}
+
+function appendStatusDetail(current: string, detail: string) {
+  if (!current) return detail
+  if (current.includes(detail)) return current
+  return `${current}；${detail}`
 }
 
 app.post('/api/models/hermes-default', (req, res) => {
@@ -468,12 +601,7 @@ app.post('/api/models/hermes-default', (req, res) => {
       ])
     })
     const settings = store.snapshot.modelSettings
-    res.json({
-      selectedModelId: settings.selectedModelId,
-      models: listModelOptions(settings),
-      hermes: readHermesModelOverview(settings),
-      catalog: readHermesModelCatalog()
-    })
+    res.json(modelListResponse(settings))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -502,12 +630,22 @@ app.post('/api/models/configure', (req, res) => {
       ])
     })
     const settings = store.snapshot.modelSettings
-    res.json({
-      selectedModelId: settings.selectedModelId,
-      models: listModelOptions(settings),
-      hermes: readHermesModelOverview(settings),
-      catalog: readHermesModelCatalog()
+    res.json(modelListResponse(settings))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/models/reasoning', (req, res) => {
+  try {
+    const { effort, showReasoning, delegationEffort } = req.body as Record<string, unknown>
+    configureHermesReasoning({
+      effort: typeof effort === 'string' ? effort as HermesReasoningEffort : undefined,
+      showReasoning: typeof showReasoning === 'boolean' ? showReasoning : undefined,
+      delegationEffort: typeof delegationEffort === 'string' ? delegationEffort as HermesReasoningEffort : undefined
     })
+    const settings = store.snapshot.modelSettings
+    res.json(modelListResponse(settings))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -521,12 +659,7 @@ app.delete('/api/models/providers/:providerId', (req, res) => {
       state.modelSettings.customModels = state.modelSettings.customModels.filter((model) => model.provider !== req.params.providerId)
     })
     const settings = store.snapshot.modelSettings
-    res.json({
-      selectedModelId: settings.selectedModelId,
-      models: listModelOptions(settings),
-      hermes: readHermesModelOverview(settings),
-      catalog: readHermesModelCatalog()
-    })
+    res.json(modelListResponse(settings))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     res.status(message.includes('当前默认') ? 409 : 500).json({ error: message })
@@ -542,12 +675,7 @@ app.post('/api/models/fallbacks', (req, res) => {
     }
     setHermesFallbackProviders(providers)
     const settings = store.snapshot.modelSettings
-    res.json({
-      selectedModelId: settings.selectedModelId,
-      models: listModelOptions(settings),
-      hermes: readHermesModelOverview(settings),
-      catalog: readHermesModelCatalog()
-    })
+    res.json(modelListResponse(settings))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -758,10 +886,11 @@ app.patch('/api/workspaces/:workspaceId', (req, res) => {
     return
   }
 
-  const nextName = typeof name === 'string' ? name.trim() : undefined
   const nextPath = typeof workspacePath === 'string' && workspacePath.trim()
     ? path.resolve(workspacePath.trim())
     : undefined
+  const nextNameFromRequest = typeof name === 'string' ? name.trim() : undefined
+  const nextName = nextNameFromRequest || (nextPath ? path.basename(nextPath) : undefined)
 
   if (!nextName && !nextPath) {
     res.status(400).json({ error: 'name or path is required' })
@@ -799,11 +928,7 @@ app.delete('/api/workspaces/:workspaceId', (req, res) => {
 
   const taskIds = state.tasks.filter((task) => task.workspaceId === workspaceId).map((task) => task.id)
   for (const taskId of taskIds) {
-    const child = runningTasks.get(taskId)
-    if (child) {
-      child.kill('SIGTERM')
-      runningTasks.delete(taskId)
-    }
+    stopRunningTask(taskId)
   }
 
   store.update((nextState) => {
@@ -856,6 +981,97 @@ app.get('/api/tasks/:taskId', (req, res) => {
   }
 
   res.json(enrichTask(state, task))
+})
+
+app.get('/api/tasks/:taskId/context', async (req, res) => {
+  try {
+    const state = store.snapshot
+    const task = state.tasks.find((item) => item.id === req.params.taskId)
+    if (!task) {
+      res.status(404).json({ error: 'task not found' })
+      return
+    }
+    const workspace = state.workspaces.find((item) => item.id === task.workspaceId)
+    const context = await readTaskContextSnapshot(task, workspace?.path)
+    res.json(context)
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/tasks/:taskId/context/compress', async (req, res) => {
+  try {
+    const state = store.snapshot
+    const task = state.tasks.find((item) => item.id === req.params.taskId)
+    if (!task) {
+      res.status(404).json({ error: 'task not found' })
+      return
+    }
+    if (task.status === 'running') {
+      res.status(409).json({ error: 'task is running' })
+      return
+    }
+    if (!task.hermesSessionId) {
+      res.status(400).json({ error: 'task has no Hermes session' })
+      return
+    }
+    const workspace = state.workspaces.find((item) => item.id === task.workspaceId)
+    if (!workspace) {
+      res.status(404).json({ error: 'workspace not found' })
+      return
+    }
+
+    const model = resolveRequestedModel(task.modelId, task.modelConfigKey, task.provider)
+    const result = await runHermesContextCommand({
+      taskId: task.id,
+      cwd: workspace.path,
+      mode: 'compress',
+      sessionId: task.hermesSessionId,
+      model: model.id === 'auto' ? undefined : model.id,
+      provider: model.id === 'auto' ? undefined : model.provider
+    })
+
+    if (result.exitCode !== 0) {
+      res.status(500).json({
+        error: result.error || sanitizeHermesRuntimeMessage(result.stderr) || `Hermes compression exited with ${result.exitCode}`
+      })
+      return
+    }
+
+    const compressedEvent = result.compressed ?? result.events.find((event) => event.type === 'context.compressed')
+    const context = normalizeContextSnapshot(
+      result.context ?? (isPlainObject(compressedEvent?.context) ? compressedEvent.context : undefined),
+      task
+    )
+    const newSessionId =
+      (typeof compressedEvent?.sessionId === 'string' ? compressedEvent.sessionId : undefined) ??
+      result.sessionId ??
+      task.hermesSessionId
+
+    store.update((mutable) => {
+      const mutableTask = mutable.tasks.find((item) => item.id === task.id)
+      if (!mutableTask) return
+      mutableTask.hermesSessionId = newSessionId
+      mutableTask.updatedAt = new Date().toISOString()
+      mutableTask.events = dedupeExecutionEvents([
+        ...(mutableTask.events ?? []),
+        ...result.events.map(normalizeBridgeEvent)
+      ])
+    })
+    broadcastTaskUpdate(task.id, true)
+
+    res.json({
+      ok: true,
+      oldSessionId: typeof compressedEvent?.oldSessionId === 'string' ? compressedEvent.oldSessionId : task.hermesSessionId,
+      newSessionId,
+      removed: typeof compressedEvent?.removed === 'number' ? compressedEvent.removed : 0,
+      skipped: Boolean(compressedEvent?.skipped),
+      reason: typeof compressedEvent?.reason === 'string' ? compressedEvent.reason : undefined,
+      context
+    })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.get('/api/tasks/:taskId/stream', (req, res) => {
@@ -985,7 +1201,12 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
   }
 
   const now = new Date().toISOString()
-  const model = resolveRequestedModel(modelId || task.modelId)
+  const requestedModelId = typeof modelId === 'string' && modelId.trim() ? modelId.trim() : undefined
+  const model = resolveRequestedModel(
+    requestedModelId || task.modelId,
+    requestedModelId ? undefined : task.modelConfigKey,
+    requestedModelId ? undefined : task.provider
+  )
   const modelConfigKey = modelSessionKey(model)
   const resumeSessionId = shouldResumeHermesSession(task, model, modelConfigKey) ? task.hermesSessionId : undefined
   const normalizedSkillNames = normalizeSkillNames(skillNames, task.skillNames ?? [])
@@ -998,6 +1219,8 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
     mutableTask.modelConfigKey = modelConfigKey
     mutableTask.skillNames = normalizedSkillNames
     mutableTask.error = undefined
+    mutableTask.stdout = undefined
+    mutableTask.stderr = undefined
     mutableTask.startedAt = now
     mutableTask.completedAt = undefined
     mutableTask.updatedAt = now
@@ -1009,20 +1232,22 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
       createdAt: now
     })
   })
-  broadcastTaskUpdate(task.id)
+  broadcastTaskUpdate(task.id, true)
 
   void executeTask(task.id, workspace.path, prompt.trim(), resumeSessionId, model, normalizedSkillNames)
-  res.status(202).json({ ok: true })
+  const updatedState = store.snapshot
+  const updatedTask = updatedState.tasks.find((item) => item.id === task.id)
+  if (!updatedTask) {
+    res.status(404).json({ error: 'task disappeared' })
+    return
+  }
+  res.status(202).json({ ok: true, task: enrichTask(updatedState, updatedTask) })
 })
 
 app.post('/api/tasks/:taskId/stop', (req, res) => {
   const taskId = req.params.taskId
-  const child = runningTasks.get(taskId)
+  const stopped = stopRunningTask(taskId)
   const stoppedAt = new Date().toISOString()
-  if (child) {
-    child.kill('SIGTERM')
-    runningTasks.delete(taskId)
-  }
 
   store.update((state) => {
     const task = state.tasks.find((item) => item.id === taskId)
@@ -1036,7 +1261,7 @@ app.post('/api/tasks/:taskId/stop', (req, res) => {
           id: crypto.randomUUID(),
           type: 'task.stopped',
           createdAt: stoppedAt,
-          reason: child ? 'user_requested' : 'not_running',
+          reason: stopped ? 'user_requested' : 'not_running',
           summary: '用户已停止当前 Hermes 任务'
         })
       ]
@@ -1049,7 +1274,7 @@ app.post('/api/tasks/:taskId/stop', (req, res) => {
       })
     }
   })
-  broadcastTaskUpdate(taskId)
+  broadcastTaskUpdate(taskId, true)
   res.json({ ok: true })
 })
 
@@ -1118,11 +1343,7 @@ app.post('/api/tasks/:taskId/tags', (req, res) => {
 
 app.delete('/api/tasks/:taskId', (req, res) => {
   const taskId = req.params.taskId
-  const child = runningTasks.get(taskId)
-  if (child) {
-    child.kill('SIGTERM')
-    runningTasks.delete(taskId)
-  }
+  stopRunningTask(taskId)
 
   store.update((state) => {
     state.tasks = state.tasks.filter((task) => task.id !== taskId)
@@ -1226,7 +1447,7 @@ async function executeTask(
   const startedAt = new Date().toISOString()
 
   try {
-    const result = await runHermesPythonBridge({
+    const result = await runHermesRuntimeTask({
       taskId,
       prompt,
       cwd: workspacePath,
@@ -1234,7 +1455,7 @@ async function executeTask(
       onEvent: (event) => updateRunningEvent(taskId, event),
       onStdout: (_chunk, accumulated) => updateRunningOutput(taskId, { stdout: accumulated }),
       onStderr: (_chunk, accumulated) => updateRunningOutput(taskId, { stderr: accumulated }),
-      onProcess: (child) => runningTasks.set(taskId, child),
+      onHandle: (handle) => runningTasks.set(taskId, handle),
       model: model?.id === 'auto' ? undefined : model?.id,
       provider: model?.id === 'auto' ? undefined : model?.provider,
       skills: skillNames,
@@ -1250,30 +1471,32 @@ async function executeTask(
       before
     )
     const taskBeforeUpdate = store.snapshot.tasks.find((task) => task.id === taskId)
+    const alreadyTerminalBeforeFinal =
+      taskBeforeUpdate?.status === 'stopped' || taskBeforeUpdate?.status === 'failed'
     const stoppedBeforeFinal = taskBeforeUpdate?.status === 'stopped'
     const finalEvents = buildFinalExecutionEvents(
       taskBeforeUpdate?.events,
       result.events,
       result.stdout,
-      stoppedBeforeFinal ? '' : result.stderr,
-      stoppedBeforeFinal ? [] : artifacts,
+      alreadyTerminalBeforeFinal ? '' : result.stderr,
+      alreadyTerminalBeforeFinal ? [] : artifacts,
       completedAt
     )
     const cleanedStdout = cleanBridgeStdout(result.stdout)
     const cleanedResponse = result.finalResponse || cleanHermesOutput(cleanedStdout)
     const failureMessage = result.exitCode === 0 ? '' : bridgeFailureMessage(result, finalEvents)
 
-    if (stoppedBeforeFinal) {
+    if (alreadyTerminalBeforeFinal) {
       store.update((state) => {
         const task = state.tasks.find((item) => item.id === taskId)
-        if (!task || task.status !== 'stopped') return
+        if (!task || (task.status !== 'stopped' && task.status !== 'failed')) return
         task.stdout = result.finalResponse || cleanedStdout || task.stdout
         task.stderr = result.stderr || task.stderr
         task.hermesSessionId = result.sessionId ?? task.hermesSessionId
         task.events = finalEvents
         task.updatedAt = task.completedAt ?? completedAt
       })
-      broadcastTaskUpdate(taskId)
+      broadcastTaskUpdate(taskId, true)
       return
     }
 
@@ -1302,7 +1525,7 @@ async function executeTask(
       })
       state.artifacts.push(...artifacts)
     })
-    broadcastTaskUpdate(taskId)
+    broadcastTaskUpdate(taskId, true)
   } catch (error) {
     runningTasks.delete(taskId)
     const completedAt = new Date().toISOString()
@@ -1322,14 +1545,29 @@ async function executeTask(
         createdAt: completedAt
       })
     })
-    broadcastTaskUpdate(taskId)
+    broadcastTaskUpdate(taskId, true)
   }
 }
 
-function resolveRequestedModel(modelId?: string) {
+function resolveRequestedModel(modelId?: string, modelConfigKey?: string, modelProvider?: string) {
   const settings = store.snapshot.modelSettings
   const models = listModelOptions(settings)
+  if (modelConfigKey) {
+    const exactByConfig = models.find((model) => (model.selectedModelKey ?? modelSelectionKey(model)) === modelConfigKey)
+    if (exactByConfig) return exactByConfig
+  }
+
   const requested = modelId || settings.selectedModelId
+  if (!requested) return selectedModelOption(settings)
+
+  const directBySelectionKey = models.find((model) => (model.selectedModelKey ?? modelSelectionKey(model)) === requested)
+  if (directBySelectionKey) return directBySelectionKey
+
+  const selectedWithProvider = modelProvider
+    ? models.find((model) => model.id === requested && normalizeProviderId(model.provider || '') === normalizeProviderId(modelProvider))
+    : undefined
+  if (selectedWithProvider) return selectedWithProvider
+
   return models.find((model) => model.id === requested) ?? selectedModelOption(settings)
 }
 
@@ -1399,232 +1637,6 @@ function normalizeSkillNames(value: unknown, fallback: string[] = []) {
       .filter(Boolean)
       .map((item) => item.slice(0, 120))
   )].slice(0, 12)
-}
-
-function isTextPreviewable(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase()
-  if (['.txt', '.md', '.json', '.csv', '.html', '.htm', '.log', '.xml', '.yaml', '.yml'].includes(ext)) {
-    return true
-  }
-  return !ext && fs.statSync(filePath).size < 1024 * 1024
-}
-
-function readPreviewBody(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase()
-  if (isTextPreviewable(filePath)) {
-    return fs.readFileSync(filePath, 'utf8')
-  }
-
-  if (ext === '.docx') {
-    return readDocxPreview(filePath)
-  }
-
-  if (['.rtf', '.doc'].includes(ext)) {
-    return readTextutilPreview(filePath)
-  }
-
-  if (['.pptx', '.ppsx'].includes(ext)) {
-    return readPptxPreview(filePath)
-  }
-
-  if (['.xlsx', '.xlsm'].includes(ext)) {
-    return readXlsxPreview(filePath)
-  }
-
-  throw new Error('这个文件暂不支持正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
-}
-
-function readDocxPreview(filePath: string) {
-  try {
-    const text = extractXmlText(readZipEntry(filePath, 'word/document.xml'))
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-
-    if (!text) throw new Error('empty docx preview')
-    return text
-  } catch {
-    throw new Error('无法读取这个 Word 文档的正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
-  }
-}
-
-function readTextutilPreview(filePath: string) {
-  try {
-    const text = execFileSync('textutil', ['-convert', 'txt', '-stdout', filePath], {
-      encoding: 'utf8',
-      maxBuffer: 12 * 1024 * 1024
-    })
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-    if (!text) throw new Error('empty textutil preview')
-    return text
-  } catch {
-    throw new Error('无法读取这个文档的正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
-  }
-}
-
-function readPptxPreview(filePath: string) {
-  try {
-    const slideEntries = listZipEntries(filePath)
-      .filter((entry) => /^ppt\/slides\/slide\d+\.xml$/.test(entry))
-      .sort((a, b) => Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0) - Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0))
-      .slice(0, 80)
-
-    const slides = slideEntries.map((entry, index) => {
-      const text = extractXmlText(readZipEntry(filePath, entry))
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .join('\n\n')
-      return text ? `## 幻灯片 ${index + 1}\n\n${text}` : ''
-    }).filter(Boolean)
-
-    if (!slides.length) throw new Error('empty pptx preview')
-    return `# 演示文稿预览\n\n${slides.join('\n\n')}`
-  } catch {
-    throw new Error('无法读取这个演示文稿的内容预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
-  }
-}
-
-function readXlsxPreview(filePath: string) {
-  try {
-    const sharedStrings = readXlsxSharedStrings(filePath)
-    const sheetEntries = listZipEntries(filePath)
-      .filter((entry) => /^xl\/worksheets\/sheet\d+\.xml$/.test(entry))
-      .sort((a, b) => Number(a.match(/sheet(\d+)\.xml$/)?.[1] ?? 0) - Number(b.match(/sheet(\d+)\.xml$/)?.[1] ?? 0))
-      .slice(0, 5)
-
-    const sheets = sheetEntries.map((entry, index) => {
-      const rows = parseXlsxRows(readZipEntry(filePath, entry), sharedStrings)
-      if (!rows.length) return ''
-      const clippedRows = rows.slice(0, 120).map((row) => row.slice(0, 36).join('\t'))
-      return `## 工作表 ${index + 1}\n\n${clippedRows.join('\n')}`
-    }).filter(Boolean)
-
-    if (!sheets.length) throw new Error('empty xlsx preview')
-    return sheets.join('\n\n')
-  } catch {
-    throw new Error('无法读取这个表格的内容预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
-  }
-}
-
-function listZipEntries(filePath: string) {
-  return execFileSync('unzip', ['-Z1', filePath], {
-    encoding: 'utf8',
-    maxBuffer: 12 * 1024 * 1024
-  })
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-}
-
-function readZipEntry(filePath: string, entry: string) {
-  return execFileSync('unzip', ['-p', filePath, entry], {
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024
-  })
-}
-
-function readXlsxSharedStrings(filePath: string) {
-  try {
-    const xml = readZipEntry(filePath, 'xl/sharedStrings.xml')
-    return Array.from(xml.matchAll(/<si\b[\s\S]*?<\/si>/g)).map((match) => extractXmlText(match[0]).replace(/\n+/g, ' ').trim())
-  } catch {
-    return []
-  }
-}
-
-function parseXlsxRows(xml: string, sharedStrings: string[]) {
-  const rows: string[][] = []
-  for (const rowMatch of xml.matchAll(/<row\b[\s\S]*?<\/row>/g)) {
-    const row: string[] = []
-    for (const cellMatch of rowMatch[0].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
-      const attrs = cellMatch[1]
-      const inner = cellMatch[2]
-      const column = attrs.match(/\br="([A-Z]+)\d+"/)?.[1]
-      const columnIndex = column ? columnNameToIndex(column) : row.length
-      row[columnIndex] = parseXlsxCell(attrs, inner, sharedStrings)
-    }
-    if (row.some((cell) => cell?.trim())) rows.push(row.map((cell) => cell ?? ''))
-  }
-  return rows
-}
-
-function parseXlsxCell(attrs: string, inner: string, sharedStrings: string[]) {
-  const type = attrs.match(/\bt="([^"]+)"/)?.[1]
-  if (type === 'inlineStr') {
-    return extractXmlText(inner).replace(/\n+/g, ' ').trim()
-  }
-  const rawValue = inner.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? ''
-  const value = decodeXmlEntities(rawValue).trim()
-  if (type === 's') {
-    return sharedStrings[Number(value)] ?? value
-  }
-  return value
-}
-
-function columnNameToIndex(column: string) {
-  return column.split('').reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1
-}
-
-function extractXmlText(xml: string) {
-  return decodeXmlEntities(
-    xml
-      .replace(/<w:tab\s*\/>/g, '\t')
-      .replace(/<a:br\s*\/>/g, '\n')
-      .replace(/<w:br\s*\/>/g, '\n')
-      .replace(/<\/w:p>/g, '\n\n')
-      .replace(/<\/a:p>/g, '\n\n')
-      .replace(/<\/t>/g, '\n')
-      .replace(/<[^>]+>/g, '')
-  )
-}
-
-function sendInlineFile(res: Response, filePath: string, fileName: string) {
-  res.setHeader('Content-Type', mimeTypeForPath(filePath))
-  const asciiName = fileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '')
-  res.setHeader('Content-Disposition', `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`)
-  res.setHeader('X-Content-Type-Options', 'nosniff')
-  res.sendFile(filePath)
-}
-
-function mimeTypeForPath(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase()
-  const types: Record<string, string> = {
-    '.pdf': 'application/pdf',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.bmp': 'image/bmp',
-    '.ico': 'image/x-icon',
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mov': 'video/quicktime',
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.m4a': 'audio/mp4',
-    '.html': 'text/html; charset=utf-8',
-    '.htm': 'text/html; charset=utf-8',
-    '.txt': 'text/plain; charset=utf-8',
-    '.md': 'text/markdown; charset=utf-8',
-    '.csv': 'text/csv; charset=utf-8',
-    '.json': 'application/json; charset=utf-8'
-  }
-  return types[ext] ?? 'application/octet-stream'
-}
-
-function decodeXmlEntities(value: string) {
-  return value
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
 }
 
 function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: string) {
@@ -1835,39 +1847,278 @@ function parseHermesStatus(statusText: string) {
 }
 
 function updateRunningOutput(taskId: string, output: { stdout?: string; stderr?: string }) {
+  let changed = false
   store.update((state) => {
     const task = state.tasks.find((item) => item.id === taskId)
     if (!task || task.status !== 'running') return
-    if (output.stdout !== undefined) task.stdout = output.stdout.trimEnd()
-    if (output.stderr !== undefined) task.stderr = output.stderr.trimEnd()
-    task.updatedAt = new Date().toISOString()
+    if (output.stdout !== undefined) {
+      const value = output.stdout.trimEnd()
+      if (task.stdout !== value) {
+        task.stdout = value
+        changed = true
+      }
+    }
+    if (output.stderr !== undefined) {
+      const value = output.stderr.trimEnd()
+      if (task.stderr !== value) {
+        task.stderr = value
+        changed = true
+      }
+    }
+    if (changed) {
+      task.updatedAt = new Date().toISOString()
+    }
   })
-  broadcastTaskUpdate(taskId)
+  if (changed) {
+    broadcastTaskUpdate(taskId)
+  }
+}
+
+function recoverInterruptedRunningTasks() {
+  const recoveredAt = new Date().toISOString()
+  store.update((state) => {
+    for (const task of state.tasks) {
+      if (task.status !== 'running') continue
+      const events = compactExecutionEvents(task.events ?? [])
+      const approvalEvent = [...events].reverse().find((event) => event.type === 'approval.request')
+      const terminalMessage = approvalEvent
+        ? approvalRequestMessage(approvalEvent)
+        : 'Cowork 服务已重新启动，旧的运行进程无法继续追踪。本轮已停止，请重新运行或继续追问。'
+      const terminalType = approvalEvent ? 'task.failed' : 'task.stopped'
+      const terminalEvent = enrichExecutionEvent({
+        id: crypto.randomUUID(),
+        type: terminalType,
+        createdAt: recoveredAt,
+        error: approvalEvent ? terminalMessage : undefined,
+        reason: approvalEvent ? 'approval_required' : 'runtime_recovered',
+        summary: terminalMessage,
+        category: approvalEvent ? 'error' : 'result',
+        synthetic: true
+      })
+      task.status = approvalEvent ? 'failed' : 'stopped'
+      task.error = approvalEvent ? terminalMessage : undefined
+      task.completedAt = recoveredAt
+      task.updatedAt = recoveredAt
+      task.events = compactExecutionEvents([...events, terminalEvent])
+      state.messages.push({
+        id: crypto.randomUUID(),
+        taskId: task.id,
+        role: 'assistant',
+        content: terminalMessage,
+        createdAt: recoveredAt
+      })
+    }
+  })
 }
 
 function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
   const event = normalizeBridgeEvent(bridgeEvent)
+  let changed = false
+  const now = new Date().toISOString()
+  const approvalBlocked = event.type === 'approval.request'
+  if (approvalBlocked) {
+    stopRunningTask(taskId)
+  }
+
   store.update((state) => {
     const task = state.tasks.find((item) => item.id === taskId)
     if (!task || task.status !== 'running') return
-    task.events = [...(task.events ?? []), event]
+
     if (bridgeEvent.type === 'message.delta' && typeof bridgeEvent.text === 'string') {
       task.stdout = `${task.stdout ?? ''}${bridgeEvent.text}`
+      changed = true
+    }
+    if (approvalBlocked) {
+      const message = approvalRequestMessage(event)
+      const failedEvent = enrichExecutionEvent({
+        id: crypto.randomUUID(),
+        type: 'task.failed',
+        createdAt: now,
+        error: message,
+        summary: message,
+        category: 'error'
+      })
+      task.status = 'failed'
+      task.error = message
+      task.completedAt = now
+      task.events = compactExecutionEvents([...(task.events ?? []), event, failedEvent])
+      task.updatedAt = now
+      changed = true
+      state.messages.push({
+        id: crypto.randomUUID(),
+        taskId,
+        role: 'assistant',
+        content: message,
+        createdAt: now
+      })
+      return
+    }
+
+    if (shouldStoreExecutionEvent(event)) {
+      task.events = compactExecutionEvents([...(task.events ?? []), event])
+    } else {
+      task.events = compactExecutionEvents(task.events ?? [])
     }
     if (bridgeEvent.type === 'task.failed' && typeof bridgeEvent.finalResponse === 'string') {
       task.stdout = bridgeEvent.finalResponse
+      changed = true
     }
     if (bridgeEvent.type === 'task.completed' && typeof bridgeEvent.finalResponse === 'string') {
       task.stdout = bridgeEvent.finalResponse
       task.hermesSessionId =
         typeof bridgeEvent.sessionId === 'string' ? bridgeEvent.sessionId : task.hermesSessionId
+      changed = true
     }
     if (bridgeEvent.type === 'task.failed' && typeof bridgeEvent.error === 'string') {
       task.error = sanitizeHermesRuntimeMessage(bridgeEvent.error)
+      changed = true
     }
-    task.updatedAt = new Date().toISOString()
+    if (changed || shouldStoreExecutionEvent(event)) {
+      task.updatedAt = new Date().toISOString()
+      changed = true
+    }
   })
-  broadcastTaskUpdate(taskId)
+  if (changed) {
+    broadcastTaskUpdate(taskId)
+  }
+}
+
+function approvalRequestMessage(event: ExecutionEvent) {
+  const command = String(event.command ?? '').replace(/\s+/g, ' ').trim()
+  const shortCommand = command ? ` 请求命令：${sanitizeHermesRuntimeMessage(command).slice(0, 120)}` : ''
+  return `Hermes 请求执行需要人工审批的命令，Cowork 当前不能代为确认。本轮已停止，避免任务无限等待。${shortCommand}`
+}
+
+async function readTaskContextSnapshot(task: Task, workspacePath?: string): Promise<HermesContextSnapshot> {
+  const latest = latestContextSnapshot(task)
+  if (latest) return latest
+  if (task.status === 'running' || !task.hermesSessionId || !workspacePath) {
+    return emptyContextSnapshot(task)
+  }
+
+  const model = resolveRequestedModel(task.modelId, task.modelConfigKey, task.provider)
+  const result = await runHermesContextCommand({
+    taskId: task.id,
+    cwd: workspacePath,
+    mode: 'context',
+    sessionId: task.hermesSessionId,
+    model: model.id === 'auto' ? undefined : model.id,
+    provider: model.id === 'auto' ? undefined : model.provider
+  })
+
+  if (result.exitCode !== 0) {
+    return {
+      ...emptyContextSnapshot(task),
+      status: 'unknown',
+      statusLabel: sanitizeHermesRuntimeMessage(result.error || result.stderr) || '暂时无法读取上下文'
+    }
+  }
+
+  const context = normalizeContextSnapshot(result.context, task)
+  store.update((mutable) => {
+    const mutableTask = mutable.tasks.find((item) => item.id === task.id)
+    if (!mutableTask) return
+    mutableTask.events = dedupeExecutionEvents([
+      ...(mutableTask.events ?? []),
+      ...result.events.map(normalizeBridgeEvent)
+    ])
+    mutableTask.updatedAt = new Date().toISOString()
+  })
+  return context
+}
+
+function latestContextSnapshot(task: Task): HermesContextSnapshot | null {
+  const event = [...(task.events ?? [])]
+    .reverse()
+    .find((item) => item.type === 'context.updated' || item.type === 'context.compressed')
+  if (!event) return null
+  const payload = event.type === 'context.compressed' && isPlainObject(event.context) ? event.context : event
+  return normalizeContextSnapshot(payload, task)
+}
+
+function normalizeContextSnapshot(value: unknown, task: Task): HermesContextSnapshot {
+  const payload = isPlainObject(value) ? value : {}
+  const rawStatus = stringValue(payload.status, 'unknown')
+  const rawSource = stringValue(payload.contextSource, 'unknown')
+  const usage = isPlainObject(payload.usage) ? payload.usage : {}
+  return {
+    sessionId: stringValue(payload.sessionId, task.hermesSessionId),
+    model: stringValue(payload.model, task.modelId === 'auto' ? 'Hermes 默认模型' : task.modelId),
+    contextUsed: numberValue(payload.contextUsed),
+    contextMax: numberValue(payload.contextMax),
+    contextPercent: numberValue(payload.contextPercent),
+    contextSource: rawSource === 'api' || rawSource === 'estimated' ? rawSource : 'unknown',
+    thresholdPercent: numberValue(payload.thresholdPercent),
+    targetRatio: numberValue(payload.targetRatio),
+    protectLast: numberValue(payload.protectLast),
+    compressionCount: numberValue(payload.compressionCount),
+    compressionEnabled: booleanValue(payload.compressionEnabled, false),
+    canCompress: booleanValue(payload.canCompress, false),
+    messageCount: numberValue(payload.messageCount, taskMessageCount(task.id)),
+    status:
+      rawStatus === 'empty' || rawStatus === 'ok' || rawStatus === 'warn' || rawStatus === 'danger'
+        ? rawStatus
+        : 'unknown',
+    statusLabel: stringValue(payload.statusLabel, '等待 Hermes 回传') ?? '等待 Hermes 回传',
+    usage: {
+      inputTokens: numberValue(usage.inputTokens),
+      outputTokens: numberValue(usage.outputTokens),
+      cacheReadTokens: numberValue(usage.cacheReadTokens),
+      cacheWriteTokens: numberValue(usage.cacheWriteTokens),
+      reasoningTokens: numberValue(usage.reasoningTokens),
+      apiCalls: numberValue(usage.apiCalls)
+    },
+    updatedAt: stringValue(payload.updatedAt, new Date().toISOString()) ?? new Date().toISOString()
+  }
+}
+
+function emptyContextSnapshot(task: Task): HermesContextSnapshot {
+  return {
+    sessionId: task.hermesSessionId,
+    model: task.modelId === 'auto' ? 'Hermes 默认模型' : task.modelId,
+    contextUsed: 0,
+    contextMax: 0,
+    contextPercent: 0,
+    contextSource: 'unknown',
+    thresholdPercent: 0,
+    targetRatio: 0,
+    protectLast: 0,
+    compressionCount: 0,
+    compressionEnabled: false,
+    canCompress: false,
+    messageCount: taskMessageCount(task.id),
+    status: task.hermesSessionId ? 'unknown' : 'empty',
+    statusLabel: task.hermesSessionId ? '等待 Hermes 回传' : '任务完成后显示',
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+      apiCalls: 0
+    },
+    updatedAt: new Date().toISOString()
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function stringValue(value: unknown, fallback?: string) {
+  return typeof value === 'string' && value.trim() ? value : fallback
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function booleanValue(value: unknown, fallback = false) {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function taskMessageCount(taskId: string) {
+  return store.snapshot.messages.filter((message) => message.taskId === taskId).length
 }
 
 function cleanBridgeStdout(output: string) {
@@ -2088,7 +2339,7 @@ function artifactEvent(artifact: Artifact, createdAt: string): ExecutionEvent {
 function dedupeExecutionEvents(events: ExecutionEvent[]) {
   const seen = new Set<string>()
   const deduped: ExecutionEvent[] = []
-  for (const event of events) {
+  for (const event of events.filter(shouldStoreExecutionEvent)) {
     const key = [
       event.type,
       event.toolCallId,
@@ -2101,7 +2352,39 @@ function dedupeExecutionEvents(events: ExecutionEvent[]) {
     seen.add(key)
     deduped.push(event)
   }
-  return deduped.slice(-160)
+  return deduped.slice(-maxStoredExecutionEvents)
+}
+
+function compactExecutionEvents(events: ExecutionEvent[]) {
+  return dedupeExecutionEvents(events)
+}
+
+function shouldStoreExecutionEvent(event: ExecutionEvent) {
+  if (event.type === 'message.delta' || event.type === 'message.complete') return false
+  if (event.type === 'reasoning.delta' || event.type === 'thinking.delta') return false
+  if (event.type === 'tool.generating') return false
+  if (event.ephemeral && event.type !== 'status') return false
+  if (event.type === 'tool.progress' && isInternalProgressEvent(event)) return false
+  if (event.type === 'status' && isEphemeralStatusEvent(event)) return false
+  if (event.type === 'thinking' && !isDisplayableThinkingText(eventPrimaryText(event))) return false
+  return true
+}
+
+function isEphemeralStatusEvent(event: ExecutionEvent) {
+  const text = eventPrimaryText(event)
+  if (String(event.kind ?? '').toLowerCase() === 'reasoning') return true
+  return /^(Hermes 正在思考|Hermes 正在处理|thinking|reasoning)$/i.test(text.trim())
+}
+
+function isDisplayableThinkingText(value: string) {
+  const text = value.replace(/\s+/g, ' ').trim()
+  if (!text) return false
+  if (/^(thinking|reasoning|computing|analyzing|deliberating|reflecting)(\.\.\.)?$/i.test(text)) return false
+  if (/^[()[\]{}·.\-▮▯ʕ｡•ᴥ•｡ʔ\s]+$/.test(text)) return false
+  if (/^[A-Za-z0-9_`'".,;:!?()/-]+$/.test(text) && text.length < 18) return false
+  if (/^[A-Za-z0-9_`'".,;:!?()/-]+(?:\s+[A-Za-z0-9_`'".,;:!?()/-]+){0,3}$/.test(text)) return false
+  if (/^(the|a|an|and|or|to|in|of|for|with|terminal|configuration|files?|now|let|me|look)$/i.test(text)) return false
+  return /(计划|步骤|拆解|检查|验证|校验|修正|搜索|读取|写入|调用|生成|完成|失败|需要|将|先|再|plan|todo|verify|check|search|read|write|tool|file)/i.test(text)
 }
 
 function inferredToolName(event: ExecutionEvent) {
@@ -2170,7 +2453,15 @@ function removeTaskStreamClient(taskId: string, res: Response) {
   const clients = taskStreamClients.get(taskId)
   if (!clients) return
   clients.delete(res)
-  if (!clients.size) taskStreamClients.delete(taskId)
+  if (!clients.size) {
+    taskStreamClients.delete(taskId)
+
+    const timer = taskStreamBroadcastTimers.get(taskId)
+    if (timer) {
+      clearTimeout(timer)
+      taskStreamBroadcastTimers.delete(taskId)
+    }
+  }
 }
 
 function sendTaskStreamSnapshot(taskId: string, res: Response) {
@@ -2183,7 +2474,7 @@ function sendTaskStreamSnapshot(taskId: string, res: Response) {
   writeSse(res, 'task', { task: enrichTask(state, task) })
 }
 
-function broadcastTaskUpdate(taskId: string) {
+function sendTaskStreamSnapshotToClients(taskId: string) {
   const clients = taskStreamClients.get(taskId)
   if (!clients?.size) return
 
@@ -2194,6 +2485,38 @@ function broadcastTaskUpdate(taskId: string) {
     }
     sendTaskStreamSnapshot(taskId, res)
   }
+}
+
+function broadcastTaskUpdate(taskId: string, force = false) {
+  const clients = taskStreamClients.get(taskId)
+  if (!clients?.size) {
+    const timer = taskStreamBroadcastTimers.get(taskId)
+    if (timer) {
+      clearTimeout(timer)
+      taskStreamBroadcastTimers.delete(taskId)
+    }
+    return
+  }
+
+  if (force) {
+    const timer = taskStreamBroadcastTimers.get(taskId)
+    if (timer) {
+      clearTimeout(timer)
+      taskStreamBroadcastTimers.delete(taskId)
+    }
+    sendTaskStreamSnapshotToClients(taskId)
+    return
+  }
+
+  if (taskStreamBroadcastTimers.has(taskId)) return
+
+  taskStreamBroadcastTimers.set(
+    taskId,
+    setTimeout(() => {
+      taskStreamBroadcastTimers.delete(taskId)
+      sendTaskStreamSnapshotToClients(taskId)
+    }, TASK_STREAM_BROADCAST_MS)
+  )
 }
 
 function writeSse(res: Response, event: string, data: unknown) {
@@ -2213,6 +2536,7 @@ function buildExecutionView(task: Task): ExecutionView {
   const errorLines = new Set<string>()
 
   for (const event of task.events ?? []) {
+    if (!shouldStoreExecutionEvent(event)) continue
     if (event.type === 'tool.started') {
       toolLines.add(`started: ${String(event.name ?? 'tool')} ${String(event.summary ?? safeJson(event.args))}`)
     }
@@ -2270,8 +2594,9 @@ function buildExecutionView(task: Task): ExecutionView {
 
 function buildExecutionActivity(task: Task): ExecutionActivity[] {
   const events = taskRunEvents(task)
+    .filter(shouldStoreExecutionEvent)
     .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'task.completed', 'task.stopped', 'task.failed'].includes(
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
       )
     )
@@ -2348,6 +2673,7 @@ function taskRunEvents(task: Task) {
 
 function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
   if (event.type === 'thinking') {
+    if (!isDisplayableThinkingText(eventPrimaryText(event))) return null
     return {
       id: event.id,
       kind: 'thinking',
@@ -2419,14 +2745,33 @@ function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
       source: event.synthetic ? 'synthetic' : 'hermes'
     }
   }
+  if (event.type === 'approval.request') {
+    return {
+      id: event.id,
+      kind: 'error',
+      title: '需要人工确认',
+      detail: approvalRequestMessage(event),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
   return {
     id: event.id,
     kind: 'status',
-    title: event.type === 'bridge.started' ? '桥接已启动' : `状态：${String(event.kind ?? '运行')}`,
+    title: activityStatusTitle(event),
     detail: event.type === 'bridge.started' ? String(event.cwd ?? '授权工作区') : eventPrimaryText(event),
     createdAt: event.createdAt,
     source: event.synthetic ? 'synthetic' : 'hermes'
   }
+}
+
+function activityStatusTitle(event: ExecutionEvent) {
+  if (event.type === 'bridge.started') return '已连接 Hermes'
+  const kind = String(event.kind ?? '').toLowerCase()
+  if (kind === 'submitted') return '任务已提交'
+  if (kind === 'idle-wait') return '等待后端进展'
+  if (kind === 'reasoning') return 'Hermes 正在思考'
+  return '状态更新'
 }
 
 function normalizeThinkingDetail(value: string) {
@@ -2700,6 +3045,8 @@ function listWorkspaceFiles(rootPath: string) {
     }
   }
 }
+
+recoverInterruptedRunningTasks()
 
 app.listen(port, '127.0.0.1', () => {
   console.log(`Hermes Cowork API listening on http://127.0.0.1:${port}`)

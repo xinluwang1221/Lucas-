@@ -41,10 +41,9 @@ npm run build:web
 
 ## 开发文档
 
-- `Hermes_Cowork_开发交接文档.md`
-- `Hermes_前端对接版开发文档.md`
-- `Hermes_前端开发缺口与MVP计划.md`
-- `SOLO_MTC_产品开发文档.md`
+- `Hermes_Cowork_开发文档.md`
+
+仓库只保留这一份主开发文档。阶段定版、架构体检、后续计划和交接信息都合并到这份文档中，避免后续开发时多份文档互相打架。
 
 ## 不提交的本机数据
 

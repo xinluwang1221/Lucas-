@@ -1,0 +1,17 @@
+:root {
+  color-scheme: light;
+  --ink: #171a16;
+  --ink-soft: #5f655d;
+  --paper: #f4f1e8;
+  --paper-deep: #ebe6d8;
+  --panel: #fffdf7;
+  --line: #d8d1bd;
+  --line-strong: #b9af96;
+  --moss: #315c42;
+  --moss-soft: #e5efe5;
+  --cobalt: #285d91;
+  --amber: #bd7b2b;
+  --danger: #a64235;
+  --shadow: 0 22px 70px rgba(49, 43, 31, 0.14);
+  font-family: "Avenir Next", "Gill Sans", "SF Pro Text", ui-sans-serif, sans-serif;
+}

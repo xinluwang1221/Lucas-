@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { dataDir, hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { HermesModelCatalogProvider, HermesModelCatalogRefreshSource, HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, ModelOption, ModelSettings } from './types.js'
+import { HermesModelCatalogProvider, HermesModelCatalogRefreshSource, HermesModelConfigureRequest, HermesModelCredential, HermesModelOverview, HermesModelProvider, HermesReasoningConfigureRequest, HermesReasoningEffort, ModelOption, ModelSettings } from './types.js'
 
 const hermesConfigPath = '/Users/lucas/.hermes/config.yaml'
 const hermesEnvPath = '/Users/lucas/.hermes/.env'
@@ -48,6 +48,20 @@ const providerModels: Record<string, { label: string; models: string[] }> = {
   copilot: { label: 'GitHub Copilot', models: ['gpt-5.4', 'gpt-5.4-mini', 'claude-sonnet-4.6', 'gemini-2.5-pro'] }
 }
 
+const nativeProviderCredentialEnv: Record<string, { apiKeyEnv?: string; baseUrlEnv?: string }> = {
+  xiaomi: { apiKeyEnv: 'XIAOMI_API_KEY', baseUrlEnv: 'XIAOMI_BASE_URL' },
+  deepseek: { apiKeyEnv: 'DEEPSEEK_API_KEY', baseUrlEnv: 'DEEPSEEK_BASE_URL' },
+  zai: { apiKeyEnv: 'GLM_API_KEY', baseUrlEnv: 'GLM_BASE_URL' },
+  'kimi-coding': { apiKeyEnv: 'KIMI_API_KEY', baseUrlEnv: 'KIMI_BASE_URL' },
+  'kimi-coding-cn': { apiKeyEnv: 'KIMI_CN_API_KEY' },
+  minimax: { apiKeyEnv: 'MINIMAX_API_KEY', baseUrlEnv: 'MINIMAX_BASE_URL' },
+  'minimax-cn': { apiKeyEnv: 'MINIMAX_CN_API_KEY', baseUrlEnv: 'MINIMAX_CN_BASE_URL' },
+  alibaba: { apiKeyEnv: 'DASHSCOPE_API_KEY', baseUrlEnv: 'DASHSCOPE_BASE_URL' },
+  'alibaba-coding-plan': { apiKeyEnv: 'ALIBABA_CODING_PLAN_API_KEY', baseUrlEnv: 'ALIBABA_CODING_PLAN_BASE_URL' }
+}
+
+const reasoningEffortValues = new Set(['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh'])
+
 let catalogCache: { value: HermesModelCatalogProvider[]; expiresAt: number } | null = null
 
 export function listModelOptions(settings: ModelSettings) {
@@ -79,9 +93,14 @@ export function listModelOptions(settings: ModelSettings) {
   const seen = new Set<string>()
   const customModels = settings.customModels.map((model) => ({ ...model, source: model.source ?? 'custom' }))
   return [...builtIns, ...customModels, ...listConfiguredProviderModelOptions(settings, configModel)]
+    .map((model) => ({
+      ...model,
+      runtimeModelId: model.id,
+      selectedModelKey: modelSelectionKey(model)
+    }))
     .filter((model) => {
-      if (seen.has(model.id)) return false
-      seen.add(model.id)
+      if (seen.has(model.selectedModelKey ?? model.id)) return false
+      seen.add(model.selectedModelKey ?? model.id)
       return true
     })
 }
@@ -90,9 +109,21 @@ export function normalizeModelId(value: string) {
   return value.trim().replace(/\s+/g, '-').slice(0, 120)
 }
 
+export function modelSelectionKey(model: Pick<ModelOption, 'id' | 'provider' | 'source'>) {
+  const provider = normalizeProviderId(model.provider ?? '')
+  if (model.id === 'auto' || !provider || provider === 'auto') return model.id
+  if (model.source === 'current' || model.source === 'catalog' || model.provider) return `${provider}:${model.id}`
+  return model.id
+}
+
+export function findModelBySelectionId(options: ModelOption[], selectedModelId: string) {
+  return options.find((model) => (model.selectedModelKey ?? modelSelectionKey(model)) === selectedModelId)
+    || options.find((model) => model.id === selectedModelId)
+}
+
 export function selectedModelOption(settings: ModelSettings) {
   const options = listModelOptions(settings)
-  const selected = options.find((model) => model.id === settings.selectedModelId)
+  const selected = findModelBySelectionId(options, settings.selectedModelId)
   if (selected && selected.source !== 'catalog') return selected
   return options[0]
 }
@@ -166,6 +197,12 @@ export function readHermesModelOverview(settings: ModelSettings): HermesModelOve
     fallbackProviders: config.fallbackProviders,
     credentials,
     providers,
+    reasoning: {
+      effort: config.reasoningEffort,
+      effectiveEffort: config.reasoningEffort || 'medium',
+      showReasoning: config.showReasoning,
+      delegationEffort: config.delegationReasoningEffort
+    },
     updatedAt: new Date().toISOString()
   }
 }
@@ -323,6 +360,7 @@ export function removeHermesModelProvider(providerId: string) {
   let nextRaw = removeCustomProviderBlocks(raw, [safeProvider])
   nextRaw = upsertRootYamlList(nextRaw, 'fallback_providers', filteredFallbacks)
   fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
+  removeNativeProviderEnvValues(safeProvider)
   try {
     fs.chmodSync(hermesConfigPath, 0o600)
   } catch {
@@ -344,18 +382,25 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   const previousConfig = readHermesModelConfig()
   const sameProvider = provider === normalizeProviderId(previousConfig.provider)
   const backupPath = backupHermesConfig(raw)
+  const nativeEnv = nativeProviderCredentialEnv[provider]
+  if (nativeEnv) {
+    writeNativeProviderEnvValues(provider, { apiKey, baseUrl })
+  }
   const fields: Record<string, string | undefined> = {
     default: modelId,
     provider
   }
   if (baseUrl) fields.base_url = baseUrl
-  if (apiKey) fields.api_key = apiKey
+  if (apiKey && !nativeEnv) fields.api_key = apiKey
   if (apiMode) fields.api_mode = apiMode
   let nextRaw = upsertModelConfigFields(raw, fields)
+  if (nativeEnv) {
+    nextRaw = removeModelConfigFields(nextRaw, ['api_key'])
+  }
   if (!sameProvider) {
     const fieldsToClear = [
       !baseUrl && 'base_url',
-      !apiKey && 'api_key',
+      (!apiKey || Boolean(nativeEnv)) && 'api_key',
       !apiMode && 'api_mode'
     ].filter((field): field is string => Boolean(field))
     nextRaw = removeModelConfigFields(nextRaw, fieldsToClear)
@@ -363,6 +408,40 @@ export function configureHermesModel(request: HermesModelConfigureRequest) {
   if (usesHermesNativeProviderConfig(provider)) {
     nextRaw = removeCustomProviderBlocks(nextRaw, [provider])
   }
+  fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
+  try {
+    fs.chmodSync(hermesConfigPath, 0o600)
+  } catch {
+    // macOS may already enforce permissions; failing chmod should not block config.
+  }
+  return { ok: true, backupPath }
+}
+
+export function configureHermesReasoning(request: HermesReasoningConfigureRequest) {
+  const fields: Array<{ section: string; values: Record<string, string | boolean> }> = []
+  if (request.effort !== undefined) {
+    fields.push({
+      section: 'agent',
+      values: { reasoning_effort: normalizeReasoningEffort(request.effort) }
+    })
+  }
+  if (request.showReasoning !== undefined) {
+    fields.push({
+      section: 'display',
+      values: { show_reasoning: Boolean(request.showReasoning) }
+    })
+  }
+  if (request.delegationEffort !== undefined) {
+    fields.push({
+      section: 'delegation',
+      values: { reasoning_effort: normalizeReasoningEffort(request.delegationEffort) }
+    })
+  }
+  if (!fields.length) throw new Error('没有需要更新的模型运行参数')
+
+  const raw = fs.readFileSync(hermesConfigPath, 'utf8')
+  const backupPath = backupHermesConfig(raw)
+  const nextRaw = fields.reduce((current, field) => upsertYamlSectionFields(current, field.section, field.values), raw)
   fs.writeFileSync(hermesConfigPath, nextRaw, { encoding: 'utf8', mode: 0o600 })
   try {
     fs.chmodSync(hermesConfigPath, 0o600)
@@ -385,6 +464,9 @@ function readHermesModelConfig() {
   const raw = fs.readFileSync(hermesConfigPath, 'utf8')
   const modelBlock = rootBlock(raw, 'model')
   const fallbackBlock = rootBlock(raw, 'fallback_providers')
+  const agentBlock = rootBlock(raw, 'agent')
+  const displayBlock = rootBlock(raw, 'display')
+  const delegationBlock = rootBlock(raw, 'delegation')
   const provider = normalizeProviderId(readYamlScalar(modelBlock, 'provider') || 'auto')
   return {
     defaultModel: readYamlScalar(modelBlock, 'default') || readYamlScalar(modelBlock, 'model'),
@@ -393,6 +475,9 @@ function readHermesModelConfig() {
     apiKey: readYamlScalar(modelBlock, 'api_key'),
     apiMode: readYamlScalar(modelBlock, 'api_mode'),
     fallbackProviders: readYamlList(fallbackBlock),
+    reasoningEffort: normalizeReasoningEffort(readYamlScalar(agentBlock, 'reasoning_effort'), false),
+    showReasoning: readYamlBoolean(displayBlock, 'show_reasoning', false),
+    delegationReasoningEffort: normalizeReasoningEffort(readYamlScalar(delegationBlock, 'reasoning_effort'), false),
     customProviders: readCustomProviders(raw).filter((customProvider) => {
       return !(customProvider.id === provider && usesHermesNativeProviderConfig(provider))
     })
@@ -607,9 +692,9 @@ function mergeCredentials(...groups: HermesModelCredential[][]) {
     const mergedConfigured = hasUsableCredential
     const detailParts = [existing.detail, credential.detail]
       .map((detail) => sanitizeStatusDetail(detail))
-      .filter((detail) => detail && !(mergedConfigured && (detail.includes('未配置') || credentialDetailNeedsAttention(detail))))
-    if (mergedConfigured && hasAuthIssue) {
-      detailParts.push('另有旧凭据记录未参与当前模型')
+      .filter((detail) => detail && !(mergedConfigured && detail.includes('未配置')))
+    if (mergedConfigured && hasAuthIssue && !detailParts.some((detail) => credentialDetailNeedsAttention(detail))) {
+      detailParts.push('凭据验证失败，请重新填写 Key')
     }
     merged.set(credential.id, {
       ...existing,
@@ -665,6 +750,13 @@ function readYamlScalar(block: string, key: string) {
   return unquoteYaml(match[1])
 }
 
+function readYamlBoolean(block: string, key: string, fallback: boolean) {
+  const value = readYamlScalar(block, key).toLowerCase()
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return fallback
+}
+
 function readYamlList(block: string) {
   return block
     .split('\n')
@@ -702,10 +794,41 @@ function upsertModelConfigFields(raw: string, fields: Record<string, string | un
   return [...lines.slice(0, start + 1), ...block, ...lines.slice(end)].join('\n')
 }
 
+function upsertYamlSectionFields(raw: string, section: string, fields: Record<string, string | boolean>) {
+  const lines = raw.replace(/\r/g, '').split('\n')
+  const start = lines.findIndex((line) => line.trim() === `${section}:`)
+  const entries = Object.entries(fields)
+  if (start === -1) {
+    return [`${section}:`, ...entries.map(([key, value]) => `  ${key}: ${formatYamlValue(value)}`), raw].join('\n')
+  }
+
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\S/.test(lines[index]) && lines[index].trim()) {
+      end = index
+      break
+    }
+  }
+  let block = lines.slice(start + 1, end)
+  for (const [key, value] of entries) {
+    block = upsertIndentedYamlValue(block, key, value)
+  }
+  return [...lines.slice(0, start + 1), ...block, ...lines.slice(end)].join('\n')
+}
+
 function upsertIndentedScalar(lines: string[], key: string, value: string) {
   const next = [...lines]
   const index = next.findIndex((line) => line.match(new RegExp(`^\\s+${key}:`)))
   const line = `  ${key}: ${quoteYaml(value)}`
+  if (index >= 0) next[index] = line
+  else next.unshift(line)
+  return next
+}
+
+function upsertIndentedYamlValue(lines: string[], key: string, value: string | boolean) {
+  const next = [...lines]
+  const index = next.findIndex((line) => line.match(new RegExp(`^\\s+${key}:`)))
+  const line = `  ${key}: ${formatYamlValue(value)}`
   if (index >= 0) next[index] = line
   else next.unshift(line)
   return next
@@ -789,6 +912,73 @@ function removeModelConfigFields(raw: string, fields: string[]) {
     return !match || !fieldSet.has(match[1])
   })
   return [...lines.slice(0, start + 1), ...nextBlock, ...lines.slice(end)].join('\n')
+}
+
+function writeNativeProviderEnvValues(provider: string, values: { apiKey?: string; baseUrl?: string }) {
+  const env = nativeProviderCredentialEnv[normalizeProviderId(provider)]
+  if (!env) return
+  const updates: Record<string, string> = {}
+  if (env.apiKeyEnv && values.apiKey) updates[env.apiKeyEnv] = values.apiKey
+  if (env.baseUrlEnv && values.baseUrl) updates[env.baseUrlEnv] = values.baseUrl.replace(/\/+$/, '')
+  writeHermesEnvValues(updates)
+}
+
+function removeNativeProviderEnvValues(provider: string) {
+  const env = nativeProviderCredentialEnv[normalizeProviderId(provider)]
+  if (!env) return
+  removeHermesEnvValues([env.apiKeyEnv, env.baseUrlEnv].filter((key): key is string => Boolean(key)))
+}
+
+function writeHermesEnvValues(values: Record<string, string>) {
+  const entries = Object.entries(values)
+    .map(([key, value]) => [normalizeEnvKey(key), normalizeSecretValue(value)] as const)
+    .filter(([key, value]) => key && value)
+  if (!entries.length) return
+
+  fs.mkdirSync(path.dirname(hermesEnvPath), { recursive: true })
+  const lines = fs.existsSync(hermesEnvPath) ? fs.readFileSync(hermesEnvPath, 'utf8').replace(/\r/g, '').split('\n') : []
+  for (const [key, value] of entries) {
+    const line = `${key}=${value}`
+    const index = lines.findIndex((item) => envLineKey(item) === key)
+    if (index >= 0) lines[index] = line
+    else lines.push(line)
+    process.env[key] = value
+  }
+  fs.writeFileSync(hermesEnvPath, `${trimTrailingEmptyLines(lines).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+  try {
+    fs.chmodSync(hermesEnvPath, 0o600)
+  } catch {
+    // Keep going if the file system already controls permissions.
+  }
+}
+
+function removeHermesEnvValues(keys: string[]) {
+  const keySet = new Set(keys.map(normalizeEnvKey).filter(Boolean))
+  if (!keySet.size || !fs.existsSync(hermesEnvPath)) return
+  const lines = fs.readFileSync(hermesEnvPath, 'utf8').replace(/\r/g, '').split('\n')
+  const nextLines = lines.filter((line) => {
+    const key = envLineKey(line)
+    return !key || !keySet.has(key)
+  })
+  for (const key of keySet) {
+    delete process.env[key]
+  }
+  fs.writeFileSync(hermesEnvPath, `${trimTrailingEmptyLines(nextLines).join('\n')}\n`, { encoding: 'utf8', mode: 0o600 })
+}
+
+function envLineKey(line: string) {
+  const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=/)
+  return match ? match[1] : ''
+}
+
+function normalizeEnvKey(value: string) {
+  return value.trim().replace(/[^A-Za-z0-9_]/g, '').slice(0, 80)
+}
+
+function trimTrailingEmptyLines(lines: string[]) {
+  const next = [...lines]
+  while (next.length && !next[next.length - 1].trim()) next.pop()
+  return next
 }
 
 function backupHermesConfig(raw: string) {
@@ -925,7 +1115,7 @@ function writeSavedModelSupplements(supplements: Record<string, string[]>) {
   fs.writeFileSync(modelCatalogSupplementsPath, `${JSON.stringify(supplements, null, 2)}\n`, 'utf8')
 }
 
-function normalizeProviderId(value: string) {
+export function normalizeProviderId(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9:._-]/g, '').slice(0, 80)
 }
 
@@ -991,6 +1181,18 @@ function unquoteYaml(value: string) {
     .trim()
     .replace(/\s+#.*$/, '')
     .replace(/^['"]|['"]$/g, '')
+}
+
+function normalizeReasoningEffort(value: unknown, strict = true): HermesReasoningEffort {
+  const effort = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (reasoningEffortValues.has(effort)) return effort as HermesReasoningEffort
+  if (!strict) return ''
+  throw new Error('思考强度不合法')
+}
+
+function formatYamlValue(value: string | boolean) {
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return quoteYaml(value)
 }
 
 function quoteYaml(value: string) {

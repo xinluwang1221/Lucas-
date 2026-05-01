@@ -77,6 +77,43 @@ export type ExecutionActivity = {
   source: 'hermes' | 'synthetic'
 }
 
+export type HermesContextSnapshot = {
+  sessionId?: string
+  model?: string
+  contextUsed: number
+  contextMax: number
+  contextPercent: number
+  contextSource: 'api' | 'estimated' | 'unknown'
+  thresholdPercent: number
+  targetRatio: number
+  protectLast: number
+  compressionCount: number
+  compressionEnabled: boolean
+  canCompress: boolean
+  messageCount: number
+  status: 'empty' | 'unknown' | 'ok' | 'warn' | 'danger'
+  statusLabel: string
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+    reasoningTokens: number
+    apiCalls: number
+  }
+  updatedAt: string
+}
+
+export type HermesContextCompressResult = {
+  ok: boolean
+  oldSessionId?: string
+  newSessionId?: string
+  removed: number
+  skipped?: boolean
+  reason?: string
+  context: HermesContextSnapshot
+}
+
 export type AppState = {
   workspaces: Workspace[]
   tasks: Task[]
@@ -98,6 +135,8 @@ export type ModelOption = {
   builtIn?: boolean
   description?: string
   source?: 'auto' | 'current' | 'custom' | 'catalog'
+  selectedModelKey?: string
+  runtimeModelId?: string
 }
 
 export type ModelSettings = {
@@ -142,6 +181,15 @@ export type HermesModelCatalogRefreshSource = {
   message: string
 }
 
+export type HermesReasoningEffort = '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
+export type HermesReasoningSettings = {
+  effort: HermesReasoningEffort
+  effectiveEffort: Exclude<HermesReasoningEffort, ''>
+  showReasoning: boolean
+  delegationEffort: HermesReasoningEffort
+}
+
 export type HermesModelOverview = {
   configPath: string
   envPath: string
@@ -153,6 +201,7 @@ export type HermesModelOverview = {
   fallbackProviders: string[]
   credentials: HermesModelCredential[]
   providers: HermesModelProvider[]
+  reasoning: HermesReasoningSettings
   updatedAt: string
 }
 
@@ -162,6 +211,12 @@ export type HermesModelConfigureRequest = {
   baseUrl?: string
   apiKey?: string
   apiMode?: string
+}
+
+export type HermesReasoningConfigureRequest = {
+  effort?: HermesReasoningEffort
+  showReasoning?: boolean
+  delegationEffort?: HermesReasoningEffort
 }
 
 export type HermesMcpServer = {

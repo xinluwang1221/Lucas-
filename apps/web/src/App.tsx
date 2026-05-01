@@ -12,12 +12,12 @@ import {
   Copy,
   Clock3,
   Database,
-  Download,
   ExternalLink,
   FileArchive,
   FileText,
   Files,
   Folder,
+  FolderSync,
   FolderOpen,
   FolderPlus,
   Globe2,
@@ -53,69 +53,127 @@ import {
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  FilePreviewPanel,
+  isInlinePreviewKind,
+  previewKind,
+  type FilePreviewState,
+  type FilePreviewTarget
+} from './features/file-preview/FilePreviewPanel'
+import { ChatComposer } from './features/chat/ChatComposer'
+import { MessageBody } from './features/chat/MessageBody'
+import {
+  ContextResourcesCard,
+  TaskArtifactsCard,
+  TaskProgressCard
+} from './features/chat/TaskInspectorCards'
+import {
+  ModelConfigModal,
+  ModelSettingsSection,
+  configuredModelOptionsForComposer,
+  defaultModelApiMode,
+  groupModelOptionsForMenu,
+  hermesProviderId,
+  providerSavedModelConfig
+} from './features/settings/models'
+import {
+  ConnectorsView as McpConnectorsView,
+  ManualMcpModal as SettingsManualMcpModal,
+  McpMarketplaceModal as SettingsMcpMarketplaceModal,
+  McpSettingsSection
+} from './features/settings/mcp'
+import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
+import {
+  InlineExecutionTracePanel,
+  LiveExecutionPanelView,
+  traceIcon
+} from './features/chat/ExecutionTracePanels'
+import {
+  compactTraceRows,
+  executionTraceRows,
+  fallbackLiveTraceRow,
+  groupTraceRows,
+  liveTraceRows,
+  taskElapsedLabel,
+  taskStepItems,
+  traceSummaryParts,
+  workModeLabel
+} from './features/chat/executionTraceModel'
+import {
+  hiddenTaskMessages,
+  latestUserMessageId,
+  visibleTaskMessages
+} from './features/chat/messageUtils'
+import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
+import { ProjectsView } from './features/workspace/ProjectsView'
+import { artifactPreviewTarget, previewRawUrl, workspacePreviewTarget } from './features/workspace/previewTargets'
+import {
   addWorkspace,
+  deleteWorkspace,
+  listWorkspaceFiles,
+  listWorkspaceTree,
+  pickWorkspaceDirectory,
+  previewWorkspaceFile,
+  revealWorkspace,
+  revealWorkspaceFile,
+  updateWorkspace,
+  uploadFile,
+  type Workspace,
+  type WorkspaceFile,
+  type WorkspaceTree
+} from './features/workspace/workspaceApi'
+import {
   AppState,
   archiveTask,
   Artifact,
-  artifactDownloadUrl,
-  artifactRawUrl,
   BackgroundServiceStatus,
+  compressTaskContext,
   configureHermesModel,
+  configureHermesReasoning,
   configureHermesMcpServer,
   createTask,
   deleteHermesModelProvider,
   deleteModel,
   deleteTask,
-  deleteWorkspace,
-  ExecutionEvent,
   getBackgroundStatus,
   getHermesMcpConfig,
   getHermesMcpRecommendations,
   getHermesRuntime,
   getHermesSessions,
+  getTaskContext,
   getHermesUpdateStatus,
   getHermesMcpServeStatus,
   HermesMcpConfig,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
-  HermesMcpMarketplaceCandidate,
   HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesModelCatalogProvider,
-  HermesModelCredential,
   HermesModelOverview,
-  HermesModelProvider,
+  HermesReasoningConfigureRequest,
   HermesSessionSummary,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
+  HermesContextSnapshot,
   HermesUpdateStatus,
   getState,
   HermesRuntime,
   installBackgroundServices,
-  installHermesMcpServer,
   listSkillFiles,
   listModels,
-  listWorkspaceFiles,
-  listWorkspaceTree,
   listSkills,
   Message,
   ModelOption,
   previewArtifact,
-  previewWorkspaceFile,
   readSkillFile,
   refreshModelCatalog,
   refreshHermesMcpRecommendationsWithAi,
   removeHermesMcpServer,
   revealArtifact,
-  revealWorkspace,
-  revealWorkspaceFile,
   runHermesAutoUpdate,
   runHermesCompatibilityTest,
   pinTask,
-  pickWorkspaceDirectory,
   sendTaskMessage,
-  searchHermesMcpMarketplace,
   setHermesMcpServerEnabled,
   setHermesMcpServerTools,
   setHermesDefaultModel,
@@ -132,19 +190,19 @@ import {
   tasksExportUrl,
   Skill,
   SkillFile,
-  uploadFile,
   toggleSkill,
   uninstallBackgroundServices,
   updateHermesMcpServer,
-  updateWorkspace,
   uploadSkill,
-  Workspace,
-  WorkspaceFile,
-  workspaceFileRawUrl,
-  WorkspaceTree,
-  WorkspaceTreeEntry
 } from './lib/api'
-import type { DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode
+} from 'react'
 
 const emptyState: AppState = {
   workspaces: [],
@@ -156,32 +214,6 @@ const emptyState: AppState = {
     selectedModelId: 'auto',
     customModels: []
   }
-}
-
-type Preview = {
-  title: string
-  body: string
-  kind: 'markdown' | 'csv' | 'document' | 'spreadsheet' | 'presentation' | 'pdf' | 'image' | 'media' | 'html' | 'text'
-  rawUrl?: string
-}
-
-type FilePreviewTarget = {
-  source: 'workspace' | 'artifact'
-  title: string
-  name: string
-  relativePath: string
-  path?: string
-  type: string
-  size: number
-  timestamp: string
-  workspaceId?: string
-  artifactId?: string
-}
-
-type FilePreviewState = Preview & {
-  target: FilePreviewTarget
-  status: 'loading' | 'ready' | 'unsupported' | 'error'
-  error?: string
 }
 
 type SettingsTab =
@@ -326,18 +358,6 @@ const defaultSettingsPrefs: SettingsPrefs = {
   rules: []
 }
 
-const providerBaseUrlHints: Record<string, string> = {
-  xiaomi: '例如 https://token-plan-cn.xiaomimimo.com/v1',
-  deepseek: '通常可留空，Hermes 会使用 DeepSeek 默认地址',
-  zai: '通常可留空，Hermes 会使用智谱 GLM 默认地址',
-  'kimi-coding': '通常可留空，Hermes 会使用 Moonshot 默认地址',
-  'kimi-coding-cn': '通常可留空，Hermes 会使用 Moonshot 国内默认地址',
-  minimax: '通常可留空，Hermes 会使用 MiniMax 默认地址',
-  'minimax-cn': '通常可留空，Hermes 会使用 MiniMax 国内默认地址',
-  alibaba: '通常可留空，Hermes 会使用阿里云百炼默认地址',
-  'qwen-oauth': '通常可留空，Hermes 会复用本机 Qwen 登录'
-}
-
 function closeOnBackdropMouseDown(onClose: () => void) {
   return (event: ReactMouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
@@ -346,11 +366,62 @@ function closeOnBackdropMouseDown(onClose: () => void) {
   }
 }
 
+const PANEL_LAYOUT_STORAGE_KEY = 'hermes-cowork-panel-layout-v1'
+const DEFAULT_SIDEBAR_WIDTH = 286
+const DEFAULT_INSPECTOR_WIDTH = 780
+const MIN_SIDEBAR_WIDTH = 220
+const MAX_SIDEBAR_WIDTH = 380
+const MIN_MAIN_WIDTH = 520
+const MIN_INSPECTOR_WIDTH = 420
+const MAX_INSPECTOR_WIDTH = 1120
+
+type PaneResizeTarget = 'left' | 'right'
+type PanelLayout = {
+  left: number
+  right: number
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function clampPanelLayout(layout: PanelLayout, options: { leftCollapsed?: boolean } = {}): PanelLayout {
+  const viewportWidth = typeof window === 'undefined' ? 1440 : window.innerWidth || 1440
+  const left = clampNumber(layout.left, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH)
+  const effectiveLeft = options.leftCollapsed ? 0 : left
+  const maxRightByViewport = Math.max(MIN_INSPECTOR_WIDTH, viewportWidth - effectiveLeft - MIN_MAIN_WIDTH)
+  const right = clampNumber(layout.right, MIN_INSPECTOR_WIDTH, Math.min(MAX_INSPECTOR_WIDTH, maxRightByViewport))
+  return { left, right }
+}
+
+function readPanelLayout(): PanelLayout {
+  if (typeof window === 'undefined') {
+    return { left: DEFAULT_SIDEBAR_WIDTH, right: DEFAULT_INSPECTOR_WIDTH }
+  }
+  const stored = window.localStorage.getItem(PANEL_LAYOUT_STORAGE_KEY)
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as Partial<PanelLayout>
+      if (typeof parsed.left === 'number' && typeof parsed.right === 'number') {
+        return clampPanelLayout({ left: parsed.left, right: parsed.right })
+      }
+    } catch {
+      window.localStorage.removeItem(PANEL_LAYOUT_STORAGE_KEY)
+    }
+  }
+  return clampPanelLayout({
+    left: DEFAULT_SIDEBAR_WIDTH,
+    right: Math.round((window.innerWidth || 1440) * 0.38)
+  })
+}
+
 function App() {
   const [state, setState] = useState<AppState>(emptyState)
   const [viewMode, setViewMode] = useState<ViewMode>('tasks')
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false)
   const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(false)
+  const [panelLayout, setPanelLayout] = useState<PanelLayout>(() => readPanelLayout())
+  const [draggingPane, setDraggingPane] = useState<PaneResizeTarget | null>(null)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('default')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined)
   const [prompt, setPrompt] = useState('')
@@ -384,6 +455,10 @@ function App() {
   const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
   const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
+  const [selectedTaskContext, setSelectedTaskContext] = useState<HermesContextSnapshot | null>(null)
+  const [contextLoading, setContextLoading] = useState(false)
+  const [contextCompressing, setContextCompressing] = useState(false)
+  const [contextError, setContextError] = useState<string | null>(null)
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
   const [mcpTestResults, setMcpTestResults] = useState<Record<string, HermesMcpTestResult>>({})
@@ -446,8 +521,54 @@ function App() {
   const conversationEndRef = useRef<HTMLDivElement | null>(null)
   const conversationFollowRef = useRef(true)
   const dragDepthRef = useRef(0)
+  const panelLayoutRef = useRef(panelLayout)
   const selectedTaskIdRef = useRef<string | null | undefined>(selectedTaskId)
   const selectedWorkspaceIdRef = useRef(selectedWorkspaceId)
+
+  useEffect(() => {
+    panelLayoutRef.current = panelLayout
+  }, [panelLayout])
+
+  useEffect(() => {
+    window.localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout))
+  }, [panelLayout])
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPanelLayout((current) => clampPanelLayout(current, { leftCollapsed: leftSidebarCollapsed }))
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [leftSidebarCollapsed])
+
+  const startPaneResize = (target: PaneResizeTarget, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    setDraggingPane(target)
+    const startX = event.clientX
+    const startLayout = panelLayoutRef.current
+    document.body.classList.add('resizing-panels')
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      const nextLayout =
+        target === 'left'
+          ? { ...startLayout, left: startLayout.left + deltaX }
+          : { ...startLayout, right: startLayout.right - deltaX }
+      setPanelLayout(clampPanelLayout(nextLayout, { leftCollapsed: leftSidebarCollapsed }))
+    }
+
+    const stopResize = () => {
+      setDraggingPane(null)
+      document.body.classList.remove('resizing-panels')
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', stopResize)
+      window.removeEventListener('pointercancel', stopResize)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', stopResize)
+    window.addEventListener('pointercancel', stopResize)
+  }
 
   const refresh = async () => {
     const next = await getState()
@@ -606,17 +727,18 @@ function App() {
     () => (selectedTaskId ? state.tasks.find((task) => task.id === selectedTaskId) : undefined),
     [selectedTaskId, state.tasks]
   )
+  const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
   const runningTask = state.tasks.find((task) => task.status === 'running')
+  const composerRunningTask = selectedTask?.status === 'running' ? selectedTask : runningTask
   const composerModels = useMemo(() => configuredModelOptionsForComposer(models), [models])
-  const selectedModel = composerModels.find((model) => model.id === selectedModelId) ?? composerModels[0] ?? {
+  const selectedModel = composerModels.find((model) => resolveModelSelectionKey(model) === selectedModelId) ?? composerModels[0] ?? {
     id: 'auto',
     label: 'Hermes 默认模型',
     builtIn: true,
     source: 'auto'
   }
   const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
-  const rememberedProviderConfig = providerSavedModelConfig(newModelProvider, hermesModel)
 
   const filteredTasks = useMemo(() => {
     const keyword = taskSearch.trim().toLowerCase()
@@ -630,27 +752,21 @@ function App() {
     })
   }, [state.tasks, taskSearch, taskScope, taskWorkspaceScope, selectedWorkspaceId, selectedTaskTag])
 
-  const sidebarRecentTasks = useMemo(() => {
-    return state.tasks
-      .filter((task) => !task.archivedAt)
-      .slice()
-      .sort((a, b) => {
-        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
-        return b.updatedAt.localeCompare(a.updatedAt)
-      })
-      .slice(0, 12)
-  }, [state.tasks])
-
-  const sidebarWorkspaceGroups = useMemo(() => {
-    return state.workspaces.map((workspace) => ({
-      workspace,
-      tasks: state.tasks
-        .filter((task) => task.workspaceId === workspace.id && !task.archivedAt)
-        .slice()
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .slice(0, 8)
-    }))
-  }, [state.workspaces, state.tasks])
+	  const sidebarWorkspaceGroups = useMemo(() => {
+	    return state.workspaces.map((workspace) => ({
+	      workspace,
+	      tasks: state.tasks
+	        .filter((task) => task.workspaceId === workspace.id && !task.archivedAt)
+	        .slice()
+	        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+	        .slice(0, 8),
+	      archivedTasks: state.tasks
+	        .filter((task) => task.workspaceId === workspace.id && task.archivedAt)
+	        .slice()
+	        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+	        .slice(0, 16)
+	    }))
+	  }, [state.workspaces, state.tasks])
 
   const taskGroups = useMemo(() => {
     return state.workspaces
@@ -676,9 +792,76 @@ function App() {
   const selectedHermesSession = selectedTask?.hermesSessionId
     ? hermesSessions.find((session) => session.id === selectedTask.hermesSessionId)
     : undefined
+
+  async function refreshSelectedTaskContext(task = selectedTask) {
+    if (!task) {
+      setSelectedTaskContext(null)
+      setContextError(null)
+      return
+    }
+    setContextLoading(true)
+    setContextError(null)
+    try {
+      const context = await getTaskContext(task.id)
+      if (selectedTaskIdRef.current === task.id) {
+        setSelectedTaskContext(context)
+      }
+    } catch (cause) {
+      if (selectedTaskIdRef.current === task.id) {
+        setContextError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (selectedTaskIdRef.current === task.id) {
+        setContextLoading(false)
+      }
+    }
+  }
+
+  async function handleCompressSelectedTaskContext() {
+    if (!selectedTask || selectedTask.status === 'running') return
+    setContextCompressing(true)
+    setContextError(null)
+    try {
+      const result = await compressTaskContext(selectedTask.id)
+      setSelectedTaskContext(result.context)
+      await refresh()
+    } catch (cause) {
+      setContextError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setContextCompressing(false)
+    }
+  }
+
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId
   }, [selectedTaskId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedTask) {
+      setSelectedTaskContext(null)
+      setContextError(null)
+      setContextLoading(false)
+      return () => {
+        cancelled = true
+      }
+    }
+    setContextLoading(true)
+    setContextError(null)
+    void getTaskContext(selectedTask.id)
+      .then((context) => {
+        if (!cancelled) setSelectedTaskContext(context)
+      })
+      .catch((cause) => {
+        if (!cancelled) setContextError(cause instanceof Error ? cause.message : String(cause))
+      })
+      .finally(() => {
+        if (!cancelled) setContextLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedTask?.id, selectedTask?.status, selectedTask?.hermesSessionId, selectedTask?.events?.length])
 
   useEffect(() => {
     selectedWorkspaceIdRef.current = selectedWorkspaceId
@@ -824,9 +1007,10 @@ function App() {
     try {
       const activeTask = selectedTask?.status === 'running' ? null : selectedTask
       const taskSkillNames = activeTask?.skillNames?.length ? activeTask.skillNames : composerSkillNames
+      const modelSelectionKey = resolveModelSelectionKey(selectedModel)
       const task = activeTask
-        ? await sendTaskMessage(activeTask.id, nextPrompt, selectedModel.id, taskSkillNames).then(() => activeTask)
-        : await createTask(selectedWorkspace.id, nextPrompt, selectedModel.id, taskSkillNames)
+        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames)).task
+        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames)
       setPrompt('')
       setComposerSkillNames([])
       setSelectedTaskId(task.id)
@@ -928,10 +1112,31 @@ function App() {
 
   async function handleSelectModel(model: ModelOption) {
     setModelNotice(null)
-    await selectModel(model.id)
-    setSelectedModelId(model.id)
+    const modelKey = resolveModelSelectionKey(model)
+    await selectModel(modelKey)
+    setSelectedModelId(modelKey)
     setModelMenuOpen(false)
     await refreshModels()
+  }
+
+  async function handleConfigureReasoning(request: HermesReasoningConfigureRequest, notice: string) {
+    setHermesModelUpdating('reasoning')
+    setHermesModelError(null)
+    setModelNotice(null)
+    try {
+      const response = await configureHermesReasoning(request)
+      setModels(response.models)
+      setSelectedModelId(response.selectedModelId)
+      setHermesModel(response.hermes)
+      setModelCatalog(response.catalog ?? [])
+      setModelNotice(notice)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setHermesModelError(message)
+      setModelNotice(message)
+    } finally {
+      setHermesModelUpdating(null)
+    }
   }
 
   async function handleSetHermesDefaultModel(modelId: string, provider?: string) {
@@ -953,11 +1158,12 @@ function App() {
 
   async function handleDeleteModel(model: ModelOption) {
     if (model.builtIn) return
-    setHermesModelUpdating(`delete-model:${model.id}`)
+    const modelKey = resolveModelSelectionKey(model)
+    setHermesModelUpdating(`delete-model:${modelKey}`)
     setHermesModelError(null)
     setModelNotice(null)
     try {
-      const response = await deleteModel(model.id)
+      const response = await deleteModel(resolveModelSelectionKey(model))
       setModels(response.models)
       setSelectedModelId(response.selectedModelId)
       setHermesModel(response.hermes)
@@ -1251,8 +1457,8 @@ function App() {
     setWorkspaceUpdatingId(workspace.id)
     setError(null)
     try {
-      const picked = await pickWorkspaceDirectory()
-      await updateWorkspace(workspace.id, { path: picked.path, name: workspace.name || picked.name })
+	      const picked = await pickWorkspaceDirectory()
+	      await updateWorkspace(workspace.id, { path: picked.path, name: picked.name })
       setSelectedWorkspaceId(workspace.id)
       setSelectedTaskId(null)
       setWorkspaceTreePath('')
@@ -1267,11 +1473,11 @@ function App() {
     }
   }
 
-  async function handleRemoveWorkspace(workspace: Workspace) {
-    if (workspace.id === 'default') {
-      setError('默认工作区不能移除。你可以重新授权它到新的文件夹。')
-      return
-    }
+	  async function handleRemoveWorkspace(workspace: Workspace) {
+	    if (workspace.id === 'default') {
+	      setError('Default Workspace 是 Cowork 的兜底工作区，不能移除。你可以点“重新授权文件夹”把它指向新的本机目录。')
+	      return
+	    }
     const workspaceTaskCount = state.tasks.filter((task) => task.workspaceId === workspace.id).length
     const confirmed = window.confirm(`移除工作区“${workspace.name}”？这只会移除 Cowork 中的工作区和 ${workspaceTaskCount} 个会话记录，不会删除真实文件。`)
     if (!confirmed) return
@@ -1586,6 +1792,15 @@ function App() {
     setPrompt((current) => (current.trim() ? `${current.trim()}\n\n${snippet}` : snippet))
   }
 
+  const panelLayoutStyle = useMemo(
+    () =>
+      ({
+        '--sidebar-width': `${panelLayout.left}px`,
+        '--inspector-width': `${panelLayout.right}px`
+      }) as CSSProperties,
+    [panelLayout.left, panelLayout.right]
+  )
+
   return (
     <div
       className={[
@@ -1600,6 +1815,7 @@ function App() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      style={panelLayoutStyle}
     >
       {isDraggingFiles && (
         <div className="drop-overlay">
@@ -1609,6 +1825,26 @@ function App() {
             <span>{selectedWorkspace?.name ?? '请选择一个授权工作区'}</span>
           </div>
         </div>
+      )}
+      {!leftSidebarCollapsed && (
+        <button
+          type="button"
+          className={`pane-resizer pane-resizer-left ${draggingPane === 'left' ? 'active' : ''}`}
+          style={{ left: `${panelLayout.left - 7}px` }}
+          title="拖动调整左侧导航宽度"
+          aria-label="拖动调整左侧导航宽度"
+          onPointerDown={(event) => startPaneResize('left', event)}
+        />
+      )}
+      {viewMode === 'tasks' && !rightSidebarCollapsed && (
+        <button
+          type="button"
+          className={`pane-resizer pane-resizer-right ${draggingPane === 'right' ? 'active' : ''}`}
+          style={{ right: `${panelLayout.right - 7}px` }}
+          title="拖动调整右侧工作区宽度"
+          aria-label="拖动调整右侧工作区宽度"
+          onPointerDown={(event) => startPaneResize('right', event)}
+        />
       )}
       {leftSidebarCollapsed && (
         <button
@@ -1659,20 +1895,22 @@ function App() {
             <span>工作区</span>
             <button
               className="icon-button"
-              title="选择文件夹授权为工作区"
+              title="新增工作区：选择一个新的本机文件夹授权给 Hermes"
+              aria-label="新增工作区"
               onClick={() => void handleAuthorizeWorkspace()}
-              disabled={workspacePicking}
-            >
+	              disabled={workspacePicking}
+	            >
               {workspacePicking ? <Loader2 size={15} className="spin" /> : <FolderPlus size={15} />}
             </button>
           </div>
           <div className="workspace-tree-list">
             {sidebarWorkspaceGroups.map((group) => (
               <SidebarWorkspaceNode
-                key={group.workspace.id}
-                workspace={group.workspace}
-                tasks={group.tasks}
-                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
+	                key={group.workspace.id}
+	                workspace={group.workspace}
+	                tasks={group.tasks}
+	                archivedTasks={group.archivedTasks}
+	                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
                 activeTaskId={selectedTaskId ?? null}
                 onOpenWorkspace={() => {
                   setSelectedWorkspaceId(group.workspace.id)
@@ -1705,11 +1943,15 @@ function App() {
 
         <div className="sidebar-nav-group">
           <button
-            className={viewMode === 'search' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => setViewMode('search')}
+            className={viewMode === 'skills' ? 'secondary-nav active' : 'secondary-nav'}
+            onClick={() => {
+              setViewMode('skills')
+              void refreshSkills().catch(() => undefined)
+              void refreshHermesMcp()
+            }}
           >
-            <Search size={17} />
-            搜索
+            <Hammer size={17} />
+            技能
           </button>
 
           <button
@@ -1727,50 +1969,6 @@ function App() {
             <Globe2 size={17} />
             调度
           </button>
-
-          <button
-            className={viewMode === 'ideas' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => setViewMode('ideas')}
-          >
-            <BookOpen size={17} />
-            模板
-          </button>
-
-          <button
-            className={viewMode === 'skills' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => {
-              setViewMode('skills')
-              void refreshSkills().catch(() => undefined)
-              void refreshHermesMcp()
-            }}
-          >
-            <Hammer size={17} />
-            技能
-          </button>
-        </div>
-
-        <div className="sidebar-section tasks-section">
-          <div className="section-title">
-            <span>最近</span>
-          </div>
-          <div className="recent-task-list">
-            {state.tasks.length === 0 && <p className="empty-copy">还没有最近任务。</p>}
-            {sidebarRecentTasks.map((task) => (
-              <SidebarRecentTaskRow
-                key={task.id}
-                task={task}
-                active={task.id === selectedTask?.id}
-                onSelect={() => {
-                  setViewMode('tasks')
-                  setSelectedTaskId(task.id)
-                  setSelectedWorkspaceId(task.workspaceId)
-                }}
-                onContinue={() => handleContinueTask(task)}
-                onRetry={() => handleRetryTask(task)}
-                onArchive={() => void handleArchiveTask(task)}
-              />
-            ))}
-          </div>
         </div>
 
         <div className="sidebar-foot">
@@ -1815,14 +2013,21 @@ function App() {
               </button>
             </div>
           )}
-          <button className="sidebar-user-button" onClick={() => setAccountMenuOpen((open) => !open)}>
+          <button
+            className="sidebar-user-button"
+            title="账号与设置"
+            aria-label="账号与设置"
+            onClick={() => setAccountMenuOpen((open) => !open)}
+          >
             <span className="account-avatar">
               <User size={15} />
             </span>
             <strong>Lucas</strong>
             <span className="local-badge">本机</span>
+            <span className="sidebar-settings-cue">
+              <Settings size={13} />
+            </span>
           </button>
-          <span>Hermes 命令行</span>
         </div>
       </aside>
 
@@ -2044,7 +2249,7 @@ function App() {
                       {message.role === 'user' ? '你' : 'Hermes'}
                       <span>{formatTime(message.createdAt)}</span>
                     </div>
-                    <div className="message-body">{message.content}</div>
+                    <MessageBody role={message.role} content={message.content} />
                   </article>
                 ))}
               </div>
@@ -2062,129 +2267,63 @@ function App() {
 
           {selectedTask?.status === 'running' && (
             <article className="message assistant pending streaming-message">
-              <div className="message-meta message-meta-action">
+              <div className="message-meta">
                 <div>
                   Hermes
                   <span>运行中</span>
                   <span className={`stream-pill ${taskStreamStatus}`}>{taskStreamLabel(taskStreamStatus)}</span>
                 </div>
-                <button
-                  className="inline-stop-button"
-                  type="button"
-                  onClick={() => void handleStop(selectedTask)}
-                  disabled={stoppingTaskId === selectedTask.id}
-                >
-                  <Square size={12} />
-                  {stoppingTaskId === selectedTask.id ? '停止中' : '停止任务'}
-                </button>
               </div>
-              {selectedTask.liveResponse ? (
-                <div className="message-body live-output">{selectedTask.liveResponse}</div>
-              ) : (
-                <div className="running-inline-status">
-                  <Loader2 size={16} className="spin" />
-                  Hermes 正在授权工作区内执行任务...
+              <LiveExecutionPanel task={selectedTask} streamStatus={taskStreamStatus} streamUpdatedAt={taskStreamUpdatedAt} />
+              <div className="live-answer-block">
+                <div className="live-answer-label">
+                  <span>{selectedTask.liveResponse ? '正在生成回答' : '等待最终回答'}</span>
+                  {!selectedTask.liveResponse && <em>过程会先在上方实时更新</em>}
                 </div>
-              )}
+                {selectedTask.liveResponse ? (
+                  <MessageBody role="assistant" content={selectedTask.liveResponse} live />
+                ) : (
+                  <div className="running-inline-status">
+                    <Loader2 size={16} className="spin" />
+                    Hermes 还在执行，答案开始生成后会显示在这里。
+                  </div>
+                )}
+              </div>
             </article>
           )}
           <div className="conversation-bottom" ref={conversationEndRef} />
         </section>
 
-        <form className="composer" onSubmit={handleSubmit}>
-          {composerSkillNames.length > 0 && (
-            <div className="composer-skill-strip">
-              <span>本次预载技能</span>
-              {composerSkillNames.map((name) => (
-                <button
-                  type="button"
-                  key={name}
-                  onClick={() => setComposerSkillNames((current) => current.filter((item) => item !== name))}
-                >
-                  <BookOpen size={13} />
-                  {name}
-                  <XCircle size={12} />
-                </button>
-              ))}
-            </div>
-          )}
-          <textarea
-            ref={promptInputRef}
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={handlePromptKeyDown}
-            placeholder="告诉 Hermes 你要做什么。附件和文件会放在当前授权工作区中。"
-            aria-label="任务输入框，按 Enter 发送，按 Shift 加 Enter 换行"
-            rows={4}
-          />
-          <div className="composer-bar">
-            <div className="composer-context">
-              <Folder size={15} />
-              <span>{selectedWorkspace?.name ?? '未选择工作区'}</span>
-              <ChevronDown size={14} />
-            </div>
-            <div className="composer-actions">
-              <div className="model-picker" ref={modelPickerRef}>
-                {modelMenuOpen && (
-                  <div className="model-menu">
-                    <div className="model-menu-title">已配置模型</div>
-                    {modelMenuGroups.map((group) => (
-                      <div className="model-menu-group" key={group.label || 'default-models'}>
-                        {group.label && <div className="model-menu-group-title">{group.label}</div>}
-                        {group.models.map((model) => (
-                          <button
-                            type="button"
-                            className={model.id === selectedModelId ? 'active' : ''}
-                            key={`${model.provider ?? 'auto'}:${model.id}`}
-                            onClick={() => void handleSelectModel(model)}
-                          >
-                            <Bot size={14} />
-                            <div>
-                              <strong>{model.label}</strong>
-                              <span>{model.description ?? model.provider ?? model.id}</span>
-                            </div>
-                            {model.id === selectedModelId && <CheckCircle2 size={14} />}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="add-model-option key-option"
-                      onClick={() => {
-                        openModelConfigPanel(selectedModel.provider || hermesModel?.provider || '', selectedModel.id === 'auto' ? hermesModel?.defaultModel : selectedModel.id)
-                        setModelMenuOpen(false)
-                      }}
-                    >
-                      <Shield size={14} />
-                      重填当前 Key
-                    </button>
-                    <button
-                      type="button"
-                      className="add-model-option"
-                      onClick={() => {
-                        openModelConfigPanel()
-                        setModelMenuOpen(false)
-                      }}
-                    >
-                      <Settings size={14} />
-                      模型服务设置
-                    </button>
-                  </div>
-                )}
-                <button type="button" className="model-trigger" onClick={() => setModelMenuOpen((open) => !open)}>
-                  <span>{selectedModel.label}</span>
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-              <button className="send-button" disabled={isSubmitting || !prompt.trim() || Boolean(runningTask)}>
-                {isSubmitting ? <Loader2 size={16} className="spin" /> : <Plus size={17} />}
-                发送给 Hermes
-              </button>
-            </div>
-          </div>
-          {modelNotice && <div className="composer-notice">{modelNotice}</div>}
-        </form>
+        <ChatComposer
+          prompt={prompt}
+          promptInputRef={promptInputRef}
+          composerSkillNames={composerSkillNames}
+          selectedWorkspaceName={selectedWorkspace?.name}
+          selectedModel={selectedModel}
+          selectedModelId={selectedModelId}
+          modelMenuOpen={modelMenuOpen}
+          modelPickerRef={modelPickerRef}
+          modelMenuGroups={modelMenuGroups}
+          hermesModel={hermesModel}
+          hermesModelUpdating={hermesModelUpdating}
+          runningTask={composerRunningTask}
+          stoppingTaskId={stoppingTaskId}
+          isSubmitting={isSubmitting}
+          modelNotice={modelNotice}
+          onSubmit={handleSubmit}
+          onPromptChange={setPrompt}
+          onPromptKeyDown={handlePromptKeyDown}
+          onRemoveSkill={(name) => setComposerSkillNames((current) => current.filter((item) => item !== name))}
+          onOpenWorkspace={() => {
+            if (selectedWorkspace) setViewMode('projects')
+          }}
+          onModelMenuOpenChange={setModelMenuOpen}
+          onConfigureReasoning={(request, notice) => void handleConfigureReasoning(request, notice)}
+          onSelectModel={(model) => void handleSelectModel(model)}
+          onOpenModelConfig={openModelConfigPanel}
+          onStopTask={(task) => void handleStop(task)}
+          resolveModelSelectionKey={resolveModelSelectionKey}
+        />
           </>
         )}
       </main>
@@ -2218,8 +2357,6 @@ function App() {
               task={selectedTask}
               streamStatus={taskStreamStatus}
               streamUpdatedAt={taskStreamUpdatedAt}
-              stopping={selectedTask ? stoppingTaskId === selectedTask.id : false}
-              onStop={() => selectedTask && void handleStop(selectedTask)}
             />
 
             <TaskArtifactsCard
@@ -2228,102 +2365,16 @@ function App() {
               onReveal={(artifact) => void handleRevealArtifact(artifact)}
             />
 
-            <AgentResourcesCard task={selectedTask} workspaceFiles={workspaceFiles} />
-
-            {selectedTask && (
-              <details className="inspector-card inspector-details inspector-utility-details">
-                <summary>更多操作</summary>
-                <div className="task-tag-editor">
-                  <div className="tag-editor-title">
-                    <Tags size={13} />
-                    场景标签
-                  </div>
-                  <div className="tag-chip-list">
-                    {taskTagOptions.map((tag) => (
-                      <button
-                        className={(selectedTask.tags ?? []).includes(tag) ? 'active' : ''}
-                        key={tag}
-                        onClick={() => void handleToggleTag(selectedTask, tag)}
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {selectedTask.status === 'running' && (
-                  <button className="danger-button" onClick={() => void handleStop(selectedTask)}>
-                    <Square size={14} />
-                    停止任务
-                  </button>
-                )}
-                <div className="status-actions">
-                  <a className="ghost-button export-button" href={taskExportUrl(selectedTask.id)}>
-                    <Download size={14} />
-                    导出 Markdown
-                  </a>
-                </div>
-                <button className="danger-button subtle" onClick={() => void handleDeleteTask(selectedTask)}>
-                  <Trash2 size={14} />
-                  删除任务记录
-                </button>
-              </details>
-            )}
-
-            <details className="inspector-card inspector-details debug-details inspector-utility-details">
-              <summary>后台调试</summary>
-              {selectedTask && (
-                <div className="debug-section">
-                  <HermesSessionCard task={selectedTask} session={selectedHermesSession} />
-                </div>
-              )}
-              <div className="debug-section">
-                <div className="card-heading-row">
-                  <h3>Hermes 运行时</h3>
-                  <button className="mini-button" onClick={() => void refreshRuntime()}>
-                    <RefreshCw size={13} />
-                    刷新
-                  </button>
-                </div>
-                <RuntimePanel runtime={runtime} />
-              </div>
-              {selectedTask && (
-                <>
-                  <div className="debug-section">
-                    <h3>运行详情</h3>
-                    <div className="detail-tabs">
-                      <button
-                        className={detailTab === 'response' ? 'active' : ''}
-                        onClick={() => setDetailTab('response')}
-                      >
-                        <Info size={14} />
-                        正文
-                      </button>
-                      <button className={detailTab === 'tools' ? 'active' : ''} onClick={() => setDetailTab('tools')}>
-                        <Wrench size={14} />
-                        工具
-                      </button>
-                      <button className={detailTab === 'logs' ? 'active' : ''} onClick={() => setDetailTab('logs')}>
-                        <Terminal size={14} />
-                        日志
-                      </button>
-                      <button className={detailTab === 'errors' ? 'active' : ''} onClick={() => setDetailTab('errors')}>
-                        <XCircle size={14} />
-                        错误
-                      </button>
-                    </div>
-                    <ExecutionPane task={selectedTask} tab={detailTab} />
-                  </div>
-                  <div className="debug-section">
-                    <h3>步骤时间线</h3>
-                    <EventTimeline events={selectedTask.events ?? []} />
-                  </div>
-                  <div className="debug-section">
-                    <h3>工具调用</h3>
-                    <ToolCards events={selectedTask.events ?? []} />
-                  </div>
-                </>
-              )}
-            </details>
+            <ContextResourcesCard
+              task={selectedTask}
+              context={selectedTaskContext}
+              loading={contextLoading}
+              error={contextError}
+              compressing={contextCompressing}
+              workspaceFiles={workspaceFiles}
+              onRefresh={() => void refreshSelectedTaskContext()}
+              onCompress={() => void handleCompressSelectedTaskContext()}
+            />
           </>
         )}
       </aside>
@@ -2344,111 +2395,28 @@ function App() {
         <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
           if (!modelPanelSaving) setModelPanelOpen(false)
         })}>
-          <form className="modal model-config-modal" onSubmit={handleAddModel}>
-            <h2>配置或重填模型 Key</h2>
-            <p>如果模型报 401、无返回或凭据失效，就在这里选择服务商并重新输入 Key / Plan Key。保存后直接写入 Hermes 本机配置，Key 只保存在你的 Mac 上。</p>
-            <div className="model-catalog-refresh-line">
-              <span>模型列表来自 Hermes 目录，并可从供应商官网补充新版本。</span>
-              <button type="button" className="settings-add-button" onClick={() => void handleRefreshModelCatalog()} disabled={modelCatalogRefreshing}>
-                {modelCatalogRefreshing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-                刷新官网模型
-              </button>
-            </div>
-            {modelNotice && <div className="modal-inline-error">{modelNotice}</div>}
-            <label>
-              服务商
-              <select
-                value={newModelProvider}
-                onChange={(event) => selectNewModelProvider(event.target.value)}
-              >
-                <option value="">选择模型服务商</option>
-                {modelCatalog.map((provider) => (
-                  <option key={provider.id} value={provider.id}>{provider.label}</option>
-                ))}
-              </select>
-            </label>
-            {rememberedProviderConfig.canReuse && (
-              <div className="model-config-memory">
-                <CheckCircle2 size={14} />
-                已记住 {rememberedProviderConfig.label} 的 Base URL 和 API 模式。修复 401 时请重新输入 Key；留空会继续沿用当前凭据。
-              </div>
-            )}
-            <label>
-              默认模型
-              <select
-                value={newModelLabel}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setNewModelLabel(value)
-                  setNewModelId(value)
-                }}
-                disabled={!newModelProvider}
-              >
-                <option value="">选择模型</option>
-                {modelGroupsForProvider(newModelProvider, modelCatalog.find((provider) => provider.id === newModelProvider)?.models ?? []).map((group) => (
-                  group.label ? (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.models.map((model) => <option key={model} value={model}>{model}</option>)}
-                    </optgroup>
-                  ) : (
-                    group.models.map((model) => <option key={model} value={model}>{model}</option>)
-                  )
-                ))}
-                <option value="custom">使用其他模型</option>
-              </select>
-            </label>
-            {(newModelLabel === 'custom' || !newModelLabel) && (
-              <label>
-                自定义模型 ID
-                <input
-                  value={newModelId}
-                  onChange={(event) => {
-                    setNewModelId(event.target.value)
-                    setNewModelLabel(event.target.value)
-                  }}
-                  placeholder="例如 mimo-v2.5-pro 或 kimi-k2.5"
-                />
-              </label>
-            )}
-            <label>
-              Base URL
-              <input
-                value={newModelBaseUrl}
-                onChange={(event) => setNewModelBaseUrl(event.target.value)}
-                placeholder={rememberedProviderConfig.baseUrl || providerBaseUrlHints[newModelProvider] || '非自定义服务通常可留空'}
-              />
-            </label>
-            <label>
-              API Key
-              <input
-                type="password"
-                value={newModelApiKey}
-                onChange={(event) => setNewModelApiKey(event.target.value)}
-                placeholder={rememberedProviderConfig.canReuse ? '修复 401 请重新输入 Key；留空则沿用当前凭据' : '请输入 Key 或 Plan Key'}
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              API 模式
-              <select value={newModelApiMode} onChange={(event) => setNewModelApiMode(event.target.value)}>
-                <option value="chat_completions">OpenAI 兼容 / Chat Completions</option>
-                <option value="anthropic_messages">Anthropic Messages</option>
-                <option value="responses">OpenAI Responses</option>
-              </select>
-            </label>
-            <div className="model-config-note">
-              保存后会写入 Hermes `config.yaml`，并把该模型设为 Hermes 默认模型。同一供应商后续切换模型时，Base URL 和 API 模式会自动带入。
-            </div>
-            <div className="modal-actions">
-              <button type="button" className="ghost-button" onClick={() => setModelPanelOpen(false)} disabled={modelPanelSaving}>
-                取消
-              </button>
-              <button className="send-button" disabled={modelPanelSaving || !newModelProvider || !(newModelId.trim() || newModelLabel.trim())}>
-                {modelPanelSaving ? <Loader2 size={16} className="spin" /> : <Plus size={16} />}
-                保存 Key 到 Hermes
-              </button>
-            </div>
-          </form>
+          <ModelConfigModal
+            modelCatalog={modelCatalog}
+            hermesModel={hermesModel}
+            providerId={newModelProvider}
+            modelId={newModelId}
+            modelLabel={newModelLabel}
+            baseUrl={newModelBaseUrl}
+            apiKey={newModelApiKey}
+            apiMode={newModelApiMode}
+            notice={modelNotice}
+            saving={modelPanelSaving}
+            catalogRefreshing={modelCatalogRefreshing}
+            onClose={() => setModelPanelOpen(false)}
+            onSubmit={handleAddModel}
+            onProviderChange={selectNewModelProvider}
+            onModelIdChange={setNewModelId}
+            onModelLabelChange={setNewModelLabel}
+            onBaseUrlChange={setNewModelBaseUrl}
+            onApiKeyChange={setNewModelApiKey}
+            onApiModeChange={setNewModelApiMode}
+            onRefreshCatalog={() => void handleRefreshModelCatalog()}
+          />
         </div>
       )}
 
@@ -2472,7 +2440,7 @@ function App() {
             selectedModel={selectedModel}
             models={composerModels}
             modelCatalog={modelCatalog}
-            selectedModelId={selectedModel.id}
+            selectedModelId={resolveModelSelectionKey(selectedModel)}
             hermesModel={hermesModel}
             hermesModelUpdating={hermesModelUpdating}
             hermesModelError={hermesModelError}
@@ -2533,7 +2501,7 @@ function App() {
 
       {mcpMarketplaceOpen && (
         <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setMcpMarketplaceOpen(false))}>
-          <McpMarketplaceModal
+          <SettingsMcpMarketplaceModal
             onClose={() => setMcpMarketplaceOpen(false)}
             onInstalled={handleMcpInstalled}
             recommendations={mcpRecommendations}
@@ -2545,7 +2513,7 @@ function App() {
         <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
           if (mcpUpdatingId !== editingMcp.id) setEditingMcp(null)
         })}>
-          <ManualMcpModal
+          <SettingsManualMcpModal
             mode="edit"
             initialServer={editingMcp}
             isSaving={mcpUpdatingId === editingMcp.id}
@@ -2559,7 +2527,7 @@ function App() {
         <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => {
           if (!mcpUpdatingId) setManualMcpOpen(false)
         })}>
-          <ManualMcpModal
+          <SettingsManualMcpModal
             mode="create"
             isSaving={Boolean(mcpUpdatingId)}
             onClose={() => setManualMcpOpen(false)}
@@ -2769,7 +2737,7 @@ function SkillsView({
       </div>
         </>
       ) : (
-        <ConnectorsView
+        <McpConnectorsView
           connectors={connectors}
           configPath={mcpConfigPath}
           error={mcpError}
@@ -2778,69 +2746,6 @@ function SkillsView({
       )}
       </div>
     </section>
-  )
-}
-
-function ConnectorsView({
-  connectors,
-  configPath,
-  error,
-  onOpenSettings
-}: {
-  connectors: HermesMcpConfig['servers']
-  configPath?: string
-  error: string | null
-  onOpenSettings: () => void
-}) {
-  const enabledCount = connectors.filter((connector) => connector.enabled).length
-
-  return (
-    <div className="connectors-panel">
-      <div className="connector-summary">
-        <div>
-          <strong>{connectors.length}</strong>
-          <span>已安装连接器</span>
-        </div>
-        <div>
-          <strong>{enabledCount}</strong>
-          <span>已启用</span>
-        </div>
-        <div>
-          <strong>{configPath ? 'Hermes' : '未连接'}</strong>
-          <span>{configPath ?? '暂未读取到 MCP 配置'}</span>
-        </div>
-      </div>
-
-      {error && <div className="settings-error-line">{error}</div>}
-
-      <div className="connector-list">
-        {!connectors.length && <p className="muted-copy">暂未读取到 MCP 连接器。可以从市场添加，或在设置里手动配置。</p>}
-        {connectors.map((connector) => (
-          <article className={connector.enabled ? 'connector-card enabled' : 'connector-card'} key={connector.id}>
-            <div className="connector-icon">
-              {connector.iconUrl ? <img src={connector.iconUrl} alt="" /> : <Plug size={18} />}
-            </div>
-            <div className="connector-body">
-              <div className="connector-head">
-                <strong>{connector.name}</strong>
-                <span>{connector.enabled ? '已启用' : '已停用'}</span>
-              </div>
-              <p>{connector.description || connector.command || connector.url || '这个连接器来自 Hermes MCP 配置。'}</p>
-              <div className="connector-meta">
-                <em>{connector.transport.toUpperCase()}</em>
-                <em>{connector.status === 'configured' ? '配置完整' : '需要补全'}</em>
-                {connector.auth !== 'none' && <em>{connector.auth}</em>}
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <div className="connector-footer">
-        <span>详细测试、工具级开关、编辑和删除仍在 MCP 设置页中完成。</span>
-        <button className="settings-link-button" onClick={onOpenSettings}>打开 MCP 管理</button>
-      </div>
-    </div>
   )
 }
 
@@ -2895,291 +2800,6 @@ function SearchTasksView({
         ))}
       </div>
     </section>
-  )
-}
-
-function ProjectsView({
-  workspaces,
-  tasks,
-  artifacts,
-  workspaceFiles,
-  workspaceTree,
-  workspacePath,
-  workspaceQuery,
-  filePreview,
-  selectedWorkspaceId,
-  onSelect,
-  onOpenTask,
-  onUsePrompt,
-  onUseFile,
-  onPreviewFile,
-  onRevealFile,
-  onOpenFolder,
-  onWorkspaceQueryChange,
-  onCloseFilePreview,
-  onUsePreviewTarget,
-  onRevealPreviewTarget,
-  onUploadClick,
-  onAdd,
-  onReveal,
-  onRename,
-  onReauthorize,
-  onRemove
-}: {
-  workspaces: Workspace[]
-  tasks: Task[]
-  artifacts: Artifact[]
-  workspaceFiles: WorkspaceFile[]
-  workspaceTree: WorkspaceTree | null
-  workspacePath: string
-  workspaceQuery: string
-  filePreview: FilePreviewState | null
-  selectedWorkspaceId: string
-  onSelect: (workspace: Workspace) => void
-  onOpenTask: (task: Task) => void
-  onUsePrompt: (workspace: Workspace, prompt: string) => void
-  onUseFile: (file: WorkspaceFile) => void
-  onPreviewFile: (file: WorkspaceFile) => void
-  onRevealFile: (file: WorkspaceFile) => void
-  onOpenFolder: (path: string) => void
-  onWorkspaceQueryChange: (query: string) => void
-  onCloseFilePreview: () => void
-  onUsePreviewTarget: (target: FilePreviewTarget) => void
-  onRevealPreviewTarget: (target: FilePreviewTarget) => void
-  onUploadClick: () => void
-  onAdd: () => void
-  onReveal: (workspace: Workspace) => void
-  onRename: (workspace: Workspace) => void
-  onReauthorize: (workspace: Workspace) => void
-  onRemove: (workspace: Workspace) => void
-}) {
-  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0]
-  const workspaceTasks = selectedWorkspace ? tasks.filter((task) => task.workspaceId === selectedWorkspace.id && !task.archivedAt) : []
-  const recentTasks = workspaceTasks
-    .slice()
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 6)
-  const workspaceArtifacts = selectedWorkspace
-    ? artifacts
-        .filter((artifact) => artifact.workspaceId === selectedWorkspace.id)
-        .slice()
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, 6)
-    : []
-  const switchableWorkspaces = workspaces.filter((workspace) => workspace.id !== selectedWorkspace?.id)
-  const failed = workspaceTasks.filter((task) => task.status === 'failed' || task.status === 'stopped').length
-  const workspaceFilePreview = selectedWorkspace && filePreview?.target.source === 'workspace' && filePreview.target.workspaceId === selectedWorkspace.id
-    ? filePreview
-    : null
-
-  return (
-    <section className="product-page workspace-home workspace-file-page">
-      <header className="product-page-head workspace-home-head">
-        <div>
-          <span className="page-kicker">工作区</span>
-          <h1>{selectedWorkspace?.name ?? '工作区'}</h1>
-          <p>{selectedWorkspace ? '已授权的本机文件夹。这里管理文件、会话和 Hermes 的工作边界。' : '选择一个文件夹，作为 Hermes 可以工作的本机空间。'}</p>
-        </div>
-        <div className="workspace-head-actions">
-          {selectedWorkspace && (
-            <button className="ghost-button" onClick={() => onReveal(selectedWorkspace)}>
-              <FolderOpen size={16} />
-              打开目录
-            </button>
-          )}
-          {selectedWorkspace && (
-            <button className="ghost-button" onClick={() => onRename(selectedWorkspace)}>
-              <Pencil size={15} />
-              重命名
-            </button>
-          )}
-          {selectedWorkspace && (
-            <button className="ghost-button" onClick={() => onReauthorize(selectedWorkspace)}>
-              <RefreshCw size={15} />
-              重新授权
-            </button>
-          )}
-          <button className="send-button" onClick={onAdd}>
-            <FolderPlus size={16} />
-            授权文件夹
-          </button>
-          {selectedWorkspace?.id !== 'default' && (
-            <button className="ghost-button danger-lite" onClick={() => onRemove(selectedWorkspace)}>
-              <Trash2 size={15} />
-              移除
-            </button>
-          )}
-        </div>
-      </header>
-
-      {selectedWorkspace ? (
-        <>
-          <section className="workspace-status-panel">
-            <div>
-              <span className="status-pill compact completed">
-                <CheckCircle2 size={14} />
-                可工作
-              </span>
-              <strong>Hermes 只会在这个授权文件夹内读取、写入和保存产物。</strong>
-              <p>需要处理文件时，从下方选择文件作为上下文，或直接新建对话。</p>
-            </div>
-            <div className="workspace-status-actions">
-              <button className="ghost-button" onClick={() => onUsePrompt(selectedWorkspace, '')}>
-                <MessageSquarePlus size={15} />
-                新建对话
-              </button>
-              <button className="ghost-button" onClick={onUploadClick}>
-                <Upload size={15} />
-                上传文件
-              </button>
-            </div>
-          </section>
-
-          <div className={workspaceFilePreview ? 'workspace-file-grid previewing' : 'workspace-file-grid'}>
-            <section className="workspace-section workspace-browser-panel">
-              <div className="workspace-section-head">
-                <div>
-                  <h2>文件</h2>
-                  <p>选择文件预览、定位，或作为下一次任务上下文。</p>
-                </div>
-                <button className="mini-button" onClick={onUploadClick}>
-                  <Upload size={13} />
-                  上传
-                </button>
-              </div>
-              <WorkspaceBrowser
-                tree={workspaceTree}
-                fallbackFiles={workspaceFiles}
-                currentPath={workspacePath}
-                query={workspaceQuery}
-                onQueryChange={onWorkspaceQueryChange}
-                onOpenFolder={onOpenFolder}
-                onUseFile={onUseFile}
-                onPreviewFile={onPreviewFile}
-                onRevealFile={onRevealFile}
-              />
-            </section>
-
-            <aside className="workspace-side-column">
-              {workspaceFilePreview ? (
-                <FilePreviewPanel
-                  preview={workspaceFilePreview}
-                  compact
-                  onClose={onCloseFilePreview}
-                  onUseContext={onUsePreviewTarget}
-                  onReveal={onRevealPreviewTarget}
-                />
-              ) : (
-                <>
-                  <section className="workspace-section">
-                    <div className="workspace-section-head">
-                      <div>
-                        <h2>会话</h2>
-                        <p>{failed ? `${failed} 个会话需要处理。` : '从这里回到这个工作区里的任务。'}</p>
-                      </div>
-                    </div>
-                    {recentTasks.length ? (
-                      <div className="workspace-task-list compact">
-                        {recentTasks.map((task) => (
-                          <button className={`workspace-task-card ${task.status}`} key={task.id} onClick={() => onOpenTask(task)}>
-                            <StatusIcon status={task.status} />
-                            <div>
-                              <strong>{task.title}</strong>
-                              <span>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</span>
-                            </div>
-                            <ChevronDown size={14} />
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyWorkspaceBlock title="暂无会话" detail="点“新建对话”，让 Hermes 在这个工作区开始工作。" />
-                    )}
-                  </section>
-
-                  {workspaceArtifacts.length > 0 && (
-                    <section className="workspace-section">
-                      <div className="workspace-section-head">
-                        <div>
-                          <h2>产物</h2>
-                          <p>这个工作区里已经生成的文件。</p>
-                        </div>
-                      </div>
-                      <div className="workspace-artifact-list">
-                        {workspaceArtifacts.map((artifact) => (
-                          <a href={artifactDownloadUrl(artifact.id)} key={artifact.id}>
-                            <FileArchive size={16} />
-                            <div>
-                              <strong>{artifact.name}</strong>
-                              <span>{formatBytes(artifact.size)}</span>
-                            </div>
-                          </a>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                </>
-              )}
-            </aside>
-          </div>
-        </>
-      ) : (
-        <EmptyWorkspaceBlock title="还没有工作区" detail="选择一个文件夹授权给 Hermes，之后这里会显示文件管理页。" />
-      )}
-
-      {switchableWorkspaces.length > 0 && (
-        <section className="workspace-switcher-section">
-          <div className="workspace-section-head">
-            <div>
-              <h2>其他工作区</h2>
-              <p>点击工作区可以切换文件管理范围。</p>
-            </div>
-          </div>
-          <div className="project-directory-list compact">
-            {switchableWorkspaces.map((workspace) => {
-              const workspaceTaskCount = tasks.filter((task) => task.workspaceId === workspace.id && !task.archivedAt).length
-              return (
-                <article
-                  className="project-directory-card"
-                  key={workspace.id}
-                  onClick={() => onSelect(workspace)}
-                >
-                  <Folder size={18} />
-                  <div>
-                    <strong>{workspace.name}</strong>
-                    <span>{workspaceTaskCount} 个会话</span>
-                  </div>
-                  <div className="project-card-actions">
-                    <button className="settings-link-button" onClick={(event) => {
-                      event.stopPropagation()
-                      onReveal(workspace)
-                    }}>打开目录</button>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        </section>
-      )}
-    </section>
-  )
-}
-
-function WorkspaceStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
-function EmptyWorkspaceBlock({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="empty-workspace-block">
-      <Circle size={18} />
-      <strong>{title}</strong>
-      <span>{detail}</span>
-    </div>
   )
 }
 
@@ -3609,27 +3229,6 @@ function SettingsModal({
   const [commandDraft, setCommandDraft] = useState('')
   const [pathDraft, setPathDraft] = useState('')
   const [ruleDraft, setRuleDraft] = useState('')
-  const [expandedMcpId, setExpandedMcpId] = useState<string | null>(null)
-  const mcpServers = hermesMcp?.servers ?? []
-  const modelProvidersForView = dedupeModelProvidersForView(hermesModel?.providers ?? [])
-  const modelCredentialsForView = hermesModel?.credentials ?? []
-  const fallbackProviderIds = hermesModel?.fallbackProviders ?? []
-  const fallbackProviderSet = new Set(fallbackProviderIds)
-  const configuredCredentialCount = modelCredentialsForView.filter((credential) => credential.configured).length
-  const fallbackCandidates = modelProvidersForView.filter((provider) => provider.configured && !provider.isCurrent)
-  const currentProviderId = hermesProviderId(hermesModel?.provider ?? selectedModel.provider ?? '')
-  const currentProviderLabel = hermesModel?.providerLabel || modelProvidersForView.find((provider) => hermesProviderId(provider.id) === currentProviderId)?.label || currentProviderId || '当前服务商'
-  const visibleProviderIds = new Set(modelProvidersForView.map((provider) => hermesProviderId(provider.id)))
-  const credentialAlerts = [
-    ...modelProvidersForView
-      .filter((provider) => providerNeedsCredentialAttention(provider))
-      .map((provider) => ({ id: provider.id, label: provider.label, detail: provider.credentialSummary, modelId: provider.isCurrent ? hermesModel?.defaultModel : provider.models[0] })),
-    ...modelCredentialsForView
-      .filter((credential) => credentialNeedsAttention(credential) && (visibleProviderIds.has(hermesProviderId(credential.id)) || hermesProviderId(credential.id) === currentProviderId))
-      .map((credential) => ({ id: credential.id, label: credential.label, detail: credential.detail, modelId: undefined }))
-  ]
-    .filter((item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index)
-    .slice(0, 3)
   const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode; group?: 'main' | 'tools' | 'about' }> = [
     { id: 'account', label: '账号', icon: <User size={15} />, group: 'main' },
     { id: 'general', label: '通用', icon: <Settings size={15} />, group: 'main' },
@@ -3723,391 +3322,58 @@ function SettingsModal({
           </SettingsSection>
         )}
         {tab === 'mcp' && (
-          <SettingsSection title="MCP">
-            <SettingsSubtabs
-              value={prefs.mcpScope}
-              options={[['local', '本地服务'], ['serve', 'Hermes Server'], ['recommendations', '每日推荐'], ['cloud', '云端']]}
-              onChange={(value) => onPrefChange('mcpScope', value as McpScope)}
-            />
-            {prefs.mcpScope === 'local' && (
-              <SettingsCard>
-              <div className="settings-card-header">
-                <div>
-                  <strong>MCP 服务管理</strong>
-                  <span>
-                    读取 Hermes 的 MCP 服务配置
-                    {hermesMcp?.configPath ? ` · ${hermesMcp.configPath}` : ''}
-                  </span>
-                </div>
-                <div className="settings-card-actions">
-                  <button className="icon-button" title="刷新 MCP 状态" onClick={onRefreshMcp}><RefreshCw size={14} /></button>
-                  <div className="mcp-add-menu">
-                    <button className="dark-mini-button"><Plus size={14} /> 添加 <ChevronDown size={13} /></button>
-                    <div className="mcp-add-popover">
-                      <button onClick={onOpenMcpMarketplace}>从市场添加</button>
-                      <button onClick={onOpenManualMcp}>手动配置</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {mcpError && <div className="settings-error-line">{mcpError}</div>}
-              {!mcpError && (
-                <div className="settings-source-line">
-                  <span>真实 Hermes 配置</span>
-                  <strong>{mcpServers.length} 个服务</strong>
-                  <em>只读预览，敏感环境变量已隐藏</em>
-                </div>
-              )}
-              <div className="mcp-server-list">
-                {mcpServers.length === 0 && !mcpError && (
-                  <div className="mcp-empty-state">Hermes 配置中暂未发现 MCP 服务。</div>
-                )}
-                {mcpServers.map((server) => (
-                  <div className="mcp-server-item" key={server.id}>
-                    <div className="mcp-server-row">
-                      <button
-                        className="mcp-expand-button"
-                        onClick={() => setExpandedMcpId((current) => current === server.id ? null : server.id)}
-                        title="展开 MCP 配置详情"
-                      >
-                        <ChevronDown size={14} />
-                      </button>
-                      <McpIcon name={server.name} iconUrl={server.iconUrl} />
-                      <div className="mcp-server-main">
-                        <strong>{server.name}</strong>
-                        <span>{mcpServerSummary(server)}</span>
-                      </div>
-                      {server.status === 'configured' ? <CheckCircle2 size={13} className="ready-mark" /> : <XCircle size={13} className="error-mark" />}
-                      <button
-                        className="settings-test-button"
-                        onClick={() => onTestMcpServer(server.id)}
-                        disabled={mcpTestingId === server.id}
-                      >
-                        {mcpTestingId === server.id ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-                        测试
-                      </button>
-                      <button
-                        className="settings-edit-button"
-                        onClick={() => onEditMcpServer(server)}
-                        disabled={mcpUpdatingId === server.id}
-                        title="编辑 MCP 服务"
-                      >
-                        {mcpUpdatingId === server.id ? <Loader2 size={13} className="spin" /> : <Wrench size={13} />}
-                      </button>
-                      <button
-                        className="settings-delete-button"
-                        onClick={() => onDeleteMcpServer(server.id)}
-                        disabled={mcpDeletingId === server.id}
-                        title="删除 MCP 服务"
-                      >
-                        {mcpDeletingId === server.id ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
-                      </button>
-                      <div className="mcp-toggle-wrap" title="写回 Hermes config.yaml 的 enabled 字段">
-                        {mcpUpdatingId === server.id && <Loader2 size={13} className="spin" />}
-                        <Toggle checked={server.enabled} onChange={(value) => onToggleMcpServer(server.id, value)} disabled={mcpUpdatingId === server.id} />
-                      </div>
-                    </div>
-                    {expandedMcpId === server.id && (
-                      <McpServerDetails
-                        server={server}
-                        testResult={mcpTestResults[server.id]}
-                        isUpdatingTools={mcpToolUpdatingId === server.id}
-                        onSetToolSelection={(mode, tools) => onSetMcpToolSelection(server.id, mode, tools)}
-                        onTest={() => onTestMcpServer(server.id)}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              </SettingsCard>
-            )}
-            {prefs.mcpScope === 'serve' && (
-              <SettingsCard>
-              <div className="settings-card-header">
-                <div>
-                  <strong>Hermes 作为 MCP Server</strong>
-                  <span>覆盖 `hermes mcp serve -v`，用于把 Hermes 对话能力通过 stdio 暴露给其他 MCP Client。</span>
-                </div>
-                <div className="settings-card-actions">
-                  <button className="icon-button" title="刷新 serve 状态" onClick={onRefreshMcpServe}><RefreshCw size={14} /></button>
-                  <button
-                    className={mcpServeStatus?.running ? 'settings-danger-button' : 'dark-mini-button'}
-                    onClick={() => onToggleMcpServe(!mcpServeStatus?.running)}
-                    disabled={mcpServeUpdating}
-                  >
-                    {mcpServeUpdating ? <Loader2 size={13} className="spin" /> : mcpServeStatus?.running ? <Square size={13} /> : <Play size={13} />}
-                    {mcpServeStatus?.running ? '停止 serve' : '启动 serve'}
-                  </button>
-                </div>
-              </div>
-              {mcpServeError && <div className="settings-error-line">{mcpServeError}</div>}
-              <McpServePanel status={mcpServeStatus} />
-              </SettingsCard>
-            )}
-            {prefs.mcpScope === 'recommendations' && (
-              <SettingsCard>
-              <div className="settings-card-header">
-                <div>
-                  <strong>每日 MCP 推荐日报</strong>
-                  <span>每天 00:10 后由 Hermes 复盘当天任务和卡点，推荐内容统一进入 MCP 市场。</span>
-                </div>
-                <div className="settings-card-actions">
-                  <button className="dark-mini-button" onClick={onRefreshMcpRecommendationsWithAi} disabled={mcpRecommendationsLoading}>
-                    {mcpRecommendationsLoading ? <Loader2 size={13} className="spin" /> : <Bot size={13} />}
-                    生成日报
-                  </button>
-                </div>
-              </div>
-              {mcpRecommendationsError && <div className="settings-error-line">{mcpRecommendationsError}</div>}
-              <div className="mcp-daily-report">
-                <div>
-                  <strong>{mcpRecommendations?.generatedAt ? `日报 ${formatMaybeDate(mcpRecommendations.generatedAt)}` : '暂无推荐日报'}</strong>
-                  <span>{mcpRecommendations?.aiSummary || mcpRecommendations?.sourceSummary || '生成后会在这里显示 Hermes 的复盘摘要。'}</span>
-                </div>
-                <button className="settings-link-button" onClick={onOpenMcpMarketplace}>去市场查看推荐</button>
-              </div>
-              <div className="mcp-daily-permission">
-                <div>
-                  <strong>允许后台每日生成</strong>
-                  <span>开启后，macOS 登录时启动 Hermes Cowork 后台，并在每天 00:10 调用 Hermes 生成推荐日报。</span>
-                </div>
-                <Toggle checked={Boolean(backgroundStatus?.api.loaded && backgroundStatus.dailyMcp.loaded)} disabled={backgroundUpdating} onChange={onToggleBackgroundServices} />
-              </div>
-              {backgroundError && <div className="settings-error-line">{backgroundError}</div>}
-              </SettingsCard>
-            )}
-            {prefs.mcpScope === 'cloud' && (
-              <SettingsCard>
-                <div className="settings-card-header">
-                  <div>
-                    <strong>云端 MCP</strong>
-                    <span>预留给未来远程 Hermes 或云端运行环境。当前版本只管理本机 Hermes。</span>
-                  </div>
-                </div>
-                <div className="mcp-empty-state">云端 MCP 暂未接入。后续可以在这里管理云端服务、远程凭据和团队共享配置。</div>
-              </SettingsCard>
-            )}
-          </SettingsSection>
+          <McpSettingsSection
+            mcpScope={prefs.mcpScope}
+            hermesMcp={hermesMcp}
+            mcpError={mcpError}
+            mcpTestResults={mcpTestResults}
+            mcpTestingId={mcpTestingId}
+            mcpUpdatingId={mcpUpdatingId}
+            mcpDeletingId={mcpDeletingId}
+            mcpToolUpdatingId={mcpToolUpdatingId}
+            mcpRecommendations={mcpRecommendations}
+            mcpRecommendationsLoading={mcpRecommendationsLoading}
+            mcpRecommendationsError={mcpRecommendationsError}
+            backgroundStatus={backgroundStatus}
+            backgroundUpdating={backgroundUpdating}
+            backgroundError={backgroundError}
+            mcpServeStatus={mcpServeStatus}
+            mcpServeUpdating={mcpServeUpdating}
+            mcpServeError={mcpServeError}
+            onMcpScopeChange={(value) => onPrefChange('mcpScope', value)}
+            onToggleMcpServer={onToggleMcpServer}
+            onRefreshMcp={onRefreshMcp}
+            onTestMcpServer={onTestMcpServer}
+            onEditMcpServer={onEditMcpServer}
+            onSetMcpToolSelection={onSetMcpToolSelection}
+            onDeleteMcpServer={onDeleteMcpServer}
+            onOpenMcpMarketplace={onOpenMcpMarketplace}
+            onOpenManualMcp={onOpenManualMcp}
+            onRefreshMcpRecommendationsWithAi={onRefreshMcpRecommendationsWithAi}
+            onToggleBackgroundServices={onToggleBackgroundServices}
+            onToggleMcpServe={onToggleMcpServe}
+            onRefreshMcpServe={onRefreshMcpServe}
+          />
         )}
         {tab === 'models' && (
-          <SettingsSection title="模型">
-            <SettingsBlock title="Hermes 的模型能力">
-              <div className="model-user-summary">
-                <div>
-                  <span>当前默认模型</span>
-                  <strong>{hermesModel?.defaultModel || '未配置'}</strong>
-                  <p>{hermesModel?.providerLabel || 'Hermes 自动选择'} · {hermesModel?.apiMode || '自动 API 模式'}</p>
-                </div>
-                <div className="model-summary-actions">
-                  <button className="settings-add-button" onClick={onRefreshModelCatalog} disabled={modelCatalogRefreshing}>
-                    {modelCatalogRefreshing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
-                    刷新官网模型
-                  </button>
-                  <button className="icon-button" title="刷新模型状态" onClick={onRefreshModels}>
-                    <RefreshCw size={14} />
-                  </button>
-                </div>
-              </div>
-              {hermesModelError && <div className="settings-error-line">{hermesModelError}</div>}
-              <div className="model-ability-grid">
-                <ModelAbilityCard title="默认大脑" value={hermesModel?.defaultModel || '未配置'} detail="决定 Hermes 日常任务默认用哪个模型。" />
-                <ModelAbilityCard title="本次任务临时模型" value={selectedModel.label} detail="只影响 Cowork 发起的新任务，不改 Hermes 配置。" />
-                <ModelAbilityCard title="备用路线" value={fallbackProviderIds.length ? `${fallbackProviderIds.length} 个备用` : '未开启'} detail="主模型失败时，Hermes 可尝试备用服务。" />
-                <ModelAbilityCard title="模型服务状态" value={`${configuredCredentialCount} 个可用凭据`} detail="只展示可用状态，不显示 API key 或 token。" />
-              </div>
-              <div className="settings-info-banner">
-                <Info size={15} />
-                普通使用只需要关注默认模型、本次任务模型和备用路线；Provider、Base URL、凭据属于高级配置。
-              </div>
-              <div className={credentialAlerts.length ? 'model-key-repair-panel attention' : 'model-key-repair-panel'}>
-                <div>
-                  <strong>{credentialAlerts.length ? '检测到模型凭据需要处理' : '模型报 401 或无返回时，先重填 Key'}</strong>
-                  <span>
-                    {credentialAlerts.length
-                      ? `${credentialAlerts[0].label}：${credentialAlerts[0].detail}`
-                      : `当前默认服务：${currentProviderLabel}。这里会写入 Hermes 本机配置。`}
-                  </span>
-                </div>
-                <button
-                  className="settings-primary-button"
-                  onClick={() => onOpenAddModel(credentialAlerts[0]?.id || currentProviderId, credentialAlerts[0]?.modelId || hermesModel?.defaultModel)}
-                >
-                  <Shield size={14} />
-                  重填 Key
-                </button>
-              </div>
-            </SettingsBlock>
-
-            <SettingsBlock title="本次任务用哪个模型">
-              <p className="settings-section-copy">选择“使用 Hermes 默认”时，Cowork 不传模型参数，完全跟随 Hermes 当前配置。</p>
-              <div className="cowork-model-list simplified">
-                {models.map((model) => (
-                  <div
-                    className={model.id === selectedModelId ? 'cowork-model-row active' : 'cowork-model-row'}
-                    key={model.id}
-                  >
-                    <button
-                      className="cowork-model-select"
-                      onClick={() => onSelectModel(model)}
-                      disabled={model.id === selectedModelId || hermesModelUpdating === `delete-model:${model.id}`}
-                    >
-                      <div>
-                        <strong>{model.label}</strong>
-                        <span>{model.description ?? model.provider ?? model.id}</span>
-                      </div>
-                      <em>{model.id === selectedModelId ? '当前使用' : '选择'}</em>
-                    </button>
-                    {!model.builtIn && (
-                      <button
-                        className="model-delete-button"
-                        onClick={() => onDeleteModel(model)}
-                        disabled={Boolean(hermesModelUpdating)}
-                        title="从已配置模型中移除"
-                      >
-                        {hermesModelUpdating === `delete-model:${model.id}` ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button className="settings-add-button" onClick={() => onOpenAddModel()}>
-                <Plus size={14} />
-                添加或重填模型 Key
-              </button>
-            </SettingsBlock>
-
-            <SettingsBlock title="长期默认模型">
-              <p className="settings-section-copy">这里会写回 Hermes `config.yaml`。适合你决定以后所有 Hermes 新任务都使用某个模型。</p>
-              <div className="settings-info-banner">
-                <Info size={15} />
-                供应商只展示中国大模型服务。模型候选来自 Hermes 内置目录，并可点击“刷新官网模型”从公开官网补充新版本；当前读取到 {modelCatalog.length || '0'} 个供应商。当前默认服务需要先切换，才能删除。
-              </div>
-              <div className="model-provider-list compact">
-                {modelProvidersForView.slice(0, 5).map((provider) => {
-                  const providerCanDelete = !provider.isCurrent && (provider.source === 'config' || provider.source === 'custom')
-                  return (
-                    <div className={provider.isCurrent ? 'model-provider-card current' : 'model-provider-card'} key={provider.id}>
-                      <div className="model-provider-head">
-                        <div>
-                          <strong>{provider.label}</strong>
-                          <span>{provider.credentialSummary || (provider.configured ? '已配置' : '未配置')}</span>
-                        </div>
-                        <div className="model-provider-actions">
-                          <em>{providerNeedsCredentialAttention(provider) ? '需重填 Key' : provider.isCurrent ? '当前' : provider.configured ? '可用' : '未配置'}</em>
-                          <button
-                            className="model-key-inline-button"
-                            onClick={() => onOpenAddModel(provider.id, provider.isCurrent ? hermesModel?.defaultModel : provider.models[0])}
-                            title={`重填 ${provider.label} 的 Key`}
-                          >
-                            <Shield size={13} />
-                            Key
-                          </button>
-                          {providerCanDelete && (
-                            <button
-                              className="model-delete-button"
-                              onClick={() => onDeleteHermesModelProvider(provider.id, provider.label)}
-                              disabled={Boolean(hermesModelUpdating)}
-                              title="删除这个 Hermes 模型服务配置"
-                            >
-                              {hermesModelUpdating === `delete-provider:${provider.id}` ? <Loader2 size={13} className="spin" /> : <Trash2 size={13} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="model-chip-list">
-                        {provider.models.length ? modelGroupsForProvider(provider.id, provider.models).map((group) => (
-                          <div className="model-chip-group" key={group.label || `${provider.id}-models`}>
-                            {group.label && <span className="model-chip-group-label">{group.label}</span>}
-                            <div className="model-chip-group-options">
-                              {group.models.map((modelId) => (
-                                <button
-                                  key={modelId}
-                                  disabled={Boolean(hermesModelUpdating) || (provider.isCurrent && hermesModel?.defaultModel === modelId)}
-                                  onClick={() => onSetHermesDefaultModel(modelId, provider.id.startsWith('custom:') ? 'custom' : provider.id)}
-                                >
-                                  {hermesModelUpdating === `${provider.id}:${modelId}` ? <Loader2 size={12} className="spin" /> : null}
-                                  {provider.isCurrent && hermesModel?.defaultModel === modelId ? '当前默认 · ' : ''}
-                                  {modelId}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )) : <span className="model-chip-empty">暂无可选模型</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </SettingsBlock>
-
-            <SettingsBlock title="备用路线">
-              <div className="fallback-model-summary">
-                <div>
-                  <span>主模型失败时</span>
-                  <strong>{fallbackProviderIds.length ? fallbackProviderIds.join(' → ') : '直接提示失败'}</strong>
-                </div>
-                <button
-                  className="settings-link-button"
-                  disabled={!fallbackProviderIds.length || hermesModelUpdating === 'fallbacks'}
-                  onClick={() => onSetHermesFallbackProviders([])}
-                >
-                  关闭备用
-                </button>
-              </div>
-              <div className="fallback-provider-list">
-                {fallbackCandidates.length ? fallbackCandidates.slice(0, 6).map((provider) => {
-                  const checked = fallbackProviderSet.has(provider.id)
-                  return (
-                    <div className={checked ? 'fallback-provider-row active' : 'fallback-provider-row'} key={provider.id}>
-                      <div>
-                        <strong>{provider.label}</strong>
-                        <span>{provider.credentialSummary || provider.id}</span>
-                      </div>
-                      <Toggle
-                        checked={checked}
-                        disabled={hermesModelUpdating === 'fallbacks'}
-                        onChange={(value) => {
-                          const next = value
-                            ? [...fallbackProviderIds, provider.id]
-                            : fallbackProviderIds.filter((id) => id !== provider.id)
-                          onSetHermesFallbackProviders(next)
-                        }}
-                      />
-                    </div>
-                  )
-                }) : (
-                  <div className="model-table-empty">暂未发现可作为备用的已配置模型服务。</div>
-                )}
-              </div>
-            </SettingsBlock>
-
-            <details className="settings-block model-advanced-details">
-              <summary>高级：模型服务与凭据状态</summary>
-              <div className="model-advanced-body">
-                <InfoGrid items={[
-                  ['配置文件', hermesModel?.configPath ?? '/Users/lucas/.hermes/config.yaml'],
-                  ['环境变量文件', hermesModel?.envPath ?? '/Users/lucas/.hermes/.env'],
-                  ['Provider', hermesModel?.provider || 'auto'],
-                  ['Base URL', hermesModel?.baseUrl || '跟随 Hermes/provider 默认值']
-                ]} />
-                <div className="model-credential-grid">
-                  {modelCredentialsForView.map((credential) => (
-                    <div className={credentialPillClass(credential)} key={`${credential.id}-${credential.kind}`}>
-                      <div>
-                        <strong>{credential.label}</strong>
-                        <span>{credential.configured ? credential.detail : credential.detail || '未配置'}</span>
-                      </div>
-                      {(credentialNeedsAttention(credential) || hermesProviderId(credential.id) === currentProviderId) && (
-                        <button className="model-key-mini-button" onClick={() => onOpenAddModel(credential.id)}>
-                          重填 Key
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </details>
-          </SettingsSection>
+          <ModelSettingsSection
+            selectedModel={selectedModel}
+            models={models}
+            modelCatalog={modelCatalog}
+            selectedModelId={selectedModelId}
+            hermesModel={hermesModel}
+            hermesModelUpdating={hermesModelUpdating}
+            hermesModelError={hermesModelError}
+            modelCatalogRefreshing={modelCatalogRefreshing}
+            onSelectModel={onSelectModel}
+            onDeleteModel={onDeleteModel}
+            onSetHermesDefaultModel={onSetHermesDefaultModel}
+            onSetHermesFallbackProviders={onSetHermesFallbackProviders}
+            onDeleteHermesModelProvider={onDeleteHermesModelProvider}
+            onRefreshModels={onRefreshModels}
+            onRefreshModelCatalog={onRefreshModelCatalog}
+            onOpenAddModel={onOpenAddModel}
+          />
         )}
         {tab === 'conversation' && (
           <SettingsSection title="对话流">
@@ -4372,40 +3638,6 @@ function SettingsControlRow({
   )
 }
 
-function ModelScenarioCard({
-  title,
-  detail,
-  action,
-  onClick
-}: {
-  title: string
-  detail: string
-  action: string
-  onClick: () => void
-}) {
-  return (
-    <div className="model-scenario-card">
-      <div>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </div>
-      <button type="button" className="settings-link-button" onClick={onClick}>
-        {action}
-      </button>
-    </div>
-  )
-}
-
-function ModelAbilityCard({ title, value, detail }: { title: string; value: string; detail: string }) {
-  return (
-    <div className="model-ability-card">
-      <span>{title}</span>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </div>
-  )
-}
-
 function SelectControl({
   value,
   options,
@@ -4442,518 +3674,6 @@ function SettingsSubtabs({
   )
 }
 
-function McpServePanel({ status }: { status: HermesMcpServeStatus | null }) {
-  const logs = status?.logs ?? []
-  return (
-    <div className="mcp-serve-panel">
-      <div className="mcp-serve-grid">
-        <div>
-          <span>运行状态</span>
-          <strong>{status?.running ? '运行中' : '未运行'}</strong>
-        </div>
-        <div>
-          <span>进程 PID</span>
-          <strong>{status?.pid ?? '无'}</strong>
-        </div>
-        <div>
-          <span>启动命令</span>
-          <strong>{status?.command.join(' ') ?? 'hermes mcp serve -v'}</strong>
-        </div>
-        <div>
-          <span>工作目录</span>
-          <strong>{status?.cwd ?? 'Hermes Agent 目录'}</strong>
-        </div>
-      </div>
-      <div className="mcp-serve-note">
-        <Info size={14} />
-        这是 stdio MCP Server：外部 MCP Client 通常需要配置同一条启动命令，而不是连接一个 HTTP 端口。这里的启动按钮用于本机诊断和日志观察。
-      </div>
-      <div className="mcp-serve-logs">
-        <div>
-          <strong>最近日志</strong>
-          <span>{logs.length ? `${logs.length} 条` : '暂无日志'}</span>
-        </div>
-        <pre>{logs.length ? logs.slice(-20).map((entry) => `[${entry.stream}] ${entry.text}`).join('\n') : '启动后会显示 Hermes MCP serve 的 stdout/stderr。'}</pre>
-      </div>
-    </div>
-  )
-}
-
-function McpServerDetails({
-  server,
-  testResult,
-  isUpdatingTools,
-  onSetToolSelection,
-  onTest
-}: {
-  server: HermesMcpConfig['servers'][number]
-  testResult?: HermesMcpTestResult
-  isUpdatingTools: boolean
-  onSetToolSelection: (mode: 'all' | 'include' | 'exclude', tools: string[]) => void
-  onTest: () => void
-}) {
-  const tools = testResult?.tools ?? []
-  const toolNames = tools.map((tool) => tool.name)
-  const activeToolNames = selectedMcpToolNames(server, toolNames)
-
-  function updateTool(toolName: string, enabled: boolean) {
-    const next = new Set(activeToolNames)
-    if (enabled) next.add(toolName)
-    else next.delete(toolName)
-    if (next.size === 0) return
-    onSetToolSelection('include', [...next])
-  }
-
-  return (
-    <div className="mcp-server-details">
-      <InfoGrid items={[
-        ['功能描述', server.description || inferMcpDescription(server)],
-        ['传输方式', mcpTransportLabel(server.transport)],
-        ['启动命令', server.command ?? server.url ?? '未配置'],
-        ['命令参数', server.args.length ? server.args.join(' ') : '无'],
-        ['认证方式', mcpAuthLabel(server)],
-        ['请求 Header', server.headerKeys.length ? `${server.headerKeys.join(', ')}（值已隐藏）` : '无'],
-        ['环境变量', server.envKeys.length ? `${server.envKeys.join(', ')}（值已隐藏）` : '无'],
-        ['工具范围', mcpToolModeLabel(server.toolMode)],
-        ['启用状态', server.enabled ? '已启用' : '已停用']
-      ]} />
-      {testResult && (
-        <div className={testResult.ok ? 'mcp-test-result ok' : 'mcp-test-result failed'}>
-          <div>
-            <strong>{testResult.ok ? '连接成功' : '连接失败'}</strong>
-            <span>
-              {testResult.elapsedMs}ms
-              {typeof testResult.toolCount === 'number' ? ` · ${testResult.toolCount} 个工具` : ''}
-            </span>
-          </div>
-          <pre>{testResult.output || testResult.error || 'Hermes 没有返回测试输出。'}</pre>
-          {testResult.tools?.length ? (
-            <div className="mcp-tool-list">
-              <div className="mcp-tool-list-head">
-                <div>
-                  <strong>发现的工具</strong>
-                  <span>对应 Hermes 的 tools.include / tools.exclude 配置，新会话生效。</span>
-                </div>
-                <div className="mcp-tool-actions">
-                  {isUpdatingTools && <Loader2 size={13} className="spin" />}
-                  <button
-                    className="settings-test-button"
-                    onClick={() => onSetToolSelection('all', [])}
-                    disabled={isUpdatingTools || activeToolNames.length === toolNames.length}
-                  >
-                    全部启用
-                  </button>
-                  <button
-                    className="settings-test-button"
-                    onClick={() => onSetToolSelection('include', activeToolNames)}
-                    disabled={isUpdatingTools || activeToolNames.length === toolNames.length}
-                  >
-                    保存选择
-                  </button>
-                </div>
-              </div>
-              {testResult.tools.map((tool) => (
-                <div className="mcp-tool-row" key={tool.name}>
-                  <Toggle
-                    checked={activeToolNames.includes(tool.name)}
-                    disabled={isUpdatingTools || (activeToolNames.length === 1 && activeToolNames.includes(tool.name))}
-                    onChange={(checked) => updateTool(tool.name, checked)}
-                  />
-                  <code>{tool.name}</code>
-                  <em>{tool.description}</em>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-      {!testResult && (
-        <div className="mcp-tool-empty">
-          <span>先测试一次 MCP，Hermes Cowork 会读取服务返回的工具列表，然后就可以逐个开关。</span>
-          <button className="settings-test-button" onClick={onTest}>
-            <Play size={13} />
-            测试并发现工具
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ManualMcpModal({
-  mode = 'create',
-  initialServer,
-  isSaving,
-  onClose,
-  onSubmit
-}: {
-  mode?: 'create' | 'edit'
-  initialServer?: HermesMcpConfig['servers'][number] | null
-  isSaving: boolean
-  onClose: () => void
-  onSubmit: (config: HermesMcpManualConfigRequest) => void
-}) {
-  const initialTransport = initialServer?.transport === 'http' || initialServer?.transport === 'sse' ? initialServer.transport : 'stdio'
-  const isEdit = mode === 'edit'
-  const [name, setName] = useState(initialServer?.name ?? '')
-  const [transport, setTransport] = useState<'stdio' | 'http' | 'sse'>(initialTransport)
-  const [command, setCommand] = useState(initialServer?.command ?? '')
-  const [argsText, setArgsText] = useState(initialServer?.args.join(' ') ?? '')
-  const [url, setUrl] = useState(initialServer?.url ?? '')
-  const [envText, setEnvText] = useState('')
-  const [auth, setAuth] = useState<'none' | 'oauth' | 'header'>(initialServer?.auth === 'oauth' || initialServer?.auth === 'header' ? initialServer.auth : 'none')
-  const [authHeaderName, setAuthHeaderName] = useState(initialServer?.headerKeys[0] ?? 'Authorization')
-  const [authHeaderValue, setAuthHeaderValue] = useState('')
-  const [preset, setPreset] = useState('')
-
-  useEffect(() => {
-    if (!initialServer) return
-    setName(initialServer.name)
-    setTransport(initialServer.transport === 'http' || initialServer.transport === 'sse' ? initialServer.transport : 'stdio')
-    setCommand(initialServer.command ?? '')
-    setArgsText(initialServer.args.join(' '))
-    setUrl(initialServer.url ?? '')
-    setEnvText('')
-    setAuth(initialServer.auth === 'oauth' || initialServer.auth === 'header' ? initialServer.auth : 'none')
-    setAuthHeaderName(initialServer.headerKeys[0] ?? 'Authorization')
-    setAuthHeaderValue('')
-    setPreset('')
-  }, [initialServer])
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    onSubmit({
-      name: name.trim(),
-      transport,
-      command: command.trim(),
-      args: splitShellLike(argsText),
-      url: url.trim(),
-      env: envText
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean),
-      auth,
-      authHeaderName: authHeaderName.trim(),
-      authHeaderValue: authHeaderValue.trim(),
-      preset: isEdit ? undefined : preset.trim()
-    })
-  }
-
-  return (
-    <form className="modal manual-mcp-modal" onSubmit={handleSubmit}>
-      <div className="modal-headline">
-        <div>
-          <h2>{isEdit ? '编辑 MCP' : '手动配置 MCP'}</h2>
-          <p>{isEdit ? '修改已安装 MCP 的连接配置。保存前会自动备份 Hermes 配置，保存后自动测试连接。' : '通过 Hermes 原生命令添加 MCP，写入前会自动备份配置，成功后自动测试连接。'}</p>
-        </div>
-        <button type="button" className="settings-close inline" onClick={onClose} aria-label="关闭手动配置">
-          <XCircle size={18} />
-        </button>
-      </div>
-      <label>
-        服务名称
-        <input
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="例如 filesystem 或 my-mcp"
-          disabled={isEdit}
-        />
-      </label>
-      <label>
-        连接方式
-        <select value={transport} onChange={(event) => setTransport(event.target.value as 'stdio' | 'http' | 'sse')}>
-          <option value="stdio">本机命令 stdio</option>
-          <option value="http">HTTP URL</option>
-          <option value="sse">SSE URL</option>
-        </select>
-      </label>
-      {!isEdit && (
-        <label>
-          Hermes preset
-          <input
-            value={preset}
-            onChange={(event) => setPreset(event.target.value)}
-            placeholder="可选；对应 hermes mcp add --preset"
-          />
-          <span className="manual-mcp-note">填写 preset 时会优先按 Hermes 内置 preset 添加；留空则使用下面的命令或 URL。</span>
-        </label>
-      )}
-      {transport === 'stdio' ? (
-        <>
-          <label>
-            启动命令
-            <input value={command} onChange={(event) => setCommand(event.target.value)} placeholder="npx / node / python" />
-          </label>
-          <label>
-            参数
-            <input value={argsText} onChange={(event) => setArgsText(event.target.value)} placeholder="-y @modelcontextprotocol/server-filesystem /path" />
-          </label>
-          <label>
-            环境变量
-            <textarea
-              value={envText}
-              onChange={(event) => setEnvText(event.target.value)}
-              placeholder={isEdit ? '留空则保留原环境变量；填写 KEY=value 会替换原 env。' : 'KEY=value\nTOKEN=...'}
-            />
-          </label>
-        </>
-      ) : (
-        <>
-          <label>
-            服务 URL
-            <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/sse" />
-          </label>
-          <label>
-            认证方式
-            <select value={auth} onChange={(event) => setAuth(event.target.value as 'none' | 'oauth' | 'header')}>
-              <option value="none">无认证</option>
-              <option value="oauth">OAuth</option>
-              <option value="header">Header</option>
-            </select>
-          </label>
-          {auth === 'header' && (
-            <div className="manual-mcp-grid">
-              <label>
-                Header 名称
-                <input value={authHeaderName} onChange={(event) => setAuthHeaderName(event.target.value)} placeholder="Authorization" />
-              </label>
-              <label>
-                Header 值
-                <input
-                  value={authHeaderValue}
-                  onChange={(event) => setAuthHeaderValue(event.target.value)}
-                  placeholder={isEdit ? '留空保留原 headers' : 'Bearer ${MY_MCP_TOKEN}'}
-                />
-              </label>
-            </div>
-          )}
-          <span className="manual-mcp-note">Header 值建议写成环境变量占位符，例如 Bearer ${'{'}MY_MCP_TOKEN{'}'}；界面只回显 Header 名称，不读取密钥。</span>
-        </>
-      )}
-      <div className="modal-actions">
-        <button type="button" className="ghost-button" onClick={onClose}>取消</button>
-        <button className="send-button" disabled={isSaving || !name.trim()}>
-          {isSaving ? <Loader2 size={15} className="spin" /> : isEdit ? <Wrench size={15} /> : <Plus size={15} />}
-          {isEdit ? '保存并测试' : '添加并测试'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-function McpMarketplaceModal({
-  onClose,
-  onInstalled,
-  recommendations
-}: {
-  onClose: () => void
-  onInstalled: (result: HermesMcpInstallResult) => void
-  recommendations: HermesMcpRecommendations | null
-}) {
-  const [query, setQuery] = useState('')
-  const [candidates, setCandidates] = useState<HermesMcpMarketplaceCandidate[]>([])
-  const [selected, setSelected] = useState<HermesMcpMarketplaceCandidate | null>(null)
-  const [marketMode, setMarketMode] = useState<'recommended' | 'search'>(recommendations?.categories.length ? 'recommended' : 'search')
-  const [isLoading, setIsLoading] = useState(false)
-  const [installingId, setInstallingId] = useState<string | null>(null)
-  const [installResult, setInstallResult] = useState<HermesMcpInstallResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const recommendedCandidates = useMemo(
-    () => (recommendations?.categories ?? []).flatMap((group) => group.candidates),
-    [recommendations]
-  )
-  const visibleCandidates = marketMode === 'recommended' ? recommendedCandidates : candidates
-
-  async function runSearch(nextQuery = query) {
-    setIsLoading(true)
-    setError(null)
-    setMarketMode('search')
-    try {
-      const response = await searchHermesMcpMarketplace(nextQuery)
-      setCandidates(response.candidates)
-      setSelected(response.candidates[0] ?? null)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      setCandidates([])
-      setSelected(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function handleInstall(candidate: HermesMcpMarketplaceCandidate) {
-    setInstallingId(candidate.id)
-    setError(null)
-    setInstallResult(null)
-    try {
-      const result = await installHermesMcpServer(candidate)
-      setInstallResult(result)
-      onInstalled(result)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setInstallingId(null)
-    }
-  }
-
-  useEffect(() => {
-    if (recommendedCandidates.length) {
-      setMarketMode('recommended')
-      setSelected(recommendedCandidates[0] ?? null)
-    } else {
-      void runSearch('')
-    }
-  }, [recommendedCandidates.length])
-
-  return (
-    <div className="mcp-marketplace-modal">
-      <div className="marketplace-head">
-        <div>
-          <h2>MCP 市场</h2>
-          <p>推荐内容来自每日 MCP 日报；也可以手动搜索 GitHub 上的 MCP 服务。</p>
-        </div>
-        <button className="settings-close inline" onClick={onClose} aria-label="关闭 MCP 市场">
-          <XCircle size={18} />
-        </button>
-      </div>
-      <div className="marketplace-tabs">
-        <button
-          className={marketMode === 'recommended' ? 'active' : ''}
-          disabled={!recommendedCandidates.length}
-          onClick={() => {
-            setMarketMode('recommended')
-            setSelected(recommendedCandidates[0] ?? null)
-          }}
-        >
-          每日推荐
-        </button>
-        <button
-          className={marketMode === 'search' ? 'active' : ''}
-          onClick={() => {
-            setMarketMode('search')
-            setSelected(candidates[0] ?? null)
-          }}
-        >
-          搜索市场
-        </button>
-      </div>
-      <form
-        className="marketplace-search"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void runSearch()
-        }}
-      >
-        <Search size={15} />
-        <input value={query} placeholder="搜索 GitHub MCP 服务" onChange={(event) => setQuery(event.target.value)} />
-        <button disabled={isLoading}>{isLoading ? <Loader2 size={14} className="spin" /> : '搜索'}</button>
-      </form>
-      {error && <div className="settings-error-line">{error}</div>}
-      <div className="marketplace-body">
-        <div className="marketplace-list">
-          {marketMode === 'recommended' && recommendations?.aiSummary && (
-            <div className="marketplace-daily-report">
-              <strong>推荐日报</strong>
-              <span>{recommendations.aiSummary}</span>
-            </div>
-          )}
-          {isLoading && <div className="mcp-empty-state">正在从 GitHub 搜索 MCP 服务...</div>}
-          {!isLoading && visibleCandidates.length === 0 && !error && (
-            <div className="mcp-empty-state">
-              {marketMode === 'recommended' ? '暂无每日推荐。请先在设置页生成日报。' : '没有找到匹配的 MCP 服务。'}
-            </div>
-          )}
-          {visibleCandidates.map((candidate) => (
-            <button
-              className={selected?.id === candidate.id ? 'marketplace-item active' : 'marketplace-item'}
-              key={candidate.id}
-              onClick={() => setSelected(candidate)}
-            >
-              <McpIcon name={candidate.name} iconUrl={candidate.iconUrl} />
-              <div>
-                <strong>{candidate.name}</strong>
-                <p>{candidate.description}</p>
-                <small>{candidate.categoryLabel} · {candidate.repo} · {languageLabel(candidate.language)} · {candidate.stars} 个星标</small>
-              </div>
-              <Plus size={15} />
-            </button>
-          ))}
-        </div>
-        <div className="marketplace-detail">
-          {selected ? (
-            <>
-              <div className="marketplace-detail-title">
-                <strong>{selected.name}</strong>
-                <a href={selected.url} target="_blank" rel="noreferrer">
-                  查看仓库
-                  <ExternalLink size={13} />
-                </a>
-              </div>
-              <p>{selected.description}</p>
-              <InfoGrid items={[
-                ['配置名', selected.installName],
-                ['语言', languageLabel(selected.language)],
-                ['星标', String(selected.stars)],
-                ['命令置信度', confidenceLabel(selected.confidence)],
-                ['仓库说明', selected.sourceDescription]
-              ]} />
-              <div className="marketplace-command">
-                <span>推荐的 Hermes 命令</span>
-                <pre>{marketplaceCommand(selected)}</pre>
-              </div>
-              <div className="marketplace-safety">
-                <Shield size={15} />
-                <span>安装会写入 Hermes 本机配置，并在写入前自动备份 `config.yaml`。MCP 会在本机执行上面的启动命令。</span>
-              </div>
-              <div className="marketplace-note">
-                安装后会立即调用 Hermes 原生测试，确认连接状态和工具发现结果。
-              </div>
-              {installResult?.installName === selected.installName && (
-                <div className={installResult.testResult?.ok ? 'mcp-test-result ok' : 'mcp-test-result failed'}>
-                  <div>
-                    <strong>{installResult.testResult?.ok ? '安装并测试成功' : '已安装，测试未通过'}</strong>
-                    <span>
-                      {installResult.testResult
-                        ? `${installResult.testResult.elapsedMs}ms${typeof installResult.testResult.toolCount === 'number' ? ` · ${installResult.testResult.toolCount} 个工具` : ''}`
-                        : '等待测试结果'}
-                    </span>
-                  </div>
-                  <pre>{installResult.testResult?.output || installResult.output || 'Hermes 没有返回安装输出。'}</pre>
-                </div>
-              )}
-              <button
-                className="marketplace-install-button"
-                disabled={installingId === selected.id || !selected.suggestedCommand}
-                onClick={() => void handleInstall(selected)}
-              >
-                {installingId === selected.id ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}
-                {selected.suggestedCommand ? '安装到 Hermes' : '需要手动配置'}
-              </button>
-            </>
-          ) : (
-            <div className="mcp-empty-state">选择一个 MCP 服务查看安装建议。</div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function marketplaceCommand(candidate: HermesMcpMarketplaceCandidate) {
-  if (!candidate.suggestedCommand) {
-    return `hermes mcp add ${candidate.installName} --command <cmd> --args <args...>`
-  }
-  return `hermes mcp add ${candidate.installName} --command ${candidate.suggestedCommand} --args ${candidate.suggestedArgs.join(' ')}`
-}
-
-function splitShellLike(value: string) {
-  return value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((part) => part.replace(/^['"]|['"]$/g, '')) ?? []
-}
-
-function languageLabel(value: string) {
-  return value && value !== 'unknown' ? value : '未知语言'
-}
-
 function formatMaybeDate(value?: string) {
   if (!value) return '待生成'
   const date = new Date(value)
@@ -4964,12 +3684,6 @@ function formatMaybeDate(value?: string) {
     hour: '2-digit',
     minute: '2-digit'
   })
-}
-
-function confidenceLabel(value: HermesMcpMarketplaceCandidate['confidence']) {
-  if (value === 'high') return '高'
-  if (value === 'medium') return '中'
-  return '低，需要人工确认'
 }
 
 function InlineAddControl({
@@ -5055,28 +3769,6 @@ function Toggle({
   )
 }
 
-function dedupeModelProvidersForView(providers: HermesModelOverview['providers']) {
-  const byId = new Map<string, HermesModelOverview['providers'][number]>()
-  for (const provider of providers) {
-    const key = provider.id.startsWith('custom:') ? provider.id.replace(/^custom:/, '') : provider.id
-    const existing = byId.get(key)
-    if (!existing) {
-      byId.set(key, { ...provider, id: key })
-      continue
-    }
-    byId.set(key, {
-      ...existing,
-      configured: existing.configured || provider.configured,
-      isCurrent: existing.isCurrent || provider.isCurrent,
-      baseUrl: provider.baseUrl || existing.baseUrl,
-      apiMode: provider.apiMode || existing.apiMode,
-      models: [...new Set([...existing.models, ...provider.models])],
-      credentialSummary: [...new Set([existing.credentialSummary, provider.credentialSummary].filter(Boolean))].join('；')
-    })
-  }
-  return [...byId.values()]
-}
-
 function InfoGrid({ items }: { items: Array<[string, string]> }) {
   return (
     <div className="settings-info-grid">
@@ -5092,215 +3784,6 @@ function InfoGrid({ items }: { items: Array<[string, string]> }) {
 
 function CloudIcon() {
   return <Globe2 size={15} />
-}
-
-function mcpLogo(name: string) {
-  return name
-    .split(/[-_\s]/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase())
-    .join('')
-    .slice(0, 2) || 'M'
-}
-
-function McpIcon({ name, iconUrl }: { name: string; iconUrl?: string }) {
-  return (
-    <span className="mcp-logo">
-      {iconUrl && (
-        <img
-          src={iconUrl}
-          alt=""
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-            const fallback = event.currentTarget.nextElementSibling
-            if (fallback instanceof HTMLElement) fallback.hidden = false
-          }}
-        />
-      )}
-      <span hidden={Boolean(iconUrl)}>{mcpLogo(name)}</span>
-    </span>
-  )
-}
-
-function mcpServerSummary(server: HermesMcpConfig['servers'][number]) {
-  const issues = server.issues.length ? ` · ${server.issues.join('、')}` : ''
-  return `${server.description || inferMcpDescription(server)}${issues}`
-}
-
-function inferMcpDescription(server: HermesMcpConfig['servers'][number]) {
-  const text = `${server.name} ${server.command ?? ''} ${server.args.join(' ')} ${server.url ?? ''}`.toLowerCase()
-  if (text.includes('csv') || text.includes('excel') || text.includes('spreadsheet')) {
-    return '表格分析能力：读取 CSV/表格文件，做字段识别、数据清洗、统计汇总和分析输出。'
-  }
-  if (text.includes('sqlite')) {
-    return 'SQLite 数据库能力：查询和维护本机 SQLite 数据库，适合轻量数据分析。'
-  }
-  if (text.includes('vision') || text.includes('image') || text.includes('ocr')) {
-    return '视觉理解能力：读取图片、截图或视觉素材，提取文字、结构和关键信息。'
-  }
-  if (text.includes('web-search') || text.includes('search')) {
-    return '网页调研能力：联网搜索资料、读取网页结果，并把来源整理给 Hermes 使用。'
-  }
-  if (text.includes('lark') || text.includes('feishu')) {
-    return '飞书工作流能力：连接云文档、消息、日历、审批等飞书工具，支撑办公自动化。'
-  }
-  return '本机 MCP 服务：为 Hermes 增加可调用的扩展工具能力。'
-}
-
-function selectedMcpToolNames(server: HermesMcpConfig['servers'][number], toolNames: string[]) {
-  if (!toolNames.length) return []
-  if (server.includeTools.length) {
-    const include = new Set(server.includeTools)
-    return toolNames.filter((name) => include.has(name))
-  }
-  if (server.excludeTools.length) {
-    const exclude = new Set(server.excludeTools)
-    return toolNames.filter((name) => !exclude.has(name))
-  }
-  return toolNames
-}
-
-function mcpTransportLabel(value: HermesMcpConfig['servers'][number]['transport']) {
-  if (value === 'stdio') return '标准输入输出'
-  if (value === 'http') return 'HTTP'
-  if (value === 'sse') return 'SSE'
-  return '未知传输'
-}
-
-function mcpAuthLabel(server: HermesMcpConfig['servers'][number]) {
-  if (server.auth === 'oauth') return 'OAuth'
-  if (server.auth === 'header') return server.headerKeys.length ? `Header：${server.headerKeys.join(', ')}` : 'Header'
-  if (server.auth === 'unknown') return '未知认证'
-  return '无认证'
-}
-
-function mcpToolModeLabel(value: string) {
-  if (value === 'all') return '全部工具'
-  if (value.endsWith(' selected')) return `${value.replace(' selected', '')} 个已选择工具`
-  if (value.endsWith(' excluded')) return `${value.replace(' excluded', '')} 个已排除工具`
-  return value
-}
-
-function hermesProviderId(label: string) {
-  const map: Record<string, string> = {
-    'Hermes 当前 Provider': 'auto',
-    'Custom endpoint': 'custom',
-    Anthropic: 'anthropic',
-    'OpenAI Codex': 'openai-codex',
-    MiniMax: 'minimax',
-    'Xiaomi MiMo': 'xiaomi',
-    OpenRouter: 'openrouter',
-    'Kimi / Moonshot': 'kimi',
-    'Z.AI / GLM': 'zai'
-  }
-  return map[label] ?? label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9._:-]/g, '')
-}
-
-function defaultModelApiMode(providerId: string) {
-  return hermesProviderId(providerId) === 'anthropic' ? 'anthropic_messages' : 'chat_completions'
-}
-
-function providerSavedModelConfig(providerId: string, overview: HermesModelOverview | null) {
-  const id = hermesProviderId(providerId)
-  if (!id) {
-    return {
-      label: '',
-      baseUrl: '',
-      apiMode: 'chat_completions',
-      canReuse: false
-    }
-  }
-
-  const currentProviderId = hermesProviderId(overview?.provider ?? '')
-  const provider = overview?.providers.find((item) => hermesProviderId(item.id) === id)
-  const isCurrent = id === currentProviderId
-  return {
-    label: provider?.label || overview?.providerLabel || id,
-    baseUrl: provider?.baseUrl || (isCurrent ? overview?.baseUrl : '') || '',
-    apiMode: provider?.apiMode || (isCurrent ? overview?.apiMode : '') || defaultModelApiMode(id),
-    canReuse: Boolean(provider?.configured || isCurrent)
-  }
-}
-
-function credentialNeedsAttention(credential: HermesModelCredential) {
-  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(credential.detail)
-}
-
-function providerNeedsCredentialAttention(provider: HermesModelProvider) {
-  return /(验证失败|不可用|401|403|invalid|expired|exhausted|denied|forbidden|unauthorized|error)/i.test(provider.credentialSummary)
-}
-
-function credentialPillClass(credential: HermesModelCredential) {
-  if (credentialNeedsAttention(credential)) return 'model-credential-pill attention'
-  if (credential.configured) return 'model-credential-pill configured'
-  return 'model-credential-pill'
-}
-
-function modelGroupsForProvider(providerId: string, models: string[]) {
-  const uniqueModels = [...new Set(models.filter(Boolean))]
-  if (hermesProviderId(providerId) !== 'xiaomi') {
-    return [{ label: '', models: uniqueModels }]
-  }
-
-  const v25 = uniqueModels.filter((model) => /^mimo-v2\.5(?:-|$)/i.test(model))
-  const v2 = uniqueModels.filter((model) => /^mimo-v2(?:-|$)/i.test(model) && !/^mimo-v2\.5(?:-|$)/i.test(model))
-  const other = uniqueModels.filter((model) => !v25.includes(model) && !v2.includes(model))
-  return [
-    v25.length ? { label: 'MiMo V2.5 系列', models: v25 } : null,
-    v2.length ? { label: 'MiMo V2 系列', models: v2 } : null,
-    other.length ? { label: '其他模型', models: other } : null
-  ].filter((group): group is { label: string; models: string[] } => Boolean(group))
-}
-
-function groupModelOptionsForMenu(models: ModelOption[]) {
-  const autoModels = models.filter((model) => model.id === 'auto')
-  const providerGroups = new Map<string, ModelOption[]>()
-  const otherModels: ModelOption[] = []
-
-  for (const model of models) {
-    if (model.id === 'auto') continue
-    const providerId = hermesProviderId(model.provider ?? '')
-    if (!providerId || providerId === 'auto') {
-      otherModels.push(model)
-      continue
-    }
-    providerGroups.set(providerId, [...(providerGroups.get(providerId) ?? []), model])
-  }
-
-  const groups: Array<{ label: string; models: ModelOption[] }> = []
-  if (autoModels.length) groups.push({ label: '常用', models: autoModels })
-
-  for (const [providerId, providerModels] of providerGroups) {
-    groups.push({
-      label: providerLabelFromModel(providerModels[0]),
-      models: providerModels
-    })
-  }
-
-  if (otherModels.length) groups.push({ label: '本次任务模型', models: otherModels })
-  return groups.filter((group) => group.models.length)
-}
-
-function configuredModelOptionsForComposer(models: ModelOption[]) {
-  const filtered = models.filter(isConfiguredComposerModel)
-  const hasAuto = filtered.some((model) => model.id === 'auto')
-  const autoModel = models.find((model) => model.id === 'auto')
-  return hasAuto || !autoModel ? filtered : [autoModel, ...filtered]
-}
-
-function isConfiguredComposerModel(model: ModelOption) {
-  if (model.id === 'auto') return true
-  if (model.source === 'catalog') return false
-  if (model.description?.includes('Hermes 模型目录')) return false
-  return true
-}
-
-function providerLabelFromModel(model?: ModelOption) {
-  if (model?.provider === 'xiaomi') return 'Xiaomi MiMo'
-  if (model?.provider === 'minimax') return 'MiniMax'
-  const label = model?.description?.split('·')[0]?.trim()
-  if (label) return label
-  return model?.provider || '模型服务'
 }
 
 function FragmentWithTrace({
@@ -5319,10 +3802,38 @@ function FragmentWithTrace({
           {message.role === 'user' ? '你' : 'Hermes'}
           <span>{formatTime(message.createdAt)}</span>
         </div>
-        <div className="message-body">{message.content}</div>
+        <MessageBody role={message.role} content={message.content} />
       </article>
-      {task && message.id === traceAfterMessageId && <InlineExecutionTrace task={task} />}
+      {task && task.status !== 'running' && message.id === traceAfterMessageId && <InlineExecutionTrace task={task} />}
     </>
+  )
+}
+
+function LiveExecutionPanel({
+  task,
+  streamStatus,
+  streamUpdatedAt
+}: {
+  task: Task
+  streamStatus: TaskStreamStatus
+  streamUpdatedAt: string | null
+}) {
+  const rows = liveTraceRows(task)
+  const currentRow = rows.at(-1) ?? fallbackLiveTraceRow(task)
+  const previousRows = rows.slice(-5, -1)
+  const steps = taskStepItems(task).slice(-4)
+
+  return (
+    <LiveExecutionPanelView
+      currentRow={currentRow}
+      previousRows={previousRows}
+      steps={steps}
+      streamStatus={streamStatus}
+      streamLabel={taskStreamLabel(streamStatus)}
+      streamDescription={taskStreamDescription(streamStatus, streamUpdatedAt)}
+      formatTime={formatTime}
+      workModeLabel={workModeLabel}
+    />
   )
 }
 
@@ -5338,133 +3849,15 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   const summaryLabel = task.status === 'running' ? '处理中' : '已处理'
 
   return (
-    <section className={`agent-run-summary ${task.status}`}>
-      <details className="agent-run-details" open={task.status === 'running'}>
-        <summary>
-          <span>{summaryLabel} {taskElapsedLabel(task)}</span>
-          {summaryParts.length > 0 && <em>{summaryParts.join(' · ')}</em>}
-          <ChevronDown size={14} />
-        </summary>
-
-        {showCurrentRow && (
-          <div className={`agent-run-current ${lastRow.kind}`}>
-            <span className="agent-trace-icon">{traceIcon(lastRow.kind)}</span>
-            <div>
-              <strong>{lastRow.title}</strong>
-              {lastRow.detail && <TraceDetail text={lastRow.detail} />}
-            </div>
-            <time>{formatTime(lastRow.createdAt)}</time>
-          </div>
-        )}
-
-        <div className="agent-run-groups">
-          {groups.map((group) => (
-            <section className={`agent-run-group ${group.kind}`} key={group.kind}>
-              <h4>
-                <span className="agent-trace-icon">{traceIcon(group.iconKind)}</span>
-                {group.label}
-                <em>{group.rows.length}</em>
-              </h4>
-              <ol>
-                {group.rows.map((row) => (
-                  <li className={`agent-run-row ${row.kind}`} key={row.id}>
-                    <span className="agent-trace-icon">{traceIcon(row.kind)}</span>
-                    <div>
-                      <strong>{row.title}</strong>
-                      {row.detail && <TraceDetail text={row.detail} />}
-                    </div>
-                    <time>{formatTime(row.createdAt)}</time>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
-        </div>
-      </details>
-    </section>
-  )
-}
-
-function TaskFocusPanel({
-  task,
-  onContinue,
-  onRetry,
-  onArchive,
-  onDelete
-}: {
-  task: Task
-  onContinue: () => void
-  onRetry: () => void
-  onArchive: () => void
-  onDelete: () => void
-}) {
-  const title = task.status === 'failed' ? '这次执行失败' : '这次执行已停止'
-  const detail = task.status === 'failed'
-    ? (task.error || '可以重新运行，或继续追问补充信息。')
-    : '任务已被停止，可以继续追问或重新运行。'
-
-  return (
-    <section className={`task-focus-panel ${task.status}`}>
-      <div className="task-focus-head">
-        <div>
-          <span className={`status-pill compact ${task.status}`}>
-            <StatusIcon status={task.status} />
-            {statusLabel(task.status)}
-          </span>
-          <h2>{title}</h2>
-          <p>{detail}</p>
-        </div>
-        <div className="task-focus-actions">
-          <button type="button" className="ghost-button" onClick={onContinue}>
-            <MessageSquarePlus size={15} />
-            继续追问
-          </button>
-          <button type="button" className="ghost-button" onClick={onRetry}>
-            <RefreshCw size={15} />
-            重新运行
-          </button>
-          <button type="button" className="ghost-button" onClick={onArchive}>
-            {task.archivedAt ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-            {task.archivedAt ? '取消归档' : '归档'}
-          </button>
-          <button type="button" className="ghost-button danger-lite" onClick={onDelete}>
-            <Trash2 size={15} />
-            删除
-          </button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function HermesSessionCard({ task, session }: { task: Task; session?: HermesSessionSummary }) {
-  return (
-    <section className="inspector-card hermes-session-card">
-      <div className="card-heading-row">
-        <h3>Hermes Session</h3>
-        <span className={session ? 'session-state linked' : 'session-state'}>
-          {session ? '已对齐' : task.hermesSessionId ? '待索引' : '未生成'}
-        </span>
-      </div>
-      <div className="session-card-body">
-        <div>
-          <span>Session ID</span>
-          <strong title={task.hermesSessionId}>{task.hermesSessionId ? shortSessionId(task.hermesSessionId) : '任务完成后生成'}</strong>
-        </div>
-        <div>
-          <span>模型</span>
-          <strong>{session?.model || (task.modelId === 'auto' ? 'Hermes 默认' : task.modelId) || '未知'}</strong>
-        </div>
-        <div>
-          <span>消息数</span>
-          <strong>{session ? `${session.messageCount} 条` : `${task.messages.length} 条 Cowork 消息`}</strong>
-        </div>
-        <div>
-          <span>最近更新</span>
-          <strong>{session ? formatTime(session.updatedAt) : formatTime(task.updatedAt)}</strong>
-        </div>
-      </div>
-    </section>
+    <InlineExecutionTracePanel
+      taskStatus={task.status}
+      summaryLabel={summaryLabel}
+      elapsedLabel={taskElapsedLabel(task)}
+      summaryParts={summaryParts}
+      currentRow={showCurrentRow ? lastRow : undefined}
+      groups={groups}
+      formatTime={formatTime}
+    />
   )
 }
 
@@ -5582,382 +3975,12 @@ function SkillDetailModal({
   )
 }
 
-function FilePreviewPanel({
-  preview,
-  compact = false,
-  onClose,
-  onUseContext,
-  onReveal
-}: {
-  preview: FilePreviewState
-  compact?: boolean
-  onClose: () => void
-  onUseContext: (target: FilePreviewTarget) => void
-  onReveal: (target: FilePreviewTarget) => void
-}) {
-  const target = preview.target
-  return (
-    <section className={compact ? 'file-preview-panel compact' : 'file-preview-panel'}>
-      <header className="file-preview-topbar">
-        <div className="file-preview-title">
-          <FileText size={18} />
-          <div>
-            <strong>{target.name}</strong>
-            <span>{target.relativePath}</span>
-          </div>
-        </div>
-        <button type="button" className="icon-button" title="关闭预览" onClick={onClose}>
-          <XCircle size={16} />
-        </button>
-      </header>
-
-      <div className="file-preview-actions">
-        <button type="button" className="ghost-button" onClick={() => onUseContext(target)}>
-          <Plus size={14} />
-          作为上下文
-        </button>
-        <button type="button" className="ghost-button" onClick={() => onReveal(target)}>
-          <FolderOpen size={14} />
-          Finder
-        </button>
-        {target.source === 'artifact' && target.artifactId && (
-          <a className="ghost-button" href={artifactDownloadUrl(target.artifactId)}>
-            <Download size={14} />
-            下载
-          </a>
-        )}
-        <button type="button" className="ghost-button" onClick={() => void copyToClipboard(target.relativePath || target.name)}>
-          <Copy size={14} />
-          复制路径
-        </button>
-      </div>
-
-      <div className="file-preview-meta">
-        <span>{target.source === 'artifact' ? '任务产物' : '工作区文件'}</span>
-        <span>{target.type || 'file'}</span>
-        <span>{formatBytes(target.size)}</span>
-        <span>{formatTime(target.timestamp)}</span>
-      </div>
-
-      <div className="file-preview-surface">
-        {preview.status === 'loading' ? (
-          <div className="file-preview-state">
-            <Loader2 size={18} className="spin" />
-            <strong>正在读取预览</strong>
-            <span>文件仍在本机，Hermes Cowork 只读取授权范围内的内容。</span>
-          </div>
-        ) : preview.status === 'ready' ? (
-          <PreviewBody preview={preview} />
-        ) : (
-          <div className={`file-preview-state ${preview.status}`}>
-            <Info size={18} />
-            <strong>{preview.status === 'unsupported' ? '暂不支持直接预览' : '预览失败'}</strong>
-            <span>{preview.error ?? '可以交给 Hermes 作为上下文，或在 Finder 中打开。'}</span>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-function PreviewBody({ preview }: { preview: Preview }) {
-  if (preview.kind === 'pdf' && preview.rawUrl) {
-    return <iframe className="embedded-preview pdf-embedded-preview" title={preview.title} src={preview.rawUrl} />
-  }
-
-  if (preview.kind === 'html' && preview.rawUrl) {
-    return <iframe className="embedded-preview html-embedded-preview" title={preview.title} src={preview.rawUrl} sandbox="allow-same-origin allow-scripts allow-forms" />
-  }
-
-  if (preview.kind === 'image' && preview.rawUrl) {
-    return (
-      <div className="image-preview-frame">
-        <img src={preview.rawUrl} alt={preview.title} />
-      </div>
-    )
-  }
-
-  if (preview.kind === 'media' && preview.rawUrl) {
-    return mediaPreviewIsAudio(preview.title)
-      ? <audio className="media-preview-player" controls src={preview.rawUrl} />
-      : <video className="media-preview-player" controls src={preview.rawUrl} />
-  }
-
-  if (preview.kind === 'markdown') {
-    return <div className="markdown-preview">{renderMarkdown(preview.body)}</div>
-  }
-
-  if (preview.kind === 'csv') {
-    return <CsvPreview title={preview.title} body={preview.body} />
-  }
-
-  if (preview.kind === 'spreadsheet') {
-    return <SpreadsheetPreview body={preview.body} />
-  }
-
-  if (preview.kind === 'presentation') {
-    return <div className="markdown-preview presentation-preview">{renderMarkdown(preview.body)}</div>
-  }
-
-  if (preview.kind === 'document') {
-    return <DocumentPreview preview={preview} />
-  }
-
-  return <pre className="text-preview">{preview.body}</pre>
-}
-
-function mediaPreviewIsAudio(title: string) {
-  return /\.(mp3|wav|m4a)$/i.test(title)
-}
-
-function DocumentPreview({ preview }: { preview: Preview }) {
-  const paragraphs = preview.body
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-  if (!paragraphs.length) {
-    return <p className="muted-copy">这个文档没有可展示的正文。</p>
-  }
-
-  const [title, ...body] = paragraphs
-
-  return (
-    <article className="document-preview">
-      <h1>{title}</h1>
-      {body.slice(0, 180).map((paragraph, index) => {
-        const isHeading = /^[一二三四五六七八九十]+[、.．]\s*\S/.test(paragraph) || /^\d+(?:\.\d+)*\s+\S/.test(paragraph)
-        if (isHeading) return <h2 key={`${paragraph}-${index}`}>{paragraph}</h2>
-        return <p key={`${paragraph}-${index}`}>{paragraph}</p>
-      })}
-    </article>
-  )
-}
-
-function CsvPreview({ title, body }: { title: string; body: string }) {
-  const delimiter = title.toLowerCase().endsWith('.tsv') ? '\t' : ','
-  const rows = parseDelimitedRows(body, delimiter)
-  if (!rows.length) return <p className="muted-copy">这个文件没有可展示的数据。</p>
-
-  const [header, ...dataRows] = rows
-  const visibleRows = dataRows.slice(0, 200)
-  const columnCount = Math.max(...rows.map((row) => row.length))
-
-  return (
-    <div className="csv-preview">
-      <div className="preview-meta">
-        <span>{rows.length - 1} 行数据</span>
-        <span>{columnCount} 列</span>
-        {dataRows.length > visibleRows.length && <span>仅展示前 {visibleRows.length} 行</span>}
-      </div>
-      <div className="csv-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {Array.from({ length: columnCount }).map((_, index) => (
-                <th key={`head-${index}`}>{header[index] || `列 ${index + 1}`}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map((row, rowIndex) => (
-              <tr key={`row-${rowIndex}`}>
-                {Array.from({ length: columnCount }).map((_, index) => (
-                  <td key={`${rowIndex}-${index}`}>{row[index] ?? ''}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function SpreadsheetPreview({ body }: { body: string }) {
-  const sections = body.split(/\n(?=## 工作表 )/).map((section) => section.trim()).filter(Boolean)
-  return (
-    <div className="spreadsheet-preview">
-      {sections.map((section, sectionIndex) => {
-        const [heading = `工作表 ${sectionIndex + 1}`, ...tableLines] = section.split(/\r?\n/)
-        const rows = tableLines.filter(Boolean).map((line) => line.split('\t'))
-        const columnCount = Math.max(1, ...rows.map((row) => row.length))
-        return (
-          <section className="sheet-preview-section" key={`${heading}-${sectionIndex}`}>
-            <h3>{heading.replace(/^##\s*/, '')}</h3>
-            {rows.length ? (
-              <div className="csv-table-wrap">
-                <table>
-                  <tbody>
-                    {rows.slice(0, 120).map((row, rowIndex) => (
-                      <tr key={`${sectionIndex}-${rowIndex}`}>
-                        {Array.from({ length: columnCount }).map((_, columnIndex) => (
-                          <td key={`${rowIndex}-${columnIndex}`}>{row[columnIndex] ?? ''}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="muted-copy">这个工作表没有可展示的数据。</p>
-            )}
-          </section>
-        )
-      })}
-    </div>
-  )
-}
-
 function StatusIcon({ status }: { status: Task['status'] }) {
   if (status === 'running') return <Loader2 size={15} className="spin" />
   if (status === 'completed') return <CheckCircle2 size={15} />
   if (status === 'failed') return <XCircle size={15} />
   if (status === 'stopped') return <Square size={15} />
   return <Circle size={15} />
-}
-
-function SidebarWorkspaceNode({
-  workspace,
-  tasks,
-  activeWorkspace,
-  activeTaskId,
-  onOpenWorkspace,
-  onOpenTask,
-  onArchiveTask,
-  onDeleteTask,
-  onReveal,
-  onRename,
-  onReauthorize,
-  onRemove,
-  updating
-}: {
-  workspace: Workspace
-  tasks: Task[]
-  activeWorkspace: boolean
-  activeTaskId: string | null
-  onOpenWorkspace: () => void
-  onOpenTask: (task: Task) => void
-  onArchiveTask: (task: Task) => void
-  onDeleteTask: (task: Task) => void
-  onReveal: () => void
-  onRename: () => void
-  onReauthorize: () => void
-  onRemove: () => void
-  updating: boolean
-}) {
-  const runningCount = tasks.filter((task) => task.status === 'running').length
-
-  return (
-    <div className={['workspace-tree-node', activeWorkspace ? 'active' : ''].filter(Boolean).join(' ')}>
-      <div className="workspace-tree-row">
-        <button type="button" className="workspace-tree-main" onClick={onOpenWorkspace} title={workspace.path}>
-          {activeWorkspace ? <FolderOpen size={15} /> : <Folder size={15} />}
-          <span>
-            <strong>{workspace.name}</strong>
-            <em>{runningCount ? `${runningCount} 个运行中` : `${tasks.length} 个会话`}</em>
-          </span>
-        </button>
-        <button type="button" className="workspace-tree-action" title="在 Finder 中打开" onClick={onReveal}>
-          <FolderOpen size={13} />
-        </button>
-        <button type="button" className="workspace-tree-action" title="重命名工作区" onClick={onRename}>
-          <Pencil size={12} />
-        </button>
-        <button type="button" className="workspace-tree-action" title="重新选择授权文件夹" onClick={onReauthorize} disabled={updating}>
-          {updating ? <Loader2 size={12} className="spin" /> : <RefreshCw size={12} />}
-        </button>
-        <button type="button" className="workspace-tree-action danger" title="移除工作区记录" onClick={onRemove} disabled={workspace.id === 'default'}>
-          <Trash2 size={12} />
-        </button>
-      </div>
-      <div className="workspace-session-list">
-        {tasks.length ? (
-          tasks.map((task) => (
-            <div className={['workspace-session-row', task.id === activeTaskId ? 'active' : '', task.status].filter(Boolean).join(' ')} key={task.id}>
-              <button type="button" className="workspace-session-main" onClick={() => onOpenTask(task)}>
-                <StatusIcon status={task.status} />
-                <span>
-                  <strong>{task.title}</strong>
-                  <em>{statusLabel(task.status)} · {formatTime(task.updatedAt)}</em>
-                </span>
-              </button>
-              <div className="workspace-session-actions">
-                <button type="button" title="归档会话" onClick={() => onArchiveTask(task)}>
-                  <Archive size={12} />
-                </button>
-                <button type="button" title="删除会话记录" onClick={() => onDeleteTask(task)}>
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p>暂无会话</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SidebarRecentTaskRow({
-  task,
-  active,
-  onSelect,
-  onContinue,
-  onRetry,
-  onArchive
-}: {
-  task: Task
-  active: boolean
-  onSelect: () => void
-  onContinue: () => void
-  onRetry: () => void
-  onArchive: () => void
-}) {
-  const hasResult = Boolean(taskResultText(task).trim())
-  const hasArtifacts = task.artifacts.length > 0
-  const meta = [
-    statusLabel(task.status),
-    formatTime(task.updatedAt),
-    hasArtifacts ? `${task.artifacts.length} 产物` : hasResult ? '有结果' : ''
-  ].filter(Boolean).join(' · ')
-  const action = recentTaskAction(task)
-
-  return (
-    <div className={['recent-task-row', active ? 'active' : '', task.status].filter(Boolean).join(' ')}>
-      <button className="recent-task-main" onClick={onSelect}>
-        <span className={`recent-task-status ${task.status}`} />
-        <span className="recent-task-copy">
-          <strong>{task.title}</strong>
-          <em>{meta}</em>
-        </span>
-        {task.pinned && <Star size={11} />}
-      </button>
-      <div className="recent-task-actions">
-        {action === 'continue' && (
-          <button type="button" title="继续追问" onClick={onContinue}>
-            <MessageSquarePlus size={12} />
-          </button>
-        )}
-        {action === 'retry' && (
-          <button type="button" title="重新运行" onClick={onRetry}>
-            <RefreshCw size={12} />
-          </button>
-        )}
-        {task.status !== 'running' && (
-          <button type="button" title={task.archivedAt ? '取消归档' : '归档'} onClick={onArchive}>
-            {task.archivedAt ? <ArchiveRestore size={12} /> : <Archive size={12} />}
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function recentTaskAction(task: Task) {
-  if (task.status === 'failed' || task.status === 'stopped') return 'retry'
-  if (task.status === 'completed') return 'continue'
-  return 'none'
 }
 
 function TaskRow({
@@ -6025,445 +4048,6 @@ function TemplateIcon({ name }: { name: string }) {
   return <Hammer size={28} />
 }
 
-function EmptyInspectorState({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="empty-inspector-state">
-      <Circle size={18} />
-      <strong>{title}</strong>
-      <span>{detail}</span>
-    </div>
-  )
-}
-
-function TaskProgressCard({
-  task,
-  streamStatus,
-  streamUpdatedAt,
-  stopping,
-  onStop
-}: {
-  task?: Task
-  streamStatus: TaskStreamStatus
-  streamUpdatedAt: string | null
-  stopping: boolean
-  onStop: () => void
-}) {
-  if (!task) {
-    return (
-      <section className="inspector-card progress-focus-card">
-        <h3>任务步骤</h3>
-        <EmptyInspectorState title="未选择任务" detail="选择左侧任务后，这里会显示拆分步骤和当前进度。" />
-      </section>
-    )
-  }
-
-  const progress = taskProgressSummary(task)
-  const showStreamState = task.status === 'running' || streamStatus === 'connecting' || streamStatus === 'live'
-
-  return (
-    <section className="inspector-card progress-focus-card">
-      <div className="card-heading-row">
-        <div>
-          <h3>任务步骤</h3>
-          <p>{progress.currentLabel}</p>
-        </div>
-        <div className="progress-heading-actions">
-          <div className={`status-pill compact ${task.status}`}>
-            <StatusIcon status={task.status} />
-            {statusLabel(task.status)}
-          </div>
-          {task.status === 'running' && (
-            <button type="button" className="mini-danger-button" onClick={onStop} disabled={stopping}>
-              <Square size={12} />
-              停止
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="task-progress-meter" aria-label={`任务进度 ${progress.doneCount}/${progress.totalCount}`}>
-        <span style={{ width: `${progress.percent}%` }} />
-      </div>
-      <div className="task-progress-copy">
-        <strong>{progress.doneCount}/{progress.totalCount} 步</strong>
-        <span>{taskElapsedLabel(task)}</span>
-      </div>
-      <TodoSteps task={task} />
-      {showStreamState && (
-        <div className={`task-stream-state ${streamStatus}`}>
-          <span />
-          <div>
-            <strong>{taskStreamLabel(streamStatus)}</strong>
-            <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
-          </div>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function TaskArtifactsCard({
-  task,
-  onPreview,
-  onReveal
-}: {
-  task?: Task
-  onPreview: (artifact: Artifact) => void
-  onReveal: (artifact: Artifact) => void
-}) {
-  const artifacts = task?.artifacts ?? []
-
-  return (
-    <section className="inspector-card artifact-focus-card">
-      <div className="card-heading-row">
-        <h3>任务产出物</h3>
-        {artifacts.length > 0 && <span className="soft-count">{artifacts.length} 个</span>}
-      </div>
-      {!task ? (
-        <EmptyInspectorState title="暂无产出物" detail="选择任务后，这里会显示 Hermes 生成的文档、表格和文件。" />
-      ) : !artifacts.length ? (
-        <EmptyInspectorState title="暂无产出物" detail="任务生成文件后，会自动出现在这里。" />
-      ) : (
-        <div className="artifact-list">
-          {artifacts.map((artifact) => (
-            <div className="artifact" key={artifact.id}>
-              <FileArchive size={17} />
-              <button type="button" className="artifact-main" onClick={() => onPreview(artifact)}>
-                <strong>{artifact.name}</strong>
-                <span>{artifact.relativePath}</span>
-              </button>
-              <button title="预览文本产物" onClick={() => onPreview(artifact)}>
-                <FileText size={15} />
-              </button>
-              <button title="在 Finder 中显示" onClick={() => onReveal(artifact)}>
-                <FolderOpen size={15} />
-              </button>
-              <a title="下载" href={artifactDownloadUrl(artifact.id)}>
-                <Upload size={15} />
-              </a>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function AgentResourcesCard({ task, workspaceFiles }: { task?: Task; workspaceFiles: WorkspaceFile[] }) {
-  const resources = task ? currentAgentResources(task) : null
-  const fileCount = resources?.files.length ?? 0
-  const toolCount = resources?.tools.length ?? 0
-  const linkCount = resources?.links.length ?? 0
-  const skillCount = resources?.skills.length ?? 0
-  const total = fileCount + toolCount + linkCount + skillCount
-
-  return (
-    <section className="inspector-card resource-focus-card">
-      <div className="card-heading-row">
-        <div>
-          <h3>{task?.status === 'running' ? '当前步骤资源' : '本轮过程资源'}</h3>
-          <p>{task?.status === 'running' ? '随任务步骤刷新，Skill 会保留' : '保留本轮最终有效的工具、链接、文件和 Skill'}</p>
-        </div>
-        {task && <span className="soft-count">{total} 项</span>}
-      </div>
-
-      {!task ? (
-        <EmptyInspectorState title="暂无资源" detail="任务运行时，Hermes 调用的工具、网站、文件和 Skill 会显示在这里。" />
-      ) : total === 0 ? (
-        <EmptyInspectorState title="当前步骤暂无资源" detail={workspaceFiles.length ? 'Hermes 还没有暴露可识别的工具或文件调用。' : '任务运行后，这里会随步骤刷新。'} />
-      ) : (
-        <div className="agent-resource-groups">
-          <ResourceGroup title="工具" items={resources?.tools ?? []} icon={<Wrench size={13} />} />
-          <ResourceGroup title="网站链接" items={resources?.links ?? []} icon={<Globe2 size={13} />} />
-          <ResourceGroup title="文件" items={resources?.files ?? []} icon={<FileText size={13} />} />
-          <ResourceGroup title="Skill" items={resources?.skills ?? []} icon={<BookOpen size={13} />} persistent />
-        </div>
-      )}
-    </section>
-  )
-}
-
-function ResourceGroup({
-  title,
-  items,
-  icon,
-  persistent = false
-}: {
-  title: string
-  items: string[]
-  icon: ReactNode
-  persistent?: boolean
-}) {
-  if (!items.length) return null
-
-  return (
-    <div className="agent-resource-group">
-      <div className="agent-resource-title">
-        <span>{title}</span>
-        {persistent && <em>常驻</em>}
-      </div>
-      <ul>
-        {items.slice(0, 6).map((item) => (
-          <li key={`${title}-${item}`}>
-            {icon}
-            <span title={item}>{shortReference(item)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function TaskSummaryCard({
-  task,
-  workspace,
-  streamStatus,
-  streamUpdatedAt
-}: {
-  task?: Task
-  workspace?: Workspace
-  streamStatus: TaskStreamStatus
-  streamUpdatedAt: string | null
-}) {
-  if (!task) {
-    return (
-      <section className="inspector-card task-summary-card">
-        <h3>任务总览</h3>
-        <EmptyInspectorState title="未选择任务" detail="选择左侧任务后，这里会显示模型、工作区和运行状态。" />
-      </section>
-    )
-  }
-
-  const stats = taskOperationStats(task)
-  const summaryRows = executionTraceRows(task)
-  const latest = summaryRows[summaryRows.length - 1]
-  const showStreamState = task.status === 'running' || streamStatus === 'connecting' || streamStatus === 'live'
-
-  return (
-    <section className="inspector-card task-summary-card">
-      <div className="task-summary-head">
-        <div>
-          <span>当前任务</span>
-          <strong>{task.title}</strong>
-        </div>
-        <div className={`status-pill compact ${task.status}`}>
-          <StatusIcon status={task.status} />
-          {statusLabel(task.status)}
-        </div>
-      </div>
-
-      <div className="task-summary-metrics">
-        <div>
-          <span>模型</span>
-          <strong>{task.modelId === 'auto' || !task.modelId ? 'Hermes 默认' : task.modelId}</strong>
-        </div>
-        <div>
-          <span>工作区</span>
-          <strong>{workspace?.name ?? task.workspaceId}</strong>
-        </div>
-        <div>
-          <span>运行时长</span>
-          <strong>{taskElapsedLabel(task)}</strong>
-        </div>
-        <div>
-          <span>Session</span>
-          <strong>{task.hermesSessionId ?? '未生成'}</strong>
-        </div>
-      </div>
-
-      <div className="task-summary-strip">
-        <span><Brain size={13} />{stats.thinking} 思考</span>
-        <span><Wrench size={13} />{stats.tools} 工具</span>
-        <span><FileText size={13} />{stats.files} 文件</span>
-        <span><FileArchive size={13} />{task.artifacts.length} 产物</span>
-      </div>
-
-      {showStreamState && (
-        <div className={`task-stream-state ${streamStatus}`}>
-          <span />
-          <div>
-            <strong>{taskStreamLabel(streamStatus)}</strong>
-            <p>{taskStreamDescription(streamStatus, streamUpdatedAt)}</p>
-          </div>
-        </div>
-      )}
-
-      {latest && (
-        <div className={`task-summary-latest ${latest.kind}`}>
-          <span className="agent-trace-icon">{traceIcon(latest.kind)}</span>
-          <div>
-            <strong>{latest.title}</strong>
-            {latest.detail && <p>{latest.detail}</p>}
-          </div>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function RecentOperations({ task }: { task: Task }) {
-  const rows = executionTraceRows(task).filter((row) => row.kind !== 'thinking').slice(-4)
-  if (!rows.length) return <p className="muted-copy">还没有捕获到工具、网页、文件或结果事件。</p>
-
-  return (
-    <ol className="recent-operations">
-      {rows.map((row) => (
-        <li className={row.kind} key={row.id}>
-          <span className="agent-trace-icon">{traceIcon(row.kind)}</span>
-          <div>
-            <strong>{row.title}</strong>
-            {row.detail && <p>{row.detail}</p>}
-          </div>
-          <time>{formatTime(row.createdAt)}</time>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-function ExecutionPane({ task, tab }: { task: Task; tab: 'response' | 'tools' | 'logs' | 'errors' }) {
-  const view = task.executionView
-  if (!view) return <p className="muted-copy">还没有运行信息。</p>
-
-  if (tab === 'response') {
-    return view.response ? <pre className="detail-pane">{view.response}</pre> : <p className="muted-copy">正文会在 Hermes 返回后显示。</p>
-  }
-
-  if (tab === 'tools') {
-    const toolEvents = task.events?.filter((event) => event.type.startsWith('tool.')) ?? []
-    if (toolEvents.length) {
-      return <ToolCards events={toolEvents} dense />
-    }
-
-    return view.tools.length ? (
-      <ul className="detail-list">
-        {view.tools.map((item, index) => (
-          <li key={`${item}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    ) : (
-      <p className="muted-copy">当前没有可识别的工具或命令记录。CLI quiet 模式会隐藏部分工具细节。</p>
-    )
-  }
-
-  if (tab === 'errors') {
-    return view.errors.length ? (
-      <ul className="detail-list error-list">
-        {view.errors.map((item, index) => (
-          <li key={`${item}-${index}`}>{item}</li>
-        ))}
-      </ul>
-    ) : (
-      <p className="muted-copy">没有错误。</p>
-    )
-  }
-
-  return view.logs.length || view.rawLog ? (
-    <pre className="detail-pane">{view.logs.length ? view.logs.join('\n') : view.rawLog}</pre>
-  ) : (
-    <p className="muted-copy">暂无运行日志。</p>
-  )
-}
-
-function EventTimeline({ events }: { events: ExecutionEvent[] }) {
-  const visible = events.filter((event) =>
-    ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'artifact.created', 'task.completed', 'task.failed'].includes(
-      event.type
-    )
-  )
-
-  if (!visible.length) {
-    return <p className="muted-copy">还没有步骤事件。新任务运行时会实时出现。</p>
-  }
-
-  return (
-    <ol className="event-timeline">
-      {visible.slice(-14).map((event) => (
-        <li key={event.id} className={`event ${event.type.replace('.', '-')}`}>
-          <span className="event-dot" />
-          <div>
-            <strong>{eventTitle(event)}</strong>
-            <p>{eventSummary(event)}</p>
-          </div>
-          <time>{formatTime(event.createdAt)}</time>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-function ToolCards({ events, dense = false }: { events: ExecutionEvent[]; dense?: boolean }) {
-  const [toolQuery, setToolQuery] = useState('')
-  const [copiedPayload, setCopiedPayload] = useState<string | null>(null)
-  const toolEvents = events.filter((event) => event.type.startsWith('tool.'))
-  if (!toolEvents.length) {
-    return <p className="muted-copy">当前任务没有工具调用，或 Hermes 没有暴露工具细节。</p>
-  }
-
-  const normalizedQuery = toolQuery.trim().toLowerCase()
-  const completedCount = toolEvents.filter((event) => event.type === 'tool.completed').length
-  const failedCount = toolEvents.filter((event) => event.isError).length
-  const filteredEvents = normalizedQuery
-    ? toolEvents.filter((event) => toolSearchText(event).includes(normalizedQuery))
-    : toolEvents
-  const visibleEvents = filteredEvents.slice(dense ? -14 : -8)
-
-  async function handleCopy(key: string, value: unknown) {
-    await copyToClipboard(payloadText(value))
-    setCopiedPayload(key)
-    window.setTimeout(() => setCopiedPayload((current) => (current === key ? null : current)), 1500)
-  }
-
-  return (
-    <div className="tool-card-list">
-      <div className="tool-toolbar">
-        <label className="tool-filter">
-          <Search size={13} />
-          <input value={toolQuery} onChange={(event) => setToolQuery(event.target.value)} placeholder="过滤工具" />
-        </label>
-        <div className="tool-summary-strip">
-          <span>{normalizedQuery ? `${filteredEvents.length}/${toolEvents.length}` : `${toolEvents.length} 条事件`}</span>
-          <span>{completedCount} 次完成</span>
-          {failedCount > 0 && <span className="danger-text">{failedCount} 次异常</span>}
-        </div>
-      </div>
-      {!visibleEvents.length && <p className="muted-copy">没有匹配的工具事件。</p>}
-      {visibleEvents.map((event) => (
-        <article className={event.isError ? 'tool-card failed' : 'tool-card'} key={event.id}>
-          <div className="tool-card-head">
-            <Wrench size={14} />
-            <strong title={toolDisplayName(event)}>{toolDisplayName(event)}</strong>
-            <span>{toolPhaseLabel(event)}</span>
-          </div>
-          {toolPrimaryText(event) && <p>{toolPrimaryText(event)}</p>}
-          <details className="tool-detail">
-            <summary>
-              <ChevronDown size={13} />
-              参数与返回
-            </summary>
-            <div className="tool-detail-body">
-              {toolPayloadSections(event).map((section) => (
-                <div className="tool-payload" key={section.label}>
-                  <div className="tool-payload-head">
-                    <span>{section.label}</span>
-                    <button
-                      type="button"
-                      title={`复制 ${section.label}`}
-                      onClick={() => void handleCopy(`${event.id}-${section.label}`, section.value)}
-                    >
-                      {copiedPayload === `${event.id}-${section.label}` ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-                    </button>
-                  </div>
-                  <pre>{stringifyPreview(section.value, dense ? 1800 : 900)}</pre>
-                </div>
-              ))}
-            </div>
-          </details>
-        </article>
-      ))}
-    </div>
-  )
-}
-
 async function copyToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text)
@@ -6480,592 +4064,8 @@ async function copyToClipboard(text: string) {
   document.body.removeChild(textarea)
 }
 
-function toolDisplayName(event: ExecutionEvent) {
-  if (event.name) return String(event.name)
-  if (Array.isArray(event.args)) {
-    const [, maybeName] = event.args
-    if (typeof maybeName === 'string' && maybeName.trim()) return maybeName
-    const [kind] = event.args
-    if (typeof kind === 'string' && kind.trim()) return kind
-  }
-  return event.type
-}
-
-function toolPhaseLabel(event: ExecutionEvent) {
-  if (event.type === 'tool.started') return '开始'
-  if (event.type === 'tool.completed') return event.isError ? '异常' : '完成'
-  if (event.type === 'tool.progress') return '进度'
-  return event.type.replace('tool.', '')
-}
-
-function toolPrimaryText(event: ExecutionEvent) {
-  if (typeof event.summary === 'string' && event.summary.trim()) return event.summary
-  if (typeof event.message === 'string' && event.message.trim()) return event.message
-  if (typeof event.text === 'string' && event.text.trim()) return event.text
-  if (Array.isArray(event.args) && typeof event.args[2] === 'string' && event.args[2].trim()) return event.args[2]
-  if (typeof event.result === 'string' && event.result.trim()) return event.result.slice(0, 180)
-  if (typeof event.error === 'string' && event.error.trim()) return event.error
-  return ''
-}
-
-function toolSearchText(event: ExecutionEvent) {
-  return [
-    toolDisplayName(event),
-    toolPhaseLabel(event),
-    toolPrimaryText(event),
-    ...toolPayloadSections(event).map((section) => payloadText(section.value))
-  ]
-    .join('\n')
-    .toLowerCase()
-}
-
-function toolPayloadSections(event: ExecutionEvent) {
-  const sections: { label: string; value: unknown }[] = []
-  if (event.args !== undefined) sections.push({ label: 'args', value: event.args })
-  if (event.kwargs !== undefined) sections.push({ label: 'kwargs', value: event.kwargs })
-  if (event.result !== undefined) sections.push({ label: 'result', value: event.result })
-  if (event.error !== undefined) sections.push({ label: 'error', value: event.error })
-  if (!sections.length) sections.push({ label: 'event', value: event })
-  return sections
-}
-
-function payloadText(value: unknown) {
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function workspacePreviewTarget(file: WorkspaceFile, workspaceId: string): FilePreviewTarget {
-  return {
-    source: 'workspace',
-    title: file.relativePath || file.name,
-    name: file.name,
-    relativePath: file.relativePath,
-    path: file.path,
-    type: file.type || 'file',
-    size: file.size,
-    timestamp: file.modifiedAt,
-    workspaceId
-  }
-}
-
-function artifactPreviewTarget(artifact: Artifact): FilePreviewTarget {
-  return {
-    source: 'artifact',
-    title: artifact.name,
-    name: artifact.name,
-    relativePath: artifact.relativePath,
-    path: artifact.path,
-    type: artifact.type || 'file',
-    size: artifact.size,
-    timestamp: artifact.createdAt,
-    workspaceId: artifact.workspaceId,
-    artifactId: artifact.id
-  }
-}
-
-function previewRawUrl(target: FilePreviewTarget) {
-  if (target.source === 'artifact' && target.artifactId) return artifactRawUrl(target.artifactId)
-  if (target.workspaceId) return workspaceFileRawUrl(target.workspaceId, target.relativePath)
-  return undefined
-}
-
-function isInlinePreviewKind(kind: Preview['kind']) {
-  return ['pdf', 'image', 'media', 'html'].includes(kind)
-}
-
 function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
   return Array.from(event.dataTransfer.types).includes('Files')
-}
-
-function previewKind(title: string): Preview['kind'] {
-  const lower = title.toLowerCase()
-  if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
-  if (lower.endsWith('.csv') || lower.endsWith('.tsv')) return 'csv'
-  if (lower.endsWith('.docx') || lower.endsWith('.doc')) return 'document'
-  if (lower.endsWith('.rtf')) return 'document'
-  if (lower.endsWith('.pptx') || lower.endsWith('.ppsx')) return 'presentation'
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xlsm')) return 'spreadsheet'
-  if (lower.endsWith('.pdf')) return 'pdf'
-  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(lower)) return 'image'
-  if (/\.(mp4|webm|mov|mp3|wav|m4a)$/i.test(lower)) return 'media'
-  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
-  return 'text'
-}
-
-function renderMarkdown(markdown: string) {
-  const lines = markdown.split(/\r?\n/)
-  const blocks = []
-  let index = 0
-
-  while (index < lines.length) {
-    const line = lines[index]
-    if (!line.trim()) {
-      index += 1
-      continue
-    }
-
-    if (line.trim().startsWith('```')) {
-      const codeLines = []
-      index += 1
-      while (index < lines.length && !lines[index].trim().startsWith('```')) {
-        codeLines.push(lines[index])
-        index += 1
-      }
-      index += 1
-      blocks.push(<pre key={`code-${index}`}>{codeLines.join('\n')}</pre>)
-      continue
-    }
-
-    const heading = line.match(/^(#{1,4})\s+(.+)$/)
-    if (heading) {
-      const level = heading[1].length
-      const text = heading[2]
-      if (level === 1) blocks.push(<h1 key={`h-${index}`}>{text}</h1>)
-      if (level === 2) blocks.push(<h2 key={`h-${index}`}>{text}</h2>)
-      if (level === 3) blocks.push(<h3 key={`h-${index}`}>{text}</h3>)
-      if (level >= 4) blocks.push(<h4 key={`h-${index}`}>{text}</h4>)
-      index += 1
-      continue
-    }
-
-    if (line.trim().startsWith('|') && lines[index + 1]?.includes('|')) {
-      const tableLines = []
-      while (index < lines.length && lines[index].trim().startsWith('|')) {
-        tableLines.push(lines[index])
-        index += 1
-      }
-      const rows = tableLines
-        .filter((item) => !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(item))
-        .map((item) => item.replace(/^\s*\|?|\|?\s*$/g, '').split('|').map((cell) => cell.trim()))
-      if (rows.length) {
-        const [header, ...body] = rows
-        blocks.push(
-          <div className="markdown-table-wrap" key={`table-${index}`}>
-            <table>
-              <thead>
-                <tr>{header.map((cell, cellIndex) => <th key={`h-${cellIndex}`}>{cell}</th>)}</tr>
-              </thead>
-              <tbody>
-                {body.map((row, rowIndex) => (
-                  <tr key={`r-${rowIndex}`}>
-                    {header.map((_, cellIndex) => <td key={`${rowIndex}-${cellIndex}`}>{row[cellIndex] ?? ''}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )
-      }
-      continue
-    }
-
-    if (/^\s*[-*]\s+/.test(line)) {
-      const items = []
-      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^\s*[-*]\s+/, ''))
-        index += 1
-      }
-      blocks.push(
-        <ul key={`ul-${index}`}>
-          {items.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
-        </ul>
-      )
-      continue
-    }
-
-    if (/^\s*\d+\.\s+/.test(line)) {
-      const items = []
-      while (index < lines.length && /^\s*\d+\.\s+/.test(lines[index])) {
-        items.push(lines[index].replace(/^\s*\d+\.\s+/, ''))
-        index += 1
-      }
-      blocks.push(
-        <ol key={`ol-${index}`}>
-          {items.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}
-        </ol>
-      )
-      continue
-    }
-
-    if (line.trim().startsWith('>')) {
-      const quotes = []
-      while (index < lines.length && lines[index].trim().startsWith('>')) {
-        quotes.push(lines[index].replace(/^\s*>\s?/, ''))
-        index += 1
-      }
-      blocks.push(<blockquote key={`quote-${index}`}>{quotes.join('\n')}</blockquote>)
-      continue
-    }
-
-    const paragraph = [line.trim()]
-    index += 1
-    while (
-      index < lines.length &&
-      lines[index].trim() &&
-      !/^(#{1,4})\s+/.test(lines[index]) &&
-      !lines[index].trim().startsWith('```') &&
-      !/^\s*[-*]\s+/.test(lines[index]) &&
-      !/^\s*\d+\.\s+/.test(lines[index]) &&
-      !lines[index].trim().startsWith('|')
-    ) {
-      paragraph.push(lines[index].trim())
-      index += 1
-    }
-    blocks.push(<p key={`p-${index}`}>{paragraph.join(' ')}</p>)
-  }
-
-  return blocks.length ? blocks : <p className="muted-copy">这个 Markdown 文件没有可展示内容。</p>
-}
-
-function parseDelimitedRows(input: string, delimiter: string) {
-  const rows: string[][] = []
-  let row: string[] = []
-  let cell = ''
-  let inQuotes = false
-
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index]
-    const next = input[index + 1]
-    if (char === '"' && inQuotes && next === '"') {
-      cell += '"'
-      index += 1
-    } else if (char === '"') {
-      inQuotes = !inQuotes
-    } else if (char === delimiter && !inQuotes) {
-      row.push(cell)
-      cell = ''
-    } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      if (char === '\r' && next === '\n') index += 1
-      row.push(cell)
-      if (row.some((value) => value.trim())) rows.push(row)
-      row = []
-      cell = ''
-    } else {
-      cell += char
-    }
-  }
-
-  row.push(cell)
-  if (row.some((value) => value.trim())) rows.push(row)
-  return rows
-}
-
-type TodoStepStatus = 'done' | 'running' | 'pending' | 'skipped' | 'stopped' | 'failed'
-
-type TodoStepItem = {
-  label: string
-  detail: string
-  status: TodoStepStatus
-}
-
-function TodoSteps({ task }: { task: Task }) {
-  const steps = taskStepItems(task)
-
-  return (
-    <ol className="todo-steps">
-      {steps.map((step) => (
-        <li className={`todo-step ${step.status}`} key={step.label}>
-          <span />
-          <div>
-            <strong>{step.label}</strong>
-            <p>{step.detail}</p>
-          </div>
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-function taskStepItems(task: Task): TodoStepItem[] {
-  const events = taskRunEvents(task)
-  const hasThinking = events.some((event) => event.type === 'thinking' || event.type === 'step')
-  const hasTools = events.some((event) => event.type.startsWith('tool.'))
-  const hasArtifacts = task.artifacts.length > 0
-  const hasErrors = task.status === 'failed' || events.some((event) => event.type === 'task.failed')
-  const wasStopped = task.status === 'stopped' || events.some((event) => event.type === 'task.stopped')
-
-  return [
-    {
-      label: '接收任务',
-      detail: task.prompt,
-      status: 'done' as const
-    },
-    {
-      label: '理解与规划',
-      detail: hasThinking ? 'Hermes 已进入推理流程' : '等待 Hermes 开始推理',
-      status: hasThinking || task.status !== 'running' ? 'done' as const : 'running' as const
-    },
-    {
-      label: '调用工具',
-      detail: hasTools ? '已捕获工具/技能调用事件' : '本轮可能无需工具，或工具细节尚未暴露',
-      status: hasTools ? 'done' as const : task.status === 'running' ? 'pending' as const : 'skipped' as const
-    },
-    {
-      label: '沉淀产物',
-      detail: hasArtifacts ? `识别到 ${task.artifacts.length} 个产物` : '暂无新增产物',
-      status: hasArtifacts ? 'done' as const : task.status === 'completed' ? 'skipped' as const : 'pending' as const
-    },
-    {
-      label: wasStopped ? '任务停止' : hasErrors ? '处理失败' : '返回结果',
-      detail: wasStopped ? '用户主动停止了这次执行' : hasErrors ? task.error || '查看错误页签获取原因' : statusLabel(task.status),
-      status: wasStopped ? 'stopped' as const : hasErrors ? 'failed' as const : task.status === 'completed' ? 'done' as const : task.status === 'running' ? 'running' as const : 'pending' as const
-    }
-  ]
-}
-
-function taskProgressSummary(task: Task) {
-  const steps = taskStepItems(task)
-  const activeStep = steps.find((step) => ['running', 'failed', 'stopped'].includes(step.status))
-    ?? steps.filter((step) => step.status === 'done').at(-1)
-    ?? steps[0]
-  const doneCount = steps.filter((step) => step.status === 'done' || step.status === 'skipped').length
-  const totalCount = steps.length
-  return {
-    currentLabel: activeStep ? activeStep.label : '等待开始',
-    doneCount,
-    totalCount,
-    percent: Math.min(100, Math.round((doneCount / totalCount) * 100))
-  }
-}
-
-function ReferenceInfo({ task, workspaceFiles }: { task?: Task; workspaceFiles: WorkspaceFile[] }) {
-  const references = task ? extractTaskReferences(task) : []
-  const skillNames = task?.skillNames ?? []
-  const recentFiles = workspaceFiles.slice(0, 5)
-
-  return (
-    <div className="reference-info">
-      <div className="reference-group">
-        <span>技能</span>
-        {skillNames.length ? (
-          <ul className="skill-list">
-            {skillNames.map((name) => (
-              <li key={name}><BookOpen size={14} />{name}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted-copy">本任务未预载指定技能。</p>
-        )}
-      </div>
-
-      <div className="reference-group">
-        <span>联网与工具来源</span>
-        {references.length ? (
-          <ul className="reference-link-list">
-            {references.slice(0, 10).map((reference) => (
-              <li key={reference}>
-                <Globe2 size={13} />
-                <span title={reference}>{reference}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted-copy">任务运行后，网页、搜索和工具来源会显示在这里。</p>
-        )}
-      </div>
-
-      <div className="reference-group">
-        <span>当前工作区</span>
-        {recentFiles.length ? (
-          <ul className="reference-link-list">
-            {recentFiles.map((file) => (
-              <li key={file.path}>
-                <FileText size={13} />
-                <span title={file.relativePath}>{file.relativePath}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted-copy">当前授权工作区还没有可展示文件。</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function WorkspaceFiles({
-  files,
-  onUseFile,
-  onPreviewFile,
-  onRevealFile
-}: {
-  files: WorkspaceFile[]
-  onUseFile: (file: WorkspaceFile) => void
-  onPreviewFile?: (file: WorkspaceFile) => void
-  onRevealFile?: (file: WorkspaceFile) => void
-}) {
-  if (!files.length) {
-    return <p className="muted-copy">当前授权工作区还没有可展示文件。</p>
-  }
-
-  return (
-    <div className="workspace-file-list">
-      {files.map((file) => (
-        <div className="workspace-file" key={file.path} title={file.relativePath}>
-          <FileText size={15} />
-          <div>
-            <strong>{file.name}</strong>
-            <span>
-              {file.type || 'file'} · {formatBytes(file.size)} · {formatTime(file.modifiedAt)}
-            </span>
-          </div>
-          <button title="作为上下文发送给 Hermes" onClick={() => onUseFile(file)}>
-            <Plus size={14} />
-          </button>
-          <button title="预览文本文件" onClick={() => onPreviewFile?.(file)}>
-            <FileText size={14} />
-          </button>
-          <button title="在 Finder 中显示" onClick={() => onRevealFile?.(file)}>
-            <FolderOpen size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function WorkspaceBrowser({
-  tree,
-  fallbackFiles,
-  currentPath,
-  query,
-  onQueryChange,
-  onOpenFolder,
-  onUseFile,
-  onPreviewFile,
-  onRevealFile
-}: {
-  tree: WorkspaceTree | null
-  fallbackFiles: WorkspaceFile[]
-  currentPath: string
-  query: string
-  onQueryChange: (query: string) => void
-  onOpenFolder: (path: string) => void
-  onUseFile: (file: WorkspaceFile) => void
-  onPreviewFile: (file: WorkspaceFile) => void
-  onRevealFile: (file: WorkspaceFile) => void
-}) {
-  const entries: WorkspaceTreeEntry[] = tree?.entries ?? fallbackFiles.map((file) => ({ ...file, kind: 'file' as const }))
-  const keyword = query.trim().toLowerCase()
-  const visibleEntries = keyword
-    ? entries.filter((entry) => `${entry.name} ${entry.relativePath} ${entry.type}`.toLowerCase().includes(keyword))
-    : entries
-
-  return (
-    <div className="workspace-browser">
-      <div className="workspace-browser-toolbar">
-        <div className="workspace-breadcrumbs">
-          {(tree?.breadcrumbs ?? [{ name: currentPath ? '当前目录' : '根目录', path: currentPath }]).map((crumb, index, items) => (
-            <button
-              type="button"
-              key={`${crumb.path}-${index}`}
-              className={index === items.length - 1 ? 'active' : ''}
-              onClick={() => onOpenFolder(crumb.path)}
-            >
-              {index === 0 ? <Folder size={13} /> : null}
-              {crumb.name}
-            </button>
-          ))}
-        </div>
-        <label className="workspace-file-search">
-          <Search size={14} />
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索当前目录" />
-        </label>
-      </div>
-
-      {visibleEntries.length ? (
-        <div className="workspace-browser-list">
-          {visibleEntries.map((entry) => {
-            const file = workspaceEntryToFile(entry)
-            const isDirectory = entry.kind === 'directory'
-            return (
-              <div className={`workspace-browser-row ${entry.kind}`} key={`${entry.kind}:${entry.relativePath}`} title={entry.relativePath}>
-                <button
-                  type="button"
-                  className="workspace-browser-main"
-                  onClick={() => isDirectory ? onOpenFolder(entry.relativePath) : onPreviewFile(file)}
-                >
-                  {isDirectory ? <Folder size={17} /> : <FileText size={17} />}
-                  <span>
-                    <strong>{entry.name}</strong>
-                    <em>{isDirectory ? '文件夹' : `${entry.type || 'file'} · ${formatBytes(entry.size)}`} · {formatTime(entry.modifiedAt)}</em>
-                  </span>
-                </button>
-                {isDirectory ? (
-                  <>
-                    <button type="button" title="进入文件夹" onClick={() => onOpenFolder(entry.relativePath)}>
-                      <ChevronDown size={14} />
-                    </button>
-                    <button type="button" title="在 Finder 中显示" onClick={() => onRevealFile(file)}>
-                      <FolderOpen size={14} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" title="作为上下文发送给 Hermes" onClick={() => onUseFile(file)}>
-                      <Plus size={14} />
-                    </button>
-                    <button type="button" title="预览文本文件" onClick={() => onPreviewFile(file)}>
-                      <FileText size={14} />
-                    </button>
-                    <button type="button" title="在 Finder 中显示" onClick={() => onRevealFile(file)}>
-                      <FolderOpen size={14} />
-                    </button>
-                  </>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <EmptyWorkspaceBlock
-          title={query.trim() ? '没有匹配文件' : '这个目录暂无文件'}
-          detail={query.trim() ? '换一个关键词，或回到根目录继续查找。' : '上传文件，或在 Finder 中放入资料后刷新页面。'}
-        />
-      )}
-    </div>
-  )
-}
-
-function workspaceEntryToFile(entry: WorkspaceTreeEntry): WorkspaceFile {
-  return {
-    name: entry.name,
-    relativePath: entry.relativePath,
-    path: entry.path,
-    type: entry.type,
-    size: entry.size,
-    modifiedAt: entry.modifiedAt
-  }
-}
-
-function latestUserMessageId(task?: Task) {
-  return task?.messages.slice().reverse().find((message) => message.role === 'user')?.id
-}
-
-function visibleTaskMessages(task: Task) {
-  if (task.status === 'running') return task.messages
-  const latestUserMessage = task.messages.slice().reverse().find((message) => message.role === 'user')
-  if (latestUserMessage) {
-    const latestUserIndex = task.messages.findIndex((message) => message.id === latestUserMessage.id)
-    return task.messages.slice(Math.max(0, latestUserIndex))
-  }
-  if (task.messages.length <= 4) return task.messages
-  return task.messages.slice(-4)
-}
-
-function hiddenTaskMessages(task: Task, visibleMessages: Message[]) {
-  if (task.status === 'running') return []
-  const visibleIds = new Set(visibleMessages.map((message) => message.id))
-  return task.messages.filter((message) => !visibleIds.has(message.id))
-}
-
-function taskResultText(task: Task) {
-  const assistantMessage = task.messages.slice().reverse().find((message) => message.role === 'assistant')
-  return task.executionView?.response || assistantMessage?.content || task.stdout || ''
 }
 
 function shortSessionId(value: string) {
@@ -7088,516 +4088,30 @@ function mergeStreamedTask(current: AppState, task: Task): AppState {
     ? current.tasks.map((item) => (item.id === task.id ? task : item))
     : [task, ...current.tasks]
 
+  const mergedTaskMessages = dedupeByIdAndSort([
+    ...current.messages.filter((message) => message.taskId !== task.id),
+    ...(task.messages ?? [])
+  ])
+  const mergedTaskArtifacts = dedupeByIdAndSort([
+    ...current.artifacts.filter((artifact) => artifact.taskId !== task.id),
+    ...(task.artifacts ?? [])
+  ])
+
   return {
     ...current,
     tasks,
-    messages: [
-      ...current.messages.filter((message) => message.taskId !== task.id),
-      ...(task.messages ?? [])
-    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    artifacts: [
-      ...current.artifacts.filter((artifact) => artifact.taskId !== task.id),
-      ...(task.artifacts ?? [])
-    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    messages: mergedTaskMessages,
+    artifacts: mergedTaskArtifacts
   }
 }
 
-type TraceRow = {
-  id: string
-  kind: 'thinking' | 'search' | 'tool' | 'file' | 'status' | 'done' | 'stopped' | 'error'
-  title: string
-  detail: string
-  createdAt: string
-}
-
-type TraceGroupKind = 'thinking' | 'search' | 'file' | 'tool' | 'result' | 'error'
-
-type TraceGroup = {
-  kind: TraceGroupKind
-  label: string
-  iconKind: TraceRow['kind']
-  rows: TraceRow[]
-}
-
-type TraceDetailToken = {
-  value: string
-  kind: 'text' | 'code' | 'url' | 'path'
-}
-
-const traceGroupOrder: TraceGroupKind[] = ['thinking', 'search', 'file', 'tool', 'result', 'error']
-
-function groupTraceRows(rows: TraceRow[]): TraceGroup[] {
-  const groups = new Map<TraceGroupKind, TraceRow[]>()
-
-  for (const row of rows) {
-    const groupKind = traceGroupKind(row)
-    groups.set(groupKind, [...(groups.get(groupKind) ?? []), row])
+function dedupeByIdAndSort<T extends { id: string; createdAt: string }>(items: T[]) {
+  const records = new Map<string, T>()
+  for (const item of items) {
+    const key = `${item.id}`
+    records.set(key, item)
   }
-
-  return traceGroupOrder
-    .map((kind) => {
-      const groupRows = groups.get(kind) ?? []
-      if (!groupRows.length) return null
-      return {
-        kind,
-        label: traceGroupLabel(kind),
-        iconKind: traceGroupIconKind(kind),
-        rows: groupRows
-      }
-    })
-    .filter((group): group is TraceGroup => Boolean(group))
-}
-
-function traceGroupKind(row: TraceRow): TraceGroupKind {
-  if (row.kind === 'search') return 'search'
-  if (row.kind === 'file') return 'file'
-  if (row.kind === 'tool') return 'tool'
-  if (row.kind === 'done' || row.kind === 'stopped') return 'result'
-  if (row.kind === 'error') return 'error'
-  return 'thinking'
-}
-
-function traceGroupLabel(kind: TraceGroupKind) {
-  if (kind === 'thinking') return '思考与规划'
-  if (kind === 'search') return '网页与搜索'
-  if (kind === 'file') return '文件活动'
-  if (kind === 'tool') return '工具调用'
-  if (kind === 'result') return '结果'
-  return '错误'
-}
-
-function traceGroupIconKind(kind: TraceGroupKind): TraceRow['kind'] {
-  if (kind === 'thinking') return 'thinking'
-  if (kind === 'search') return 'search'
-  if (kind === 'file') return 'file'
-  if (kind === 'tool') return 'tool'
-  if (kind === 'result') return 'done'
-  return 'error'
-}
-
-function traceSummaryParts(task: Task, rows: TraceRow[]) {
-  const searchCount = rows.filter((row) => row.kind === 'search').length
-  const toolCount = rows.filter((row) => row.kind === 'tool').length
-  const fileCount = rows.filter((row) => row.kind === 'file').length
-  const errorCount = rows.filter((row) => row.kind === 'error').length
-  const parts = [
-    searchCount > 0 ? `${searchCount} 次检索` : '',
-    toolCount > 0 ? `${toolCount} 次工具` : '',
-    fileCount > 0 ? `${fileCount} 个文件` : '',
-    task.artifacts.length > 0 ? `${task.artifacts.length} 个产物` : '',
-    errorCount > 0 ? `${errorCount} 个异常` : ''
-  ].filter(Boolean)
-  if (task.status === 'running' && !parts.length) return ['Hermes 正在处理']
-  return parts
-}
-
-function TraceDetail({ text }: { text: string }) {
-  const tokens = tokenizeTraceDetail(text)
-  return (
-    <p className="trace-detail">
-      {tokens.map((token, index) => {
-        if (token.kind === 'text') return <span key={`${token.kind}-${index}`}>{token.value}</span>
-        return (
-          <code className={`trace-token ${token.kind}`} key={`${token.kind}-${index}`}>
-            {trimTraceToken(token.value, token.kind)}
-          </code>
-        )
-      })}
-    </p>
-  )
-}
-
-function tokenizeTraceDetail(text: string): TraceDetailToken[] {
-  const tokens: TraceDetailToken[] = []
-  const pattern = /(`[^`]+`|https?:\/\/[^\s，。)）]+|\/Users\/[^\s，。)）]+|(?:[\w.-]+\/)+[\w.-]+\.(?:ts|tsx|js|jsx|css|md|json|yaml|yml|py|txt|docx|xlsx|pptx|pdf)|[\w.-]+\.(?:ts|tsx|js|jsx|css|md|json|yaml|yml|py|txt|docx|xlsx|pptx|pdf))/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = pattern.exec(text))) {
-    if (match.index > lastIndex) {
-      tokens.push({ value: text.slice(lastIndex, match.index), kind: 'text' })
-    }
-    const value = match[0]
-    tokens.push({ value, kind: traceDetailTokenKind(value) })
-    lastIndex = match.index + value.length
-  }
-
-  if (lastIndex < text.length) tokens.push({ value: text.slice(lastIndex), kind: 'text' })
-  return tokens.length ? tokens : [{ value: text, kind: 'text' }]
-}
-
-function traceDetailTokenKind(value: string): TraceDetailToken['kind'] {
-  if (value.startsWith('`') && value.endsWith('`')) return 'code'
-  if (/^https?:\/\//.test(value)) return 'url'
-  return 'path'
-}
-
-function trimTraceToken(value: string, kind: TraceDetailToken['kind']) {
-  const raw = kind === 'code' ? value.slice(1, -1) : value
-  if (kind === 'url') {
-    try {
-      return new URL(raw).hostname.replace(/^www\./, '')
-    } catch {
-      return raw
-    }
-  }
-  if (kind === 'path') return shortReference(raw)
-  return raw
-}
-
-function taskRunEvents(task: Task) {
-  const runStartedAt = new Date(task.startedAt ?? task.createdAt).getTime()
-  if (!Number.isFinite(runStartedAt)) return task.events ?? []
-
-  let events = (task.events ?? []).filter((event) => {
-    const eventTime = new Date(event.createdAt).getTime()
-    return !Number.isFinite(eventTime) || eventTime >= runStartedAt - 1000
-  })
-
-  if (task.status === 'completed') {
-    events = events.filter((event) => event.category !== 'error')
-  }
-
-  if (task.status === 'completed' || task.status === 'failed' || task.status === 'stopped') {
-    const terminalIndex = events.findIndex((event) => ['task.completed', 'task.failed', 'task.stopped'].includes(event.type))
-    if (terminalIndex >= 0) return events.slice(0, terminalIndex + 1)
-  }
-
-  return events
-}
-
-function executionTraceRows(task: Task): TraceRow[] {
-  if (task.executionView?.activity?.length) {
-    return task.executionView.activity.map((activity) => ({
-      id: activity.id,
-      kind: activity.kind,
-      title: activity.title,
-      detail: activity.detail,
-      createdAt: activity.createdAt
-    })).slice(-24)
-  }
-
-  const rows = taskRunEvents(task)
-    .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'task.completed', 'task.stopped', 'task.failed'].includes(
-        event.type
-      )
-    )
-    .map((event): TraceRow => {
-      if (event.type === 'thinking') {
-        return {
-          id: event.id,
-          kind: 'thinking',
-          title: '思考',
-          detail: eventSummary(event),
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type === 'step') {
-        return {
-          id: event.id,
-          kind: 'thinking',
-          title: eventTitle(event),
-          detail: eventSummary(event),
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type.startsWith('tool.')) {
-        const name = toolDisplayName(event)
-        return {
-          id: event.id,
-          kind: traceToolKind(name, event),
-          title: `${toolPhaseLabel(event)}：${name}`,
-          detail: traceToolDetail(event),
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type === 'artifact.created') {
-        return {
-          id: event.id,
-          kind: 'file',
-          title: `生成产物：${String(event.name ?? '文件')}`,
-          detail: eventSummary(event),
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type === 'task.completed') {
-        return {
-          id: event.id,
-          kind: 'done',
-          title: '任务完成',
-          detail: 'Hermes 已返回最终结果',
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type === 'task.stopped') {
-        return {
-          id: event.id,
-          kind: 'stopped',
-          title: '任务已停止',
-          detail: eventSummary(event),
-          createdAt: event.createdAt
-        }
-      }
-      if (event.type === 'task.failed') {
-        return {
-          id: event.id,
-          kind: 'error',
-          title: '任务失败',
-          detail: eventSummary(event),
-          createdAt: event.createdAt
-        }
-      }
-      return {
-        id: event.id,
-        kind: 'status',
-        title: eventTitle(event),
-        detail: eventSummary(event),
-        createdAt: event.createdAt
-      }
-    })
-
-  if (task.status === 'completed' && !rows.some((row) => row.kind === 'done')) {
-    rows.push({
-      id: `${task.id}-completed`,
-      kind: 'done',
-      title: '任务完成',
-      detail: 'Hermes 已返回最终结果',
-      createdAt: task.completedAt ?? task.updatedAt
-    })
-  }
-
-  if (task.status === 'stopped' && !rows.some((row) => row.kind === 'stopped')) {
-    rows.push({
-      id: `${task.id}-stopped`,
-      kind: 'stopped',
-      title: '任务已停止',
-      detail: '用户已停止这次执行',
-      createdAt: task.completedAt ?? task.updatedAt
-    })
-  }
-
-  if (task.status === 'failed' && !rows.some((row) => row.kind === 'error')) {
-    rows.push({
-      id: `${task.id}-failed`,
-      kind: 'error',
-      title: '任务失败',
-      detail: task.error || 'Hermes 返回失败状态',
-      createdAt: task.completedAt ?? task.updatedAt
-    })
-  }
-
-  if (task.status === 'running' && !rows.some((row) => row.kind === 'done' || row.kind === 'error')) {
-    rows.push({
-      id: `${task.id}-running`,
-      kind: 'status',
-      title: '持续运行中',
-      detail: 'Hermes 正在执行任务，新的思考和操作会继续出现在这里。',
-      createdAt: task.updatedAt
-    })
-  }
-
-  return rows.slice(-24)
-}
-
-function compactTraceRows(task: Task, rows: TraceRow[]) {
-  if (task.status === 'running') return rows.slice(-8)
-
-  const durableRows = rows.filter((row) => row.kind !== 'thinking' || row.title !== '思考')
-  return (durableRows.length ? durableRows : rows).slice(-5)
-}
-
-function traceToolKind(name: string, event: ExecutionEvent): TraceRow['kind'] {
-  if (event.category === 'search') return 'search'
-  if (event.category === 'file') return 'file'
-  if (event.category === 'error') return 'error'
-  if (event.category === 'result') return 'done'
-  const text = `${name} ${event.type} ${toolPrimaryText(event)} ${payloadText(event.args)} ${payloadText(event.kwargs)}`.toLowerCase()
-  if (event.isError) return 'error'
-  if (text.includes('search') || text.includes('browser') || text.includes('web') || text.includes('url') || text.includes('http')) return 'search'
-  if (text.includes('file') || text.includes('read') || text.includes('write') || text.includes('workspace') || text.includes('path')) return 'file'
-  return 'tool'
-}
-
-function traceToolDetail(event: ExecutionEvent) {
-  const primary = toolPrimaryText(event)
-  if (primary) return stringifyPreview(primary, 180)
-  if (event.type === 'tool.started') return stringifyPreview(event.args ?? event.kwargs ?? '工具开始执行', 180)
-  if (event.type === 'tool.completed') return event.isError ? eventSummary(event) : stringifyPreview(event.result ?? '工具执行完成', 180)
-  return eventSummary(event)
-}
-
-function traceIcon(kind: TraceRow['kind']) {
-  if (kind === 'thinking') return <Brain size={14} />
-  if (kind === 'search') return <Globe2 size={14} />
-  if (kind === 'file') return <FileText size={14} />
-  if (kind === 'done') return <CheckCircle2 size={14} />
-  if (kind === 'stopped') return <Square size={14} />
-  if (kind === 'error') return <XCircle size={14} />
-  if (kind === 'tool') return <Wrench size={14} />
-  return <Clock3 size={14} />
-}
-
-function taskOperationStats(task: Task) {
-  const rows = executionTraceRows(task)
-  return {
-    thinking: rows.filter((row) => row.kind === 'thinking').length,
-    tools: rows.filter((row) => row.kind === 'tool' || row.kind === 'search' || row.kind === 'file').length,
-    files: rows.filter((row) => row.kind === 'file').length,
-    errors: rows.filter((row) => row.kind === 'error').length
-  }
-}
-
-function taskElapsedLabel(task: Task) {
-  const start = task.startedAt ?? task.createdAt
-  const end = task.completedAt ?? (task.status === 'running' ? new Date().toISOString() : task.updatedAt)
-  const elapsed = Math.max(0, new Date(end).getTime() - new Date(start).getTime())
-  if (!Number.isFinite(elapsed) || elapsed <= 0) return '刚刚'
-  const seconds = Math.floor(elapsed / 1000)
-  if (seconds < 60) return `${seconds} 秒`
-  const minutes = Math.floor(seconds / 60)
-  const restSeconds = seconds % 60
-  if (minutes < 60) return restSeconds ? `${minutes} 分 ${restSeconds} 秒` : `${minutes} 分钟`
-  const hours = Math.floor(minutes / 60)
-  const restMinutes = minutes % 60
-  return restMinutes ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`
-}
-
-function extractTaskReferences(task: Task) {
-  const text = [
-    task.prompt,
-    task.stdout ?? '',
-    ...(task.events ?? []).flatMap((event) => [
-      toolPrimaryText(event),
-      payloadText(event.args),
-      payloadText(event.kwargs),
-      payloadText(event.result)
-    ])
-  ].join('\n')
-  return extractReferencesFromText(text)
-}
-
-function extractReferencesFromText(text: string) {
-  const urls = text.match(/https?:\/\/[^\s"'<>）)]+/g) ?? []
-  const files = text.match(/(?:\/Users\/[^\s"'<>]+|[\w.-]+\/[\w./-]+\.(?:md|csv|xlsx|pdf|docx|txt|json))/g) ?? []
-  return [...new Set([...urls, ...files])].slice(0, 16)
-}
-
-function currentAgentResources(task: Task) {
-  const events = currentResourceEvents(task)
-  const eventText = events
-    .flatMap((event) => [
-      event.name,
-      eventSummary(event),
-      toolPrimaryText(event),
-      payloadText(event.args),
-      payloadText(event.kwargs),
-      payloadText(event.result)
-    ])
-    .join('\n')
-  const references = extractReferencesFromText(eventText)
-  const links = references.filter((reference) => /^https?:\/\//.test(reference))
-  const files = [
-    ...references.filter((reference) => !/^https?:\/\//.test(reference)),
-    ...events
-      .filter((event) => event.type === 'artifact.created')
-      .map((event) => String(event.relativePath ?? event.name ?? ''))
-      .filter(Boolean)
-  ]
-  const tools = events
-    .filter((event) => event.type.startsWith('tool.'))
-    .map((event) => humanToolName(toolDisplayName(event)))
-    .filter((name) => name && !isInternalToolName(name))
-  return {
-    tools: uniqueCompact(tools).slice(0, 8),
-    links: uniqueByDisplay(links).slice(0, 8),
-    files: uniqueCompact(files).slice(0, 8),
-    skills: uniqueCompact(task.skillNames ?? []).slice(0, 8)
-  }
-}
-
-function currentResourceEvents(task: Task) {
-  const events = taskRunEvents(task)
-  if (task.status !== 'running') return events
-
-  const lastStepIndex = events.reduce((lastIndex, event, index) => {
-    if (event.type === 'step' || event.type === 'thinking' || event.type === 'status') return index
-    return lastIndex
-  }, -1)
-
-  return lastStepIndex >= 0 ? events.slice(lastStepIndex + 1) : events
-}
-
-function uniqueCompact(items: string[]) {
-  return [...new Set(items.map((item) => item.trim()).filter(Boolean))]
-}
-
-function uniqueByDisplay(items: string[]) {
-  const seen = new Set<string>()
-  return items.filter((item) => {
-    const key = shortReference(item)
-    if (!key || key === '...') return false
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-function humanToolName(name: string) {
-  const lower = name.toLowerCase()
-  if (lower.includes('mimo_web_search') || lower.includes('web_search') || lower.includes('smart_search')) return '网页搜索'
-  if (lower.includes('browser') || lower.includes('playwright') || lower.includes('chrome')) return '浏览器'
-  if (lower.includes('terminal') || lower.includes('shell') || lower.includes('command')) return '命令行'
-  if (lower.includes('file') || lower.includes('workspace')) return '文件读写'
-  if (lower.includes('lark') || lower.includes('feishu')) return '飞书'
-  return name
-}
-
-function isInternalToolName(name: string) {
-  const lower = name.toLowerCase()
-  return lower.includes('reasoning.') || lower === 'tool.started' || lower === 'tool.completed'
-}
-
-function eventTitle(event: ExecutionEvent) {
-  if (event.type === 'bridge.started') return '桥接已启动'
-  if (event.type === 'step') return `第 ${event.iteration ?? '?'} 轮推理`
-  if (event.type === 'thinking') return '思考中'
-  if (event.type === 'status') return `状态：${event.kind ?? '运行'}`
-  if (event.type === 'tool.started') return `开始工具：${event.name ?? 'tool'}`
-  if (event.type === 'tool.completed') return `完成工具：${event.name ?? 'tool'}`
-  if (event.type === 'artifact.created') return `生成产物：${event.name ?? '文件'}`
-  if (event.type === 'task.completed') return '任务完成'
-  if (event.type === 'task.stopped') return '任务已停止'
-  if (event.type === 'task.failed') return '任务失败'
-  return event.type
-}
-
-function eventSummary(event: ExecutionEvent) {
-  if (event.type === 'bridge.started') return String(event.cwd ?? '授权工作区')
-  if (event.type === 'step') return `${Array.isArray(event.previousTools) ? event.previousTools.length : 0} 个上一轮工具结果`
-  if (event.type === 'thinking') return String(event.message || 'Hermes 正在处理')
-  if (event.type === 'status') return String(event.message ?? '')
-  if (event.type === 'tool.started') return stringifyPreview(event.args, 120)
-  if (event.type === 'tool.completed') return event.isError ? '工具返回错误' : String(event.result ?? '工具执行完成').slice(0, 140)
-  if (event.type === 'artifact.created') return String(event.summary ?? event.relativePath ?? '文件已加入产物区')
-  if (event.type === 'task.completed') return 'Hermes 已返回最终结果'
-  if (event.type === 'task.stopped') return String(event.summary ?? '用户已停止当前 Hermes 任务')
-  if (event.type === 'task.failed') return String(event.error ?? 'Hermes 执行失败')
-  return stringifyPreview(event, 140)
-}
-
-function stringifyPreview(value: unknown, limit = 260) {
-  let text: string
-  if (typeof value === 'string') {
-    text = value
-  } else {
-    try {
-      text = JSON.stringify(value, null, 2)
-    } catch {
-      text = String(value)
-    }
-  }
-  return text.length > limit ? `${text.slice(0, limit)}...` : text
+  return [...records.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
 }
 
 function RuntimePanel({ runtime }: { runtime: HermesRuntime | null }) {
