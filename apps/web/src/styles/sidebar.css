@@ -124,7 +124,7 @@
   gap: 2px;
   margin-top: 2px;
   padding-top: 10px;
-  border-top: 1px solid rgba(49, 92, 66, 0.1);
+  border-top: 1px solid var(--line);
 }
 
 .sidebar-workspace-card {
@@ -222,7 +222,7 @@
 }
 
 .workspace-tree-main svg {
-  color: var(--moss);
+  color: var(--success);
 }
 
 .workspace-tree-main strong,
@@ -287,7 +287,7 @@
   gap: 2px;
   margin: 3px 0 2px 12px;
   padding-left: 8px;
-  border-left: 1px solid rgba(49, 92, 66, 0.18);
+  border-left: 1px solid var(--success-border);
 }
 
 .workspace-session-list > p {
@@ -319,7 +319,7 @@
 
 .workspace-archive-list summary:hover {
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.5);
+  background: var(--sidebar-elevated);
 }
 
 .workspace-archive-list summary span {
@@ -363,7 +363,7 @@
 }
 
 .workspace-session-main svg {
-  color: var(--amber);
+  color: var(--warning);
 }
 
 .workspace-session-row.archived .workspace-session-main svg {
@@ -414,7 +414,7 @@
 
 .icon-button:hover {
   color: var(--ink);
-  background: rgba(49, 92, 66, 0.08);
+  background: var(--surface-selected);
 }
 
 .icon-button.disabled {
@@ -472,7 +472,7 @@
   height: 34px;
   padding: 0 9px;
   color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.62);
+  background: var(--sidebar-elevated);
   border: 1px solid var(--line);
   border-radius: 7px;
 }
@@ -505,7 +505,7 @@
   height: 27px;
   padding: 0 8px;
   color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.52);
+  background: var(--sidebar-elevated);
   border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 11px;
@@ -513,8 +513,8 @@
 
 .task-tag-filter button.active {
   color: var(--panel);
-  background: var(--moss);
-  border-color: var(--moss);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .task-workspace-tabs {
@@ -528,7 +528,7 @@
   height: 28px;
   min-width: 0;
   color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.52);
+  background: var(--sidebar-elevated);
   border: 1px solid var(--line);
   border-radius: 7px;
   font-size: 11px;
@@ -600,12 +600,12 @@
 }
 
 .task-row.active {
-  background: rgba(49, 92, 66, 0.1);
+  background: var(--surface-selected);
 }
 
 .workspace.active,
 .workspace:hover {
-  background: rgba(49, 92, 66, 0.11);
+  background: var(--surface-selected);
 }
 
 .task-card {
@@ -631,7 +631,7 @@
 }
 
 .task-row.pinned .task-card {
-  border-color: #d5bc72;
+  border-color: var(--warning-border);
 }
 
 .task-card small {
@@ -648,7 +648,7 @@
   max-width: 150px;
   margin-top: 3px;
   overflow: hidden;
-  color: var(--moss);
+  color: var(--success);
   font-size: 10px;
   font-style: normal;
   text-overflow: ellipsis;
@@ -667,7 +667,7 @@
   max-width: 72px;
   overflow: hidden;
   padding: 2px 5px;
-  color: var(--moss);
+  color: var(--success);
   background: var(--moss-soft);
   border-radius: 999px;
   text-overflow: ellipsis;
@@ -690,7 +690,7 @@
 }
 
 .task-action.active {
-  color: var(--amber);
+  color: var(--warning);
   opacity: 1;
 }
 
@@ -703,14 +703,14 @@
 
 .task-action:hover {
   color: var(--ink);
-  background: rgba(49, 92, 66, 0.08);
+  background: var(--surface-selected);
   border-color: var(--line);
 }
 
 .task-delete:hover {
   color: var(--danger);
-  background: #fff1eb;
-  border-color: #e3b8aa;
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
 }
 
 .management-export {

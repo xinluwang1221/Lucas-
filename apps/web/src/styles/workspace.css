@@ -135,7 +135,7 @@
 .project-directory-card:hover,
 .project-directory-card.active {
   border-color: var(--line-strong);
-  background: #f8f5ec;
+  background: var(--surface-hover);
 }
 
 .product-task-result strong,
@@ -214,8 +214,8 @@
   min-height: 22px;
   margin-bottom: 8px;
   padding: 0 8px;
-  color: var(--moss);
-  background: var(--moss-soft);
+  color: var(--success);
+  background: var(--success-soft);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
@@ -234,9 +234,9 @@
   align-items: stretch;
   margin-top: 24px;
   padding: 18px;
-  background: linear-gradient(135deg, rgba(49, 92, 66, 0.1), rgba(255, 253, 247, 0.92));
+  background: linear-gradient(135deg, var(--success-soft), var(--surface));
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
 }
 
 .workspace-status-panel {
@@ -335,7 +335,7 @@
   min-height: 28px;
   padding: 0 9px;
   color: var(--ink-soft);
-  background: rgba(244, 241, 232, 0.72);
+  background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   font-size: 12px;
@@ -343,7 +343,7 @@
 
 .workspace-breadcrumbs button.active {
   color: var(--ink);
-  background: #ffffff;
+  background: var(--surface);
   border-color: var(--line-strong);
 }
 
@@ -355,7 +355,7 @@
   height: 34px;
   padding: 0 10px;
   color: var(--ink-soft);
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 7px;
 }
@@ -392,7 +392,7 @@
 
 .workspace-browser-row.directory {
   grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
-  background: rgba(229, 239, 229, 0.48);
+  background: var(--surface-selected);
 }
 
 .workspace-browser-main {
@@ -407,7 +407,7 @@
 }
 
 .workspace-browser-main svg {
-  color: var(--moss);
+  color: var(--success);
 }
 
 .workspace-browser-main strong,
@@ -499,7 +499,7 @@
 .workspace-stat-grid div {
   min-width: 0;
   padding: 12px;
-  background: rgba(255, 253, 247, 0.82);
+  background: var(--surface);
 }
 
 .workspace-stat-grid span,
@@ -556,7 +556,7 @@
   min-height: 86px;
   padding: 12px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.84);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   text-align: left;
@@ -569,7 +569,7 @@
 
 .workspace-template-grid svg {
   grid-row: span 2;
-  color: var(--moss);
+  color: var(--success);
 }
 
 .workspace-template-grid strong,
@@ -606,7 +606,7 @@
   min-height: 48px;
   padding: 10px;
   color: var(--ink);
-  background: rgba(255, 253, 247, 0.84);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   text-align: left;
@@ -623,11 +623,11 @@
 }
 
 .workspace-task-card.completed > svg {
-  color: var(--moss);
+  color: var(--success);
 }
 
 .workspace-task-card.running > svg {
-  color: var(--cobalt);
+  color: var(--info);
 }
 
 .workspace-task-card.failed > svg,
@@ -654,7 +654,7 @@
 }
 
 .workspace-context-section {
-  background: rgba(248, 245, 236, 0.72);
+  background: var(--surface-muted);
 }
 
 .workspace-context-grid {
@@ -666,7 +666,7 @@
 .workspace-context-group {
   min-width: 0;
   padding: 12px;
-  background: rgba(255, 253, 247, 0.78);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -695,7 +695,7 @@
 }
 
 .workspace-context-group li svg {
-  color: var(--cobalt);
+  color: var(--info);
 }
 
 .workspace-context-group li span {

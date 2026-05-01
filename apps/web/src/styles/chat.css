@@ -582,7 +582,7 @@
 }
 
 .example-grid button svg {
-  color: var(--cobalt);
+  color: var(--info);
 }
 
 .example-grid button strong {
@@ -1461,7 +1461,7 @@
 .message.assistant.pending .message-body.live-output {
   min-height: 0;
   padding: 0;
-  color: #242821;
+  color: var(--foreground);
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -1472,14 +1472,14 @@
 
 .live-output {
   min-height: 72px;
-  border-color: #b6c9b7;
-  background: linear-gradient(180deg, #fffdf7, #f3f8f0);
+  border-color: var(--success-border);
+  background: linear-gradient(180deg, var(--surface), var(--success-soft));
 }
 
 .message.user .message-body {
   color: white;
-  background: var(--cobalt);
-  border-color: var(--cobalt);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .running-inline-status {
@@ -1488,7 +1488,7 @@
   gap: 10px;
   min-height: 28px;
   padding: 6px 0;
-  color: var(--moss);
+  color: var(--success);
   font-size: 13px;
   font-weight: 700;
 }

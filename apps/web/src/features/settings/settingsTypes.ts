@@ -65,12 +65,12 @@ export type SettingsPrefs = {
 
 export const defaultSettingsPrefs: SettingsPrefs = {
   linkOpenMode: '始终询问',
-  appearanceAccentColor: '#2f8f56',
-  appearanceAccentStrongColor: '#1f7a43',
-  appearanceBackgroundColor: '#fbfcfa',
+  appearanceAccentColor: '#22c55e',
+  appearanceAccentStrongColor: '#16a34a',
+  appearanceBackgroundColor: '#faf7f2',
   appearanceSurfaceColor: '#ffffff',
-  appearanceForegroundColor: '#171a16',
-  appearanceMutedColor: '#606a5f',
+  appearanceForegroundColor: '#111827',
+  appearanceMutedColor: '#6b7280',
   appearanceUiFont: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, sans-serif',
   appearanceCodeFont: '"SFMono-Regular", "SF Mono", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace',
   appearanceTranslucentSidebar: true,

@@ -9,6 +9,14 @@ const LANGUAGE_STORAGE_KEY = 'hermes-cowork.language.v1'
 const THEME_STORAGE_KEY = 'hermes-cowork.theme.v1'
 const PRIVACY_STORAGE_KEY = 'hermes-cowork.privacyMode.v1'
 
+const LEGACY_APPEARANCE_DEFAULTS: Partial<Record<keyof SettingsPrefs, string>> = {
+  appearanceAccentColor: '#2f8f56',
+  appearanceAccentStrongColor: '#1f7a43',
+  appearanceBackgroundColor: '#fbfcfa',
+  appearanceForegroundColor: '#171a16',
+  appearanceMutedColor: '#606a5f'
+}
+
 function readStoredValue(key: string, fallback: string) {
   if (typeof window === 'undefined') return fallback
   try {
@@ -33,7 +41,7 @@ function readStoredSettingsPrefs(): SettingsPrefs {
     const raw = window.localStorage.getItem(SETTINGS_PREFS_STORAGE_KEY)
     if (!raw) return defaultSettingsPrefs
     const parsed = JSON.parse(raw) as Partial<SettingsPrefs>
-    return {
+    const prefs = {
       ...defaultSettingsPrefs,
       ...parsed,
       commandWhitelist: Array.isArray(parsed.commandWhitelist) ? parsed.commandWhitelist : defaultSettingsPrefs.commandWhitelist,
@@ -41,6 +49,12 @@ function readStoredSettingsPrefs(): SettingsPrefs {
       mcpServers: Array.isArray(parsed.mcpServers) ? parsed.mcpServers : defaultSettingsPrefs.mcpServers,
       rules: Array.isArray(parsed.rules) ? parsed.rules : defaultSettingsPrefs.rules
     }
+    for (const [key, legacyValue] of Object.entries(LEGACY_APPEARANCE_DEFAULTS) as Array<[keyof SettingsPrefs, string]>) {
+      if (prefs[key] === legacyValue) {
+        prefs[key] = defaultSettingsPrefs[key] as never
+      }
+    }
+    return prefs
   } catch {
     return defaultSettingsPrefs
   }
