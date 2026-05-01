@@ -1,4 +1,4 @@
-import type { ExecutionEvent, Task, WorkspaceFile } from '../../lib/api'
+import type { ExecutionEvent, MessageAttachment, Task, WorkspaceFile } from '../../lib/api'
 import { taskResultText } from './messageUtils'
 
 export type TodoStepStatus = 'done' | 'running' | 'pending' | 'skipped' | 'stopped' | 'failed'
@@ -369,13 +369,20 @@ export function buildContextResourceSnapshot(task: Task, workspaceFiles: Workspa
   const allReferences = extractTaskReferences(task)
   const allLinks = allReferences.filter((reference) => /^https?:\/\//.test(reference))
   const allFiles = allReferences.filter((reference) => !/^https?:\/\//.test(reference))
-  const files = resolveContextFiles(uniqueCompact([...liveResources.files, ...allFiles]), workspaceFiles)
+  const attachmentFiles = task.messages.flatMap((message) => attachmentReferences(message.attachments))
+  const files = resolveContextFiles(uniqueCompact([...attachmentFiles, ...liveResources.files, ...allFiles]), workspaceFiles)
   return {
     files,
     links: uniqueByDisplay([...liveResources.links, ...allLinks]).slice(0, 10),
     tools: uniqueCompact(liveResources.tools).slice(0, 10),
     skills: uniqueCompact(liveResources.skills).slice(0, 10)
   }
+}
+
+function attachmentReferences(attachments?: MessageAttachment[]) {
+  return (attachments ?? [])
+    .flatMap((attachment) => [attachment.relativePath, attachment.path])
+    .filter(Boolean)
 }
 
 export function isUserVisibleExecutionEvent(event: ExecutionEvent) {

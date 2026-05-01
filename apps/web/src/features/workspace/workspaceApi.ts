@@ -38,7 +38,7 @@ export async function deleteWorkspace(workspaceId: string): Promise<{ ok: boolea
   return request(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
 }
 
-export async function uploadFile(workspaceId: string, file: File) {
+export async function uploadFile(workspaceId: string, file: File): Promise<WorkspaceFile> {
   const form = new FormData()
   form.append('file', file)
   return request(`/api/workspaces/${workspaceId}/files`, {

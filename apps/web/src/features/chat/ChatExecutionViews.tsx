@@ -14,19 +14,21 @@ import {
   traceSummaryParts,
   workModeLabel
 } from './executionTraceModel'
-import type { Message, Task } from '../../lib/api'
+import type { Message, MessageAttachment, Task } from '../../lib/api'
 import type { TaskStreamStatus } from './useTaskStream'
 
 export function FragmentWithTrace({
   message,
   task,
   traceAfterMessageId,
-  formatTime
+  formatTime,
+  onOpenAttachment
 }: {
   message: Message
   task: Task | undefined
   traceAfterMessageId?: string
   formatTime: (value: string) => string
+  onOpenAttachment?: (attachment: MessageAttachment) => void
 }) {
   return (
     <>
@@ -35,7 +37,12 @@ export function FragmentWithTrace({
           {message.role === 'user' ? '你' : 'Hermes'}
           <span>{formatTime(message.createdAt)}</span>
         </div>
-        <MessageBody role={message.role} content={message.content} />
+        <MessageBody
+          role={message.role}
+          content={message.content}
+          attachments={message.attachments}
+          onOpenAttachment={onOpenAttachment}
+        />
       </article>
       {task && task.status !== 'running' && message.id === traceAfterMessageId && (
         <InlineExecutionTrace task={task} formatTime={formatTime} />

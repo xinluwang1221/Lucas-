@@ -65,9 +65,10 @@ import { ProjectsView } from './features/workspace/ProjectsView'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
 import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
-import type { WorkspaceFile } from './features/workspace/workspaceApi'
+import { uploadFile, type WorkspaceFile } from './features/workspace/workspaceApi'
 import {
   HermesMcpConfig,
+  MessageAttachment,
   ModelOption,
   Task,
   Skill,
@@ -145,6 +146,60 @@ function closeOnBackdropMouseDown(onClose: () => void) {
       onClose()
     }
   }
+}
+
+function messageAttachmentFromWorkspaceFile(file: WorkspaceFile, workspaceId: string): MessageAttachment {
+  return {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${workspaceId}:${file.relativePath}:${Date.now()}`,
+    workspaceId,
+    name: file.name,
+    relativePath: file.relativePath,
+    path: file.path,
+    type: file.type,
+    size: file.size,
+    createdAt: new Date().toISOString()
+  }
+}
+
+function normalizeUploadedWorkspaceFile(file: WorkspaceFile, source: File, workspacePath: string): WorkspaceFile {
+  const uploadedPath = file.path || `${workspacePath.replace(/\/+$/, '')}/${source.name}`
+  const relativePath = file.relativePath || relativePathFromWorkspacePath(uploadedPath, workspacePath) || source.name
+  const sourceExtension = source.name.includes('.') ? source.name.split('.').pop() : ''
+  return {
+    name: file.name || source.name,
+    relativePath,
+    path: uploadedPath,
+    type: file.type || sourceExtension || 'file',
+    size: Number.isFinite(file.size) ? file.size : source.size,
+    modifiedAt: file.modifiedAt || new Date().toISOString()
+  }
+}
+
+function relativePathFromWorkspacePath(filePath: string, workspacePath: string) {
+  const normalizedFile = filePath.replace(/\\/g, '/')
+  const normalizedWorkspace = workspacePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  return normalizedFile.startsWith(`${normalizedWorkspace}/`)
+    ? normalizedFile.slice(normalizedWorkspace.length + 1)
+    : ''
+}
+
+function workspaceFileFromMessageAttachment(attachment: MessageAttachment): WorkspaceFile {
+  return {
+    name: attachment.name,
+    relativePath: attachment.relativePath,
+    path: attachment.path,
+    type: attachment.type,
+    size: attachment.size,
+    modifiedAt: attachment.createdAt
+  }
+}
+
+function mergeComposerAttachments(current: MessageAttachment[], incoming: MessageAttachment[]) {
+  const merged = new Map(current.map((attachment) => [`${attachment.workspaceId}:${attachment.relativePath}`, attachment]))
+  for (const attachment of incoming) {
+    merged.set(`${attachment.workspaceId}:${attachment.relativePath}`, attachment)
+  }
+  return Array.from(merged.values()).slice(0, 12)
 }
 
 function App() {
@@ -296,6 +351,8 @@ function App() {
     onModelMenuClose: () => setModelMenuOpen(false)
   })
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
+  const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([])
+  const [composerAttachmentUploading, setComposerAttachmentUploading] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('account')
@@ -466,6 +523,8 @@ function App() {
     runningTask,
     selectedModel,
     composerSkillNames,
+    composerAttachments,
+    attachmentUploading: composerAttachmentUploading,
     selectedTaskId,
     taskScope,
     refresh,
@@ -473,6 +532,7 @@ function App() {
     setError,
     setPrompt,
     setComposerSkillNames,
+    setComposerAttachments,
     setSelectedTaskId
   })
   const handleSubmit = useMemo(() => createSubmitHandler(submitPrompt), [createSubmitHandler, submitPrompt])
@@ -510,6 +570,44 @@ function App() {
     document.addEventListener('mousedown', handleMouseDown)
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [modelMenuOpen])
+
+  useEffect(() => {
+    setComposerAttachments((current) =>
+      current.filter((attachment) => attachment.workspaceId === selectedWorkspaceId)
+    )
+  }, [selectedWorkspaceId])
+
+  async function handleAttachComposerFiles(files: File[]) {
+    if (!selectedWorkspace) {
+      setError('请先选择一个授权工作区。')
+      return
+    }
+    const uploadableFiles = files.filter((file) => file.size >= 0)
+    if (!uploadableFiles.length) return
+    setComposerAttachmentUploading(true)
+    setError(null)
+    try {
+      const uploadedAttachments: MessageAttachment[] = []
+      for (const file of uploadableFiles) {
+        const uploaded = await uploadFile(selectedWorkspace.id, file)
+        uploadedAttachments.push(messageAttachmentFromWorkspaceFile(
+          normalizeUploadedWorkspaceFile(uploaded, file, selectedWorkspace.path),
+          selectedWorkspace.id
+        ))
+      }
+      setComposerAttachments((current) => mergeComposerAttachments(current, uploadedAttachments))
+      await refresh()
+      await refreshWorkspaceFiles()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setComposerAttachmentUploading(false)
+    }
+  }
+
+  function handlePreviewMessageAttachment(attachment: MessageAttachment) {
+    void openWorkspaceFilePreview(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
+  }
 
   function handleUseSkill(skill: Skill) {
     setComposerSkillNames((current) => current.includes(skill.name) ? current : [...current, skill.name])
@@ -869,7 +967,12 @@ function App() {
                       {message.role === 'user' ? '你' : 'Hermes'}
                       <span>{formatTime(message.createdAt)}</span>
                     </div>
-                    <MessageBody role={message.role} content={message.content} />
+                    <MessageBody
+                      role={message.role}
+                      content={message.content}
+                      attachments={message.attachments}
+                      onOpenAttachment={handlePreviewMessageAttachment}
+                    />
                   </article>
                 ))}
               </div>
@@ -883,6 +986,7 @@ function App() {
               task={selectedTask}
               traceAfterMessageId={latestUserMessageId(selectedTask)}
               formatTime={formatTime}
+              onOpenAttachment={handlePreviewMessageAttachment}
             />
           ))}
 
@@ -930,6 +1034,8 @@ function App() {
           prompt={prompt}
           promptInputRef={promptInputRef}
           composerSkillNames={composerSkillNames}
+          composerAttachments={composerAttachments}
+          attachmentUploading={composerAttachmentUploading}
           selectedWorkspaceName={selectedWorkspace?.name}
           selectedModel={selectedModel}
           selectedModelId={selectedModelId}
@@ -946,6 +1052,9 @@ function App() {
           onPromptChange={setPrompt}
           onPromptKeyDown={handlePromptKeyDown}
           onRemoveSkill={(name) => setComposerSkillNames((current) => current.filter((item) => item !== name))}
+          onAttachFiles={(files) => void handleAttachComposerFiles(files)}
+          onRemoveAttachment={(attachmentId) => setComposerAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
+          onPreviewAttachment={handlePreviewMessageAttachment}
           onOpenWorkspace={() => {
             if (selectedWorkspace) setViewMode('projects')
           }}

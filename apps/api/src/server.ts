@@ -34,7 +34,7 @@ import {
 } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, ModelOption, ModelSettings, Task } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -1123,14 +1123,15 @@ app.get('/api/tasks/:taskId/export.md', (req, res) => {
 })
 
 app.post('/api/tasks', (req, res) => {
-  const { prompt, workspaceId, modelId, skillNames } = req.body as {
+  const { prompt, workspaceId, modelId, skillNames, attachments } = req.body as {
     prompt?: string
     workspaceId?: string
     modelId?: string
     skillNames?: unknown
+    attachments?: unknown
   }
-  if (!prompt?.trim() || !workspaceId) {
-    res.status(400).json({ error: 'prompt and workspaceId are required' })
+  if (!workspaceId) {
+    res.status(400).json({ error: 'workspaceId is required' })
     return
   }
 
@@ -1142,6 +1143,12 @@ app.post('/api/tasks', (req, res) => {
   }
 
   const now = new Date().toISOString()
+  const normalizedAttachments = normalizeTaskAttachments(attachments, workspace, now)
+  const userPrompt = prompt?.trim() || (normalizedAttachments.length ? '请查看这些附件。' : '')
+  if (!userPrompt) {
+    res.status(400).json({ error: 'prompt or attachments are required' })
+    return
+  }
   const model = resolveRequestedModel(modelId)
   const modelConfigKey = modelSessionKey(model)
   const normalizedSkillNames = normalizeSkillNames(skillNames)
@@ -1152,9 +1159,9 @@ app.post('/api/tasks', (req, res) => {
     provider: model.provider,
     modelConfigKey,
     skillNames: normalizedSkillNames,
-    title: prompt.trim().slice(0, 42),
+    title: userPrompt.slice(0, 42),
     status: 'running',
-    prompt: prompt.trim(),
+    prompt: userPrompt,
     createdAt: now,
     updatedAt: now,
     startedAt: now
@@ -1166,23 +1173,20 @@ app.post('/api/tasks', (req, res) => {
       id: crypto.randomUUID(),
       taskId: task.id,
       role: 'user',
-      content: prompt.trim(),
-      createdAt: now
+      content: userPrompt,
+      createdAt: now,
+      attachments: normalizedAttachments
     })
   })
 
-  void executeTask(task.id, workspace.path, prompt.trim(), undefined, model, normalizedSkillNames)
+  void executeTask(task.id, workspace.path, promptWithAttachments(userPrompt, normalizedAttachments), undefined, model, normalizedSkillNames)
   const createdState = store.snapshot
   const createdTask = createdState.tasks.find((item) => item.id === task.id)
   res.status(201).json(createdTask ? enrichTask(createdState, createdTask) : task)
 })
 
 app.post('/api/tasks/:taskId/messages', (req, res) => {
-  const { prompt, modelId, skillNames } = req.body as { prompt?: string; modelId?: string; skillNames?: unknown }
-  if (!prompt?.trim()) {
-    res.status(400).json({ error: 'prompt is required' })
-    return
-  }
+  const { prompt, modelId, skillNames, attachments } = req.body as { prompt?: string; modelId?: string; skillNames?: unknown; attachments?: unknown }
 
   const state = store.snapshot
   const task = state.tasks.find((item) => item.id === req.params.taskId)
@@ -1202,6 +1206,12 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
   }
 
   const now = new Date().toISOString()
+  const normalizedAttachments = normalizeTaskAttachments(attachments, workspace, now)
+  const userPrompt = prompt?.trim() || (normalizedAttachments.length ? '请查看这些附件。' : '')
+  if (!userPrompt) {
+    res.status(400).json({ error: 'prompt or attachments are required' })
+    return
+  }
   const requestedModelId = typeof modelId === 'string' && modelId.trim() ? modelId.trim() : undefined
   const model = resolveRequestedModel(
     requestedModelId || task.modelId,
@@ -1229,13 +1239,14 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
       id: crypto.randomUUID(),
       taskId: task.id,
       role: 'user',
-      content: prompt.trim(),
-      createdAt: now
+      content: userPrompt,
+      createdAt: now,
+      attachments: normalizedAttachments
     })
   })
   broadcastTaskUpdate(task.id, true)
 
-  void executeTask(task.id, workspace.path, prompt.trim(), resumeSessionId, model, normalizedSkillNames)
+  void executeTask(task.id, workspace.path, promptWithAttachments(userPrompt, normalizedAttachments), resumeSessionId, model, normalizedSkillNames)
   const updatedState = store.snapshot
   const updatedTask = updatedState.tasks.find((item) => item.id === task.id)
   if (!updatedTask) {
@@ -1394,10 +1405,15 @@ app.post('/api/workspaces/:workspaceId/files', upload.single('file'), (req, res)
     return
   }
 
-  const targetPath = ensureInsideWorkspace(path.join(workspace.path, req.file.originalname), workspace.path)
-  fs.copyFileSync(req.file.path, targetPath)
-  fs.unlinkSync(req.file.path)
-  res.status(201).json({ name: req.file.originalname, path: targetPath })
+  try {
+    const targetPath = uniqueUploadTargetPath(workspace.path, req.file.originalname)
+    fs.copyFileSync(req.file.path, targetPath)
+    fs.unlinkSync(req.file.path)
+    res.status(201).json(workspaceFileFromPath(targetPath, workspace.path))
+  } catch (error) {
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.get('/api/artifacts/:artifactId/download', (req, res) => {
@@ -1672,6 +1688,74 @@ function normalizeSkillNames(value: unknown, fallback: string[] = []) {
   )].slice(0, 12)
 }
 
+function normalizeTaskAttachments(value: unknown, workspace: Workspace, createdAt: string): MessageAttachment[] {
+  if (!Array.isArray(value)) return []
+  const attachments: MessageAttachment[] = []
+  const seen = new Set<string>()
+
+  for (const item of value.slice(0, 12)) {
+    const targetPath = resolveAttachmentPath(item, workspace.path)
+    if (!targetPath) continue
+    try {
+      if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) continue
+      const stat = fs.statSync(targetPath)
+      const relativePath = normalizeRelativePath(path.relative(workspace.path, targetPath))
+      if (!relativePath || seen.has(relativePath.toLowerCase())) continue
+      seen.add(relativePath.toLowerCase())
+      attachments.push({
+        id: crypto.randomUUID(),
+        workspaceId: workspace.id,
+        name: path.basename(targetPath),
+        relativePath,
+        path: targetPath,
+        type: path.extname(targetPath).replace('.', '') || 'file',
+        size: stat.size,
+        createdAt
+      })
+    } catch {
+      // Ignore stale or invalid attachment references. The file must exist in the authorized workspace.
+    }
+  }
+
+  return attachments
+}
+
+function resolveAttachmentPath(item: unknown, workspacePath: string) {
+  const reference = attachmentReference(item)
+  if (!reference) return null
+  try {
+    if (path.isAbsolute(reference)) {
+      return ensureInsideWorkspace(reference, workspacePath)
+    }
+    const relativePath = normalizeRelativePath(reference)
+    if (!relativePath) return null
+    return ensureInsideWorkspace(path.join(workspacePath, relativePath), workspacePath)
+  } catch {
+    return null
+  }
+}
+
+function attachmentReference(item: unknown) {
+  if (typeof item === 'string') return item.trim()
+  if (!item || typeof item !== 'object') return ''
+  const record = item as Record<string, unknown>
+  return String(record.relativePath ?? record.path ?? '').trim()
+}
+
+function promptWithAttachments(prompt: string, attachments: MessageAttachment[]) {
+  const cleanPrompt = prompt.trim() || '请查看这些附件。'
+  if (!attachments.length) return cleanPrompt
+  const attachmentLines = attachments.map((attachment) =>
+    `- ${attachment.name}: ${attachment.path} (工作区相对路径：${attachment.relativePath})`
+  )
+  return [
+    cleanPrompt,
+    '',
+    'Hermes Cowork 已将以下附件放入当前授权工作区。请在需要时读取这些文件作为上下文：',
+    ...attachmentLines
+  ].join('\n')
+}
+
 function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: string) {
   const lines = [
     `# ${task.title || 'Hermes Cowork 任务'}`,
@@ -1702,6 +1786,13 @@ function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: s
     lines.push('## 对话记录', '')
     for (const message of task.messages) {
       lines.push(`### ${message.role} · ${formatExportTime(message.createdAt)}`, '', message.content.trim() || '(空)', '')
+      if (message.attachments?.length) {
+        lines.push('附件：', '')
+        for (const attachment of message.attachments) {
+          lines.push(`- ${attachment.name}：\`${attachment.relativePath}\` (${formatBytesForExport(attachment.size)})`)
+        }
+        lines.push('')
+      }
     }
   }
 
@@ -3123,16 +3214,37 @@ function listWorkspaceFiles(rootPath: string) {
       }
       if (!entry.isFile()) continue
       const stat = fs.statSync(fullPath)
-      files.push({
-        name: entry.name,
-        relativePath,
-        path: fullPath,
-        type: path.extname(entry.name).replace('.', '') || 'file',
-        size: stat.size,
-        modifiedAt: stat.mtime.toISOString()
-      })
+      files.push(workspaceFileFromPath(fullPath, rootPath, relativePath, stat))
     }
   }
+}
+
+function workspaceFileFromPath(filePath: string, rootPath: string, relativePath = path.relative(rootPath, filePath), stat = fs.statSync(filePath)) {
+  return {
+    name: path.basename(filePath),
+    relativePath: normalizeRelativePath(relativePath),
+    path: filePath,
+    type: path.extname(filePath).replace('.', '') || 'file',
+    size: stat.size,
+    modifiedAt: stat.mtime.toISOString()
+  }
+}
+
+function uniqueUploadTargetPath(rootPath: string, originalName: string) {
+  const safeName = sanitizeUploadedFilename(originalName)
+  const parsed = path.parse(safeName)
+  for (let index = 0; index < 1000; index += 1) {
+    const suffix = index === 0 ? '' : ` ${index + 1}`
+    const candidateName = `${parsed.name}${suffix}${parsed.ext}`
+    const candidatePath = ensureInsideWorkspace(path.join(rootPath, candidateName), rootPath)
+    if (!fs.existsSync(candidatePath)) return candidatePath
+  }
+  throw new Error('无法生成可用的上传文件名。')
+}
+
+function sanitizeUploadedFilename(value: string) {
+  const baseName = path.basename(value || '').replace(/[\r\n\t]/g, ' ').trim()
+  return baseName || `upload-${Date.now()}`
 }
 
 recoverInterruptedRunningTasks()

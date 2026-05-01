@@ -165,6 +165,7 @@ flowchart LR
 | 任务运行状态 | 主对话区、右侧任务上下文、左侧工作区会话树 | `/api/state`、任务事件流、Hermes session 元数据 | `Task`、`executionView`、右侧步骤/产物/资源分层 |
 | 上下文用量、过程资源与压缩 | 右侧任务上下文、未来对话框上方风险提示 | `/api/tasks/:taskId/context`、`/api/tasks/:taskId/context/compress`、任务 events、工作区文件索引 | `ContextResourcesCard`，合并展示上下文用量、文件大小/占比、网页、工具和 Skill；不再单独展示来源/阈值/消息数表格 |
 | 产物与文件 | 主结果、右侧产物、工作区文件、附件入口 | `/api/artifacts`、`/api/workspaces/*/files` | 同一套文件预览、Finder 打开、下载逻辑 |
+| 对话附件 | 输入框附件 chip、用户消息附件、右侧上下文文件 | `/api/workspaces/:id/files`、`Message.attachments`、任务创建/继续请求的 `attachments` | 附件先上传到授权工作区，再作为消息附件和 Hermes prompt 文件路径进入任务 |
 | Skills | 技能页、任务输入区预载技能、右侧参考信息 | `/api/skills`、本机 skill 目录 | 同一套 skill 名称、启停和文件查看逻辑 |
 
 开发检查清单：
@@ -534,6 +535,7 @@ HC_EVENT\t
 - 任务停止：运行中的任务可在对话区 pending 消息和右侧“任务进度”直接停止；后端会向 Hermes 子进程发送 `SIGTERM`，记录 `task.stopped` 事件，并避免子进程退出码把用户主动停止误判为失败。
 - 任务实时流：后端新增 `/api/tasks/:taskId/stream` SSE 事件流；前端选中运行任务时自动订阅该任务快照，实时更新 live response、执行轨迹、工具事件、产物和停止/完成状态，原轮询机制保留为兜底。运行消息和右侧任务总览会显示“连接中 / 实时同步 / 轮询兜底”等状态，帮助用户判断当前是否实时连接 Hermes。
 - 输入框底部模型切换：默认项跟随 Hermes 当前模型，另支持显式选择当前供应商、fallback 供应商和已配置模型服务下的模型候选；候选必须来自 `/api/models`，不能单独读取旧的本次任务模型清单；创建任务时把选中模型传给后端。
+- 输入框附件第一版已落地：支持从对话框选择 PPT、Word、Excel/CSV、PDF、图片、Markdown/TXT 等主流文件；文件会先上传到当前授权工作区，输入框展示附件 chip；发送任务时附件写入 `Message.attachments`，并把本机路径附加到 Hermes 实际 prompt 中。对话流里的用户消息会显示附件卡片，点击后复用右侧文件预览面板打开。
 - 右侧任务上下文：默认顺序固定为任务拆解、任务产出物、上下文与资源。任务拆解不能写死固定五步，只能展示产品级计划：少量、面向用户目标、能表达“先做什么、再做什么、交付什么”的步骤。Hermes `todo` 如果只是运行清单（例如读取文件、调用工具、检索资料、整理结果，或超过 6 步的操作流），必须放到对话区过程流，不进入任务拆解。Hermes 未暴露产品级拆解时，任务拆解显示空态，不能再从 thinking/status/tool/artifact/complete 事件推导假步骤。工具调用、网页、文件、Skill 归入“上下文与资源”或过程记录，不污染任务拆解。Plan、ReAct、Reflection、Result 只作为每步后面的中文小标签（计划/行动/校验/结果），不能在顶部铺成静态模式条；表情化 thinking、后台心跳、`The user is`、`reasoning.available`、`Hermes 已返回最终结果` 等原始事件不能作为用户可见步骤或说明。
 - 左下角本机偏好菜单：点击 Lucas 弹出本机菜单，可切换语言展示项、循环切换主题、进入设置弹窗；点击菜单外空白区域会关闭。
 - 设置弹窗：包含本机、通用、外观、MCP、模型、对话流、外部应用授权、云端运行环境、命令、规则、关于等分类；外观页是主题后台，负责主题模式、强调色、浅色背景/前景、字体、字号、半透明侧栏和字体平滑；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
@@ -660,7 +662,8 @@ HC_EVENT\t
 `apps/web/src/features/chat/ChatComposer.tsx`
 
 - 对话输入框和底部模型/运行参数入口，已从 `App.tsx` 抽离。
-- 负责预载 Skill 条、输入框、工作区入口、模型菜单、思考强度、显示原始思考开关、重填 Key、模型服务设置、发送/停止按钮。
+- 负责预载 Skill 条、附件 chip、输入框、工作区入口、模型菜单、思考强度、显示原始思考开关、重填 Key、模型服务设置、发送/停止按钮。
+- 附件入口只负责选择文件和展示上传后的本轮附件；文件上传、消息持久化、Hermes prompt 拼接仍由 App/API 层处理，避免输入组件持有业务真源。
 - 只通过 props 接收模型列表、Hermes reasoning 状态和任务运行状态；后续优化模型选择和思考强度入口时，优先改这里。
 
 `apps/web/src/features/chat/useConversationBehavior.ts`
@@ -1495,6 +1498,7 @@ Hermes runtime 融合顺序：
 - 当前不是 macOS 原生客户端，还是本地 Web。
 - 工作区授权已改为左侧“+ / 授权文件夹”触发 macOS Finder 目录选择；当前仍是本地 Web + Node Adapter 方案，未来打包成客户端后要替换为 Tauri/Electron 原生授权和安全书签。
 - 文件预览已经统一到右侧文件详情面板：点击工作区文件或任务产物时，右侧任务上下文会切换为文件预览、Finder 定位、复制路径和“作为上下文”操作。
+- 对话附件第一版已补齐：输入框可选择主流文件并上传到当前授权工作区；发送任务时附件写入消息记录和 Hermes prompt；对话流展示附件卡片，点击复用右侧文件预览，右侧“上下文与资源”会把消息附件计入文件上下文。
 - 当前预览覆盖文本类、小型无扩展文本文件、Markdown、CSV/TSV、PDF、图片、音视频、HTML、docx/doc/rtf、pptx/ppsx、xlsx/xlsm。
 - Office 文件当前是内容级预览：docx/doc/rtf 抽正文，pptx/ppsx 抽幻灯片文字，xlsx/xlsm 抽前几个工作表为表格；不保留原版分页、字体、图表、图片和复杂排版。后续如需高保真，应接系统 Quick Look 或专门文档渲染服务。
 - 任务状态存在 `data/state.json`，大规模数据不适合长期使用。

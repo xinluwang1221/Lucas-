@@ -13,6 +13,18 @@ export type Message = {
   role: 'user' | 'assistant' | 'system'
   content: string
   createdAt: string
+  attachments?: MessageAttachment[]
+}
+
+export type MessageAttachment = {
+  id: string
+  workspaceId: string
+  name: string
+  relativePath: string
+  path: string
+  type: string
+  size: number
+  createdAt: string
 }
 
 export type Artifact = {

@@ -9,7 +9,7 @@ import {
   setTaskTags,
   stopTask
 } from './chatApi'
-import type { ApprovalChoice, ModelOption, Task, Workspace } from '../../lib/api'
+import type { ApprovalChoice, MessageAttachment, ModelOption, Task, Workspace } from '../../lib/api'
 import type { TaskScope } from './useTaskSelection'
 
 type UseTaskActionsParams = {
@@ -19,6 +19,8 @@ type UseTaskActionsParams = {
   runningTask?: Task
   selectedModel: ModelOption
   composerSkillNames: string[]
+  composerAttachments: MessageAttachment[]
+  attachmentUploading: boolean
   selectedTaskId: string | null | undefined
   taskScope: TaskScope
   refresh: () => Promise<void>
@@ -26,6 +28,7 @@ type UseTaskActionsParams = {
   setError: (message: string | null) => void
   setPrompt: Dispatch<SetStateAction<string>>
   setComposerSkillNames: Dispatch<SetStateAction<string[]>>
+  setComposerAttachments: Dispatch<SetStateAction<MessageAttachment[]>>
   setSelectedTaskId: Dispatch<SetStateAction<string | null | undefined>>
 }
 
@@ -36,6 +39,8 @@ export function useTaskActions({
   runningTask,
   selectedModel,
   composerSkillNames,
+  composerAttachments,
+  attachmentUploading,
   selectedTaskId,
   taskScope,
   refresh,
@@ -43,6 +48,7 @@ export function useTaskActions({
   setError,
   setPrompt,
   setComposerSkillNames,
+  setComposerAttachments,
   setSelectedTaskId
 }: UseTaskActionsParams) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -50,19 +56,21 @@ export function useTaskActions({
   const [approvingTaskId, setApprovingTaskId] = useState<string | null>(null)
 
   const submitPrompt = useCallback(async () => {
-    const nextPrompt = prompt.trim()
-    if (!nextPrompt || !selectedWorkspace || isSubmitting || runningTask) return
+    const nextPrompt = prompt.trim() || (composerAttachments.length ? '请查看这些附件。' : '')
+    if ((!nextPrompt && !composerAttachments.length) || !selectedWorkspace || isSubmitting || runningTask || attachmentUploading) return
     setIsSubmitting(true)
     setError(null)
     try {
       const activeTask = selectedTask?.status === 'running' ? null : selectedTask
       const taskSkillNames = activeTask?.skillNames?.length ? activeTask.skillNames : composerSkillNames
       const modelSelectionKey = resolveModelSelectionKey(selectedModel)
+      const taskAttachments = composerAttachments.filter((attachment) => attachment.workspaceId === selectedWorkspace.id)
       const task = activeTask
-        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames)).task
-        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames)
+        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments)).task
+        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments)
       setPrompt('')
       setComposerSkillNames([])
+      setComposerAttachments([])
       setSelectedTaskId(task.id)
       await refresh()
     } catch (cause) {
@@ -71,6 +79,8 @@ export function useTaskActions({
       setIsSubmitting(false)
     }
   }, [
+    attachmentUploading,
+    composerAttachments,
     composerSkillNames,
     isSubmitting,
     prompt,
@@ -81,6 +91,7 @@ export function useTaskActions({
     selectedTask,
     selectedWorkspace,
     setComposerSkillNames,
+    setComposerAttachments,
     setError,
     setPrompt,
     setSelectedTaskId

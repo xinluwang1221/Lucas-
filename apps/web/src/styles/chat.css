@@ -1082,6 +1082,47 @@
   line-height: 1.78;
 }
 
+.message-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.message-attachment-list button {
+  display: inline-grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  max-width: min(360px, 100%);
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-align: left;
+}
+
+.message-attachment-list button:hover {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.message-attachment-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-caption);
+  font-weight: 800;
+}
+
+.message-attachment-list em {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: normal;
+}
+
 .message-markdown {
   white-space: normal;
 }
@@ -1531,6 +1572,67 @@
   font-size: 11px;
 }
 
+.composer-attachment-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.composer-attachment-chip {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  max-width: min(320px, 100%);
+  min-height: 32px;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.composer-attachment-open {
+  display: inline-grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  color: inherit;
+  text-align: left;
+}
+
+.composer-attachment-open span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
+.composer-attachment-open em {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.composer-attachment-remove {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  color: var(--ink-soft);
+  border-radius: 999px;
+}
+
+.composer-attachment-remove:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .composer:focus-within {
   border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
@@ -1592,6 +1694,11 @@
 
 .composer-context {
   gap: 2px;
+}
+
+.composer-attach:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .send-button {

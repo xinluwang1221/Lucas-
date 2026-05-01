@@ -7,8 +7,10 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  FileText,
   Folder,
   Loader2,
+  Paperclip,
   Pause,
   Settings,
   Shield,
@@ -20,10 +22,12 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   RefObject
 } from 'react'
+import { useRef } from 'react'
 import type {
   HermesModelOverview,
   HermesReasoningConfigureRequest,
   HermesReasoningEffort,
+  MessageAttachment,
   ModelOption,
   Task
 } from '../../lib/api'
@@ -37,6 +41,8 @@ export function ChatComposer({
   prompt,
   promptInputRef,
   composerSkillNames,
+  composerAttachments,
+  attachmentUploading,
   selectedWorkspaceName,
   selectedModel,
   selectedModelId,
@@ -53,6 +59,9 @@ export function ChatComposer({
   onPromptChange,
   onPromptKeyDown,
   onRemoveSkill,
+  onAttachFiles,
+  onRemoveAttachment,
+  onPreviewAttachment,
   onOpenWorkspace,
   onModelMenuOpenChange,
   onConfigureReasoning,
@@ -64,6 +73,8 @@ export function ChatComposer({
   prompt: string
   promptInputRef: RefObject<HTMLTextAreaElement | null>
   composerSkillNames: string[]
+  composerAttachments: MessageAttachment[]
+  attachmentUploading: boolean
   selectedWorkspaceName?: string
   selectedModel: ModelOption
   selectedModelId: string
@@ -80,6 +91,9 @@ export function ChatComposer({
   onPromptChange: (value: string) => void
   onPromptKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
   onRemoveSkill: (name: string) => void
+  onAttachFiles: (files: File[]) => void
+  onRemoveAttachment: (attachmentId: string) => void
+  onPreviewAttachment: (attachment: MessageAttachment) => void
   onOpenWorkspace: () => void
   onModelMenuOpenChange: (open: boolean | ((current: boolean) => boolean)) => void
   onConfigureReasoning: (request: HermesReasoningConfigureRequest, notice: string) => void
@@ -89,6 +103,8 @@ export function ChatComposer({
   resolveModelSelectionKey: (model: ModelOption) => string
 }) {
   const effectiveEffort = hermesModel?.reasoning.effectiveEffort ?? 'medium'
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null)
+  const canSend = Boolean(prompt.trim() || composerAttachments.length)
 
   return (
     <form className="composer" onSubmit={onSubmit}>
@@ -105,6 +121,35 @@ export function ChatComposer({
               {name}
               <XCircle size={12} />
             </button>
+          ))}
+        </div>
+      )}
+      {composerAttachments.length > 0 && (
+        <div className="composer-attachment-strip" aria-label="本轮附件">
+          {composerAttachments.map((attachment) => (
+            <div
+              className="composer-attachment-chip"
+              key={attachment.id}
+            >
+              <button
+                type="button"
+                className="composer-attachment-open"
+                title={`打开附件：${attachment.relativePath}`}
+                onClick={() => onPreviewAttachment(attachment)}
+              >
+                <FileText size={14} />
+                <span>{attachment.name}</span>
+                <em>{formatBytes(attachment.size)}</em>
+              </button>
+              <button
+                type="button"
+                className="composer-attachment-remove"
+                aria-label={`移除附件 ${attachment.name}`}
+                onClick={() => onRemoveAttachment(attachment.id)}
+              >
+                <XCircle size={13} />
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -128,6 +173,29 @@ export function ChatComposer({
           <Folder size={15} />
           <ChevronDown size={14} />
         </button>
+        <button
+          type="button"
+          className="composer-icon-button composer-attach"
+          title="添加附件到当前工作区"
+          aria-label="添加附件到当前工作区"
+          disabled={attachmentUploading || Boolean(runningTask)}
+          onClick={() => attachmentInputRef.current?.click()}
+        >
+          {attachmentUploading ? <Loader2 size={15} className="spin" /> : <Paperclip size={15} />}
+        </button>
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          data-testid="composer-file-input"
+          accept=".ppt,.pptx,.ppsx,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.pdf,.txt,.md,image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? [])
+            if (files.length) onAttachFiles(files)
+            event.currentTarget.value = ''
+          }}
+        />
         <div className="composer-actions">
           <div className="model-picker" ref={modelPickerRef}>
             {modelMenuOpen && (
@@ -253,7 +321,7 @@ export function ChatComposer({
             className={runningTask ? 'send-button icon-send-button running' : 'send-button icon-send-button'}
             title={runningTask ? '停止当前任务' : '发送给 Hermes'}
             aria-label={runningTask ? '停止当前任务' : '发送给 Hermes'}
-            disabled={runningTask ? stoppingTaskId === runningTask.id : isSubmitting || !prompt.trim()}
+            disabled={runningTask ? stoppingTaskId === runningTask.id : isSubmitting || attachmentUploading || !canSend}
             onClick={runningTask ? () => onStopTask(runningTask) : undefined}
           >
             {runningTask
@@ -300,4 +368,11 @@ function composerModelTriggerLabel(model: ModelOption) {
   const label = model.label.includes('·') ? model.label.split('·').pop()?.trim() : model.label
   const compact = label?.replace(/^Hermes\s*默认模型$/, '默认模型') || model.id || '模型'
   return compact.length > 18 ? `${compact.slice(0, 16)}...` : compact
+}
+
+function formatBytes(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
