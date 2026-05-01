@@ -64,6 +64,7 @@ import {
   TaskArtifactsCard,
   TaskProgressCard
 } from './features/chat/TaskInspectorCards'
+import { useTaskActions } from './features/chat/useTaskActions'
 import {
   ModelConfigModal,
   ModelSettingsSection,
@@ -117,16 +118,13 @@ import {
 } from './features/workspace/workspaceApi'
 import {
   AppState,
-  archiveTask,
   Artifact,
   BackgroundServiceStatus,
   configureHermesModel,
   configureHermesReasoning,
   configureHermesMcpServer,
-  createTask,
   deleteHermesModelProvider,
   deleteModel,
-  deleteTask,
   getBackgroundStatus,
   getHermesMcpConfig,
   getHermesMcpRecommendations,
@@ -162,16 +160,12 @@ import {
   revealArtifact,
   runHermesAutoUpdate,
   runHermesCompatibilityTest,
-  pinTask,
-  sendTaskMessage,
   setHermesMcpServerEnabled,
   setHermesMcpServerTools,
   setHermesDefaultModel,
   setHermesFallbackProviders,
-  setTaskTags,
   selectModel,
   startHermesMcpServe,
-  stopTask,
   stopHermesMcpServe,
   Task,
   testHermesMcpServer,
@@ -413,8 +407,6 @@ function App() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState('default')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null | undefined>(undefined)
   const [prompt, setPrompt] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [workspacePicking, setWorkspacePicking] = useState(false)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
@@ -766,6 +758,31 @@ function App() {
     source: 'auto'
   }
   const modelMenuGroups = useMemo(() => groupModelOptionsForMenu(composerModels), [composerModels])
+  const {
+    isSubmitting,
+    stoppingTaskId,
+    submitPrompt,
+    handleStop,
+    handleDeleteTask,
+    handlePinTask,
+    handleArchiveTask,
+    handleToggleTag
+  } = useTaskActions({
+    prompt,
+    selectedWorkspace,
+    selectedTask,
+    runningTask,
+    selectedModel,
+    composerSkillNames,
+    selectedTaskId,
+    taskScope,
+    refresh,
+    resolveModelSelectionKey,
+    setError,
+    setPrompt,
+    setComposerSkillNames,
+    setSelectedTaskId
+  })
 
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId
@@ -844,29 +861,6 @@ function App() {
     conversationFollowRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 180
   }
 
-  async function submitPrompt() {
-    const nextPrompt = prompt.trim()
-    if (!nextPrompt || !selectedWorkspace || isSubmitting || runningTask) return
-    setIsSubmitting(true)
-    setError(null)
-    try {
-      const activeTask = selectedTask?.status === 'running' ? null : selectedTask
-      const taskSkillNames = activeTask?.skillNames?.length ? activeTask.skillNames : composerSkillNames
-      const modelSelectionKey = resolveModelSelectionKey(selectedModel)
-      const task = activeTask
-        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames)).task
-        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames)
-      setPrompt('')
-      setComposerSkillNames([])
-      setSelectedTaskId(task.id)
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     await submitPrompt()
@@ -876,27 +870,6 @@ function App() {
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
     event.preventDefault()
     void submitPrompt()
-  }
-
-  async function handleStop(task: Task) {
-    if (stoppingTaskId) return
-    try {
-      setStoppingTaskId(task.id)
-      await stopTask(task.id)
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setStoppingTaskId(null)
-    }
-  }
-
-  async function handleDeleteTask(task: Task) {
-    const confirmed = window.confirm('只删除 Hermes Cowork 中的任务记录，不删除工作区文件。确定删除吗？')
-    if (!confirmed) return
-    await deleteTask(task.id)
-    setSelectedTaskId(null)
-    await refresh()
   }
 
   async function handleToggleSkill(skill: Skill) {
@@ -1238,30 +1211,6 @@ function App() {
     }))
   }
 
-  async function handlePinTask(task: Task) {
-    setError(null)
-    try {
-      await pinTask(task.id, !task.pinned)
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function handleArchiveTask(task: Task) {
-    setError(null)
-    try {
-      const shouldArchive = !task.archivedAt
-      await archiveTask(task.id, shouldArchive)
-      if (selectedTaskId === task.id && shouldArchive && taskScope === 'active') {
-        setSelectedTaskId(null)
-      }
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
   async function handleAuthorizeWorkspace() {
     if (workspacePicking) return
     setWorkspacePicking(true)
@@ -1339,20 +1288,6 @@ function App() {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setWorkspaceUpdatingId(null)
-    }
-  }
-
-  async function handleToggleTag(task: Task, tag: string) {
-    setError(null)
-    const currentTags = task.tags ?? []
-    const nextTags = currentTags.includes(tag)
-      ? currentTags.filter((item) => item !== tag)
-      : [...currentTags, tag]
-    try {
-      await setTaskTags(task.id, nextTags)
-      await refresh()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
     }
   }
 
