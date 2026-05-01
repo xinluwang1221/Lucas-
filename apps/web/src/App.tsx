@@ -106,11 +106,10 @@ import { useTaskSelection } from './features/chat/useTaskSelection'
 import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { artifactPreviewTarget, previewRawUrl, workspacePreviewTarget } from './features/workspace/previewTargets'
+import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import {
   addWorkspace,
   deleteWorkspace,
-  listWorkspaceFiles,
-  listWorkspaceTree,
   pickWorkspaceDirectory,
   previewWorkspaceFile,
   revealWorkspace,
@@ -118,8 +117,7 @@ import {
   updateWorkspace,
   uploadFile,
   type Workspace,
-  type WorkspaceFile,
-  type WorkspaceTree
+  type WorkspaceFile
 } from './features/workspace/workspaceApi'
 import {
   AppState,
@@ -426,10 +424,6 @@ function App() {
   const [workspacePicking, setWorkspacePicking] = useState(false)
   const [filePreview, setFilePreview] = useState<FilePreviewState | null>(null)
   const [detailTab, setDetailTab] = useState<'response' | 'tools' | 'logs' | 'errors'>('response')
-  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
-  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTree | null>(null)
-  const [workspaceTreePath, setWorkspaceTreePath] = useState('')
-  const [workspaceFileQuery, setWorkspaceFileQuery] = useState('')
   const [workspaceUpdatingId, setWorkspaceUpdatingId] = useState<string | null>(null)
   const [taskSearch, setTaskSearch] = useState('')
   const [taskScope, setTaskScope] = useState<'active' | 'archived' | 'all'>('active')
@@ -736,6 +730,19 @@ function App() {
     selectedTask,
     refreshAppState: refresh
   })
+  const {
+    workspaceFiles,
+    workspaceTree,
+    workspaceTreePath,
+    setWorkspaceTreePath,
+    workspaceFileQuery,
+    setWorkspaceFileQuery,
+    refreshWorkspaceFiles
+  } = useWorkspaceFiles({
+    selectedWorkspaceId,
+    refreshKey: state.artifacts.length,
+    onWorkspaceChange: () => setFilePreview(null)
+  })
   const resolveModelSelectionKey = (model: ModelOption) => model.selectedModelKey || model.id
 
   const composerRunningTask = selectedTask?.status === 'running' ? selectedTask : runningTask
@@ -781,26 +788,6 @@ function App() {
     selectedTask?.messages.length,
     selectedTask?.artifacts.length
   ])
-
-  useEffect(() => {
-    if (!selectedWorkspaceId) return
-    void listWorkspaceFiles(selectedWorkspaceId)
-      .then(setWorkspaceFiles)
-      .catch(() => setWorkspaceFiles([]))
-  }, [selectedWorkspaceId, state.artifacts.length])
-
-  useEffect(() => {
-    setWorkspaceTreePath('')
-    setWorkspaceFileQuery('')
-    setFilePreview(null)
-  }, [selectedWorkspaceId])
-
-  useEffect(() => {
-    if (!selectedWorkspaceId) return
-    void listWorkspaceTree(selectedWorkspaceId, workspaceTreePath)
-      .then(setWorkspaceTree)
-      .catch(() => setWorkspaceTree(null))
-  }, [selectedWorkspaceId, workspaceTreePath, state.artifacts.length])
 
   useEffect(() => {
     void refreshRuntime()
@@ -1566,17 +1553,6 @@ function App() {
       await revealWorkspaceFile(selectedWorkspace.id, file.relativePath)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function refreshWorkspaceFiles() {
-    if (!selectedWorkspaceId) return
-    try {
-      setWorkspaceFiles(await listWorkspaceFiles(selectedWorkspaceId))
-      setWorkspaceTree(await listWorkspaceTree(selectedWorkspaceId, workspaceTreePath))
-    } catch {
-      setWorkspaceFiles([])
-      setWorkspaceTree(null)
     }
   }
 
