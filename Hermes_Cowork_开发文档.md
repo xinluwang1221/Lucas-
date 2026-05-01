@@ -512,6 +512,12 @@ HC_EVENT\t
 - 负责 `AppState`、当前工作区、当前任务、刷新后默认任务选择、工作区 fallback 和相关 ref 同步。
 - 后续修复“刷新后跳错会话”“工作区删除后选中状态异常”“多入口选中任务不同步”时，优先检查这里和 `useTaskSelection.ts`。
 
+`apps/web/src/features/app/useAppBootstrap.ts`
+
+- 应用启动初始化 hook，已从 `App.tsx` 抽离。
+- 负责首轮加载 Hermes runtime、更新状态、Hermes sessions、MCP、MCP serve、MCP 推荐、后台服务、Skills 和 Models。
+- 后续修复“打开应用初始数据没加载”“启动时多个模块刷新顺序不清楚”“后台服务状态初始展示异常”等问题时，优先检查这里。
+
 `apps/web/src/features/layout/usePanelLayout.ts`
 
 - 三栏布局状态 hook，已从 `App.tsx` 抽离。
@@ -614,6 +620,12 @@ HC_EVENT\t
 - 对话输入框和底部模型/运行参数入口，已从 `App.tsx` 抽离。
 - 负责预载 Skill 条、输入框、工作区入口、模型菜单、思考强度、显示原始思考开关、重填 Key、模型服务设置、发送/停止按钮。
 - 只通过 props 接收模型列表、Hermes reasoning 状态和任务运行状态；后续优化模型选择和思考强度入口时，优先改这里。
+
+`apps/web/src/features/chat/useConversationBehavior.ts`
+
+- 对话区 DOM 行为 hook，已从 `App.tsx` 抽离。
+- 负责输入框 ref、对话滚动 ref、自动跟随到底部、用户手动滚动后的跟随判定、输入框聚焦、提交表单和 `Enter` 发送 / `Shift+Enter` 换行键盘行为。
+- 后续修复“流式输出不自动下滑”“切换会话后位置不对”“键盘发送行为异常”“聚焦输入框不稳定”等问题时，优先改这里。
 
 `apps/web/src/features/chat/ChatExecutionViews.tsx`
 
@@ -1356,7 +1368,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts`、`apps/web/src/features/file-preview/artifactApi.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts`、工作区动作 hook `useWorkspaceActions.ts` 和拖拽上传 hook `useWorkspaceDropzone.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
-3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts`、`taskContextApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
+3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`useConversationBehavior.ts`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts`、`taskContextApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts`、`apps/web/src/features/settings/useModelConfigForm.ts`、`apps/web/src/features/settings/useModelActions.ts` 和 `apps/web/src/features/settings/modelApi.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态、模型配置表单、模型动作和模型 API service 都在 settings 模块；后续如继续深化，再把模型 provider/form 子组件拆细。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`、`apps/web/src/features/settings/useMcpState.ts` 和 `apps/web/src/features/settings/mcpApi.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP 页面大组件拆成二级 Tab 子组件。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts`、`skillsApi.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面、详情弹窗和 Skill API service 都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
@@ -1364,8 +1376,8 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 10. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。
-11. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts` 和 `apps/web/src/features/app/useAppState.ts`，`App.tsx` 不再直接调用 `/api/state`，`lib/api.ts` 只保留共享协议类型。
-11. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+11. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts`、`apps/web/src/features/app/useAppState.ts` 和 `apps/web/src/features/app/useAppBootstrap.ts`，`App.tsx` 不再直接调用 `/api/state`，启动初始化也不再堆在主组件里，`lib/api.ts` 只保留共享协议类型。
+12. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 

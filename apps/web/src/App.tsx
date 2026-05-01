@@ -7,7 +7,8 @@ import {
   PanelRightOpen,
   Upload,
 } from 'lucide-react'
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAppBootstrap } from './features/app/useAppBootstrap'
 import { useAppState } from './features/app/useAppState'
 import { AppSidebar } from './features/layout/AppSidebar'
 import {
@@ -58,6 +59,7 @@ import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
 import { latestUserMessageId } from './features/chat/messageUtils'
 import { mergeStreamedTask } from './features/chat/taskState'
 import { taskExportUrl, tasksExportUrl } from './features/chat/chatApi'
+import { useConversationBehavior } from './features/chat/useConversationBehavior'
 import { useTaskContext } from './features/chat/useTaskContext'
 import { useTaskStream } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
@@ -73,7 +75,6 @@ import {
   Skill,
 } from './lib/api'
 import type {
-  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react'
 
@@ -306,11 +307,7 @@ function App() {
   const [settingsPrefs, setSettingsPrefs] = useState<SettingsPrefs>(defaultSettingsPrefs)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const skillFileInputRef = useRef<HTMLInputElement | null>(null)
-  const promptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
-  const conversationRef = useRef<HTMLElement | null>(null)
-  const conversationEndRef = useRef<HTMLDivElement | null>(null)
-  const conversationFollowRef = useRef(true)
   const {
     selectedWorkspace,
     selectedTask,
@@ -329,6 +326,15 @@ function App() {
     selectedTaskTag,
     hermesSessions
   })
+  const {
+    promptInputRef,
+    conversationRef,
+    conversationEndRef,
+    focusComposer,
+    handleConversationScroll,
+    createSubmitHandler,
+    createPromptKeyDownHandler
+  } = useConversationBehavior({ selectedTask, selectedTaskId })
   const {
     selectedTaskContext,
     contextLoading,
@@ -462,36 +468,23 @@ function App() {
     setComposerSkillNames,
     setSelectedTaskId
   })
+  const handleSubmit = useMemo(() => createSubmitHandler(submitPrompt), [createSubmitHandler, submitPrompt])
+  const handlePromptKeyDown = useMemo(
+    () => createPromptKeyDownHandler(submitPrompt),
+    [createPromptKeyDownHandler, submitPrompt]
+  )
 
-  useEffect(() => {
-    conversationFollowRef.current = true
-    scrollConversationToBottom()
-  }, [selectedTaskId])
-
-  useEffect(() => {
-    if (!selectedTask || !conversationFollowRef.current) return
-    scrollConversationToBottom()
-  }, [
-    selectedTask?.id,
-    selectedTask?.status,
-    selectedTask?.updatedAt,
-    selectedTask?.liveResponse?.length,
-    selectedTask?.events?.length,
-    selectedTask?.messages.length,
-    selectedTask?.artifacts.length
-  ])
-
-  useEffect(() => {
-    void refreshRuntime()
-    void refreshHermesUpdateStatus()
-    void refreshHermesSessions()
-    void refreshHermesMcp()
-    void refreshMcpServeStatus()
-    void refreshMcpRecommendationsState()
-    void refreshBackgroundStatus()
-    void refreshSkills().catch(() => undefined)
-    void refreshModels().catch(() => undefined)
-  }, [])
+  useAppBootstrap({
+    refreshRuntime,
+    refreshHermesUpdateStatus,
+    refreshHermesSessions,
+    refreshHermesMcp,
+    refreshMcpServeStatus,
+    refreshMcpRecommendationsState,
+    refreshBackgroundStatus,
+    refreshSkills,
+    refreshModels
+  })
 
   useEffect(() => {
     if (!settingsOpen || settingsTab !== 'models') return
@@ -510,38 +503,6 @@ function App() {
     document.addEventListener('mousedown', handleMouseDown)
     return () => document.removeEventListener('mousedown', handleMouseDown)
   }, [modelMenuOpen])
-
-  function focusComposer() {
-    window.requestAnimationFrame(() => {
-      const input = promptInputRef.current
-      if (!input) return
-      input.focus()
-      input.setSelectionRange(input.value.length, input.value.length)
-    })
-  }
-
-  function scrollConversationToBottom() {
-    window.requestAnimationFrame(() => {
-      conversationEndRef.current?.scrollIntoView({ block: 'end' })
-    })
-  }
-
-  function handleConversationScroll() {
-    const element = conversationRef.current
-    if (!element) return
-    conversationFollowRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 180
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    await submitPrompt()
-  }
-
-  function handlePromptKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    void submitPrompt()
-  }
 
   function handleUseSkill(skill: Skill) {
     setComposerSkillNames((current) => current.includes(skill.name) ? current : [...current, skill.name])
