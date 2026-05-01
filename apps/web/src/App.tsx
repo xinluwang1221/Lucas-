@@ -74,6 +74,7 @@ import {
   hermesProviderId,
   providerSavedModelConfig
 } from './features/settings/models'
+import { useModelState } from './features/settings/useModelState'
 import {
   ConnectorsView as McpConnectorsView,
   ManualMcpModal as SettingsManualMcpModal,
@@ -149,12 +150,10 @@ import {
   HermesRuntime,
   installBackgroundServices,
   listSkillFiles,
-  listModels,
   listSkills,
   Message,
   ModelOption,
   readSkillFile,
-  refreshModelCatalog,
   refreshHermesMcpRecommendationsWithAi,
   removeHermesMcpServer,
   revealArtifact,
@@ -457,12 +456,6 @@ function App() {
   const [selectedSkillFile, setSelectedSkillFile] = useState<SkillFile | null>(null)
   const [skillFileContent, setSkillFileContent] = useState('')
   const [skillFileError, setSkillFileError] = useState<string | null>(null)
-  const [models, setModels] = useState<ModelOption[]>([])
-  const [modelCatalog, setModelCatalog] = useState<HermesModelCatalogProvider[]>([])
-  const [selectedModelId, setSelectedModelId] = useState('auto')
-  const [hermesModel, setHermesModel] = useState<HermesModelOverview | null>(null)
-  const [hermesModelUpdating, setHermesModelUpdating] = useState<string | null>(null)
-  const [hermesModelError, setHermesModelError] = useState<string | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [modelPanelOpen, setModelPanelOpen] = useState(false)
   const [newModelId, setNewModelId] = useState('')
@@ -472,8 +465,23 @@ function App() {
   const [newModelApiKey, setNewModelApiKey] = useState('')
   const [newModelApiMode, setNewModelApiMode] = useState('chat_completions')
   const [modelPanelSaving, setModelPanelSaving] = useState(false)
-  const [modelCatalogRefreshing, setModelCatalogRefreshing] = useState(false)
-  const [modelNotice, setModelNotice] = useState<string | null>(null)
+  const {
+    models,
+    modelCatalog,
+    selectedModelId,
+    setSelectedModelId,
+    hermesModel,
+    hermesModelUpdating,
+    setHermesModelUpdating,
+    hermesModelError,
+    setHermesModelError,
+    modelCatalogRefreshing,
+    modelNotice,
+    setModelNotice,
+    applyModelResponse,
+    refreshModels,
+    refreshModelCatalogState
+  } = useModelState()
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -556,35 +564,6 @@ function App() {
   const refreshSkills = async () => {
     const nextSkills = await listSkills()
     setSkills(nextSkills)
-  }
-
-  const refreshModels = async () => {
-    const nextModels = await listModels()
-    setModels(nextModels.models)
-    setSelectedModelId(nextModels.selectedModelId)
-    setHermesModel(nextModels.hermes)
-    setModelCatalog(nextModels.catalog ?? [])
-  }
-
-  async function handleRefreshModelCatalog() {
-    setModelCatalogRefreshing(true)
-    setHermesModelError(null)
-    setModelNotice(null)
-    try {
-      const response = await refreshModelCatalog()
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
-      const sourceSummary = response.catalogRefresh?.sources
-        ?.map((source) => `${source.label}${source.ok ? `：${source.addedModels.length} 个模型` : '：刷新失败'}`)
-        .join('；')
-      setModelNotice(sourceSummary ? `模型目录已刷新。${sourceSummary}` : '模型目录已刷新')
-    } catch (cause) {
-      setHermesModelError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setModelCatalogRefreshing(false)
-    }
   }
 
   const refreshHermesMcp = async () => {
@@ -943,10 +922,7 @@ function App() {
     setModelNotice(null)
     try {
       const response = await configureHermesReasoning(request)
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response)
       setModelNotice(notice)
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause)
@@ -962,10 +938,7 @@ function App() {
     setHermesModelError(null)
     try {
       const response = await setHermesDefaultModel(modelId, provider)
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response)
       setModelNotice(`Hermes 默认模型已更新为 ${modelId}`)
     } catch (cause) {
       setHermesModelError(cause instanceof Error ? cause.message : String(cause))
@@ -982,10 +955,7 @@ function App() {
     setModelNotice(null)
     try {
       const response = await deleteModel(resolveModelSelectionKey(model))
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response)
       setModelMenuOpen(false)
       setModelNotice(`已从已配置模型中移除：${model.label}`)
     } catch (cause) {
@@ -1000,10 +970,7 @@ function App() {
     setHermesModelError(null)
     try {
       const response = await setHermesFallbackProviders(providers)
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response)
       setModelNotice(providers.length ? '备用模型列表已更新' : '已关闭备用模型')
     } catch (error) {
       const cause = error instanceof Error ? error : new Error(String(error))
@@ -1021,10 +988,7 @@ function App() {
     setModelNotice(null)
     try {
       const response = await deleteHermesModelProvider(providerId)
-      setModels(response.models)
-      setSelectedModelId(response.selectedModelId)
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response)
       setModelNotice(`已移除模型服务配置：${label}`)
     } catch (cause) {
       setHermesModelError(cause instanceof Error ? cause.message : String(cause))
@@ -1100,10 +1064,7 @@ function App() {
         apiMode: newModelApiMode
       })
       await selectModel('auto')
-      setModels(response.models)
-      setSelectedModelId('auto')
-      setHermesModel(response.hermes)
-      setModelCatalog(response.catalog ?? [])
+      applyModelResponse(response, 'auto')
       setNewModelId('')
       setNewModelLabel('')
       setNewModelProvider('')
@@ -2085,7 +2046,7 @@ function App() {
             onBaseUrlChange={setNewModelBaseUrl}
             onApiKeyChange={setNewModelApiKey}
             onApiModeChange={setNewModelApiMode}
-            onRefreshCatalog={() => void handleRefreshModelCatalog()}
+            onRefreshCatalog={() => void refreshModelCatalogState()}
           />
         </div>
       )}
@@ -2162,7 +2123,7 @@ function App() {
             onSetHermesFallbackProviders={(providers) => void handleSetHermesFallbackProviders(providers)}
             onDeleteHermesModelProvider={(providerId, label) => void handleDeleteHermesModelProvider(providerId, label)}
             onRefreshModels={() => void refreshModels()}
-            onRefreshModelCatalog={() => void handleRefreshModelCatalog()}
+            onRefreshModelCatalog={() => void refreshModelCatalogState()}
             onAddRule={handleAddSettingsRule}
             onOpenAddModel={(providerId, modelId) => openModelConfigPanel(providerId, modelId)}
           />
