@@ -399,3 +399,15 @@ audio.media-preview-player {
   font-size: 10px;
   font-weight: 700;
 }
+
+@media (max-width: 1180px) {
+  .file-preview-panel.compact {
+    max-height: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .file-preview-panel.compact .document-preview {
+    padding: 34px 26px 44px;
+  }
+}

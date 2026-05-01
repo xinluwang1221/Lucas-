@@ -2311,3 +2311,92 @@
   gap: 10px;
   margin-top: 20px;
 }
+
+@media (max-width: 1180px) {
+  .settings-modal {
+    width: calc(100vw - 28px);
+    height: calc(100vh - 28px);
+    max-height: calc(100vh - 28px);
+    grid-template-columns: 236px minmax(0, 1fr);
+  }
+
+  .settings-panel {
+    padding: 34px 24px 42px;
+  }
+
+  .model-health-grid,
+  .model-ability-grid,
+  .model-impact-grid,
+  .hermes-update-grid,
+  .hermes-auto-update-summary,
+  .hermes-update-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .settings-modal {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-sidebar {
+    max-height: 190px;
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .settings-user {
+    padding-bottom: 12px;
+  }
+
+  .settings-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-nav button {
+    min-width: 0;
+  }
+
+  .settings-panel {
+    padding: 24px 16px 34px;
+  }
+
+  .settings-subtabs {
+    top: -24px;
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    max-width: 100%;
+  }
+
+  .settings-control-row,
+  .cowork-model-row,
+  .fallback-model-summary,
+  .fallback-provider-row,
+  .hermes-auto-update-gate,
+  .hermes-smoke-card.pending,
+  .model-scenario-card {
+    grid-template-columns: 1fr;
+  }
+
+  .model-user-summary {
+    flex-direction: column;
+  }
+
+  .settings-control-action {
+    justify-content: flex-start;
+  }
+
+  .model-health-grid,
+  .model-ability-grid,
+  .model-impact-grid,
+  .model-scenario-grid,
+  .model-credential-grid,
+  .hermes-update-grid,
+  .hermes-auto-update-summary,
+  .hermes-update-checks {
+    grid-template-columns: 1fr;
+  }
+}

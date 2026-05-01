@@ -2635,113 +2635,6 @@
   }
 }
 
-@container sidebar (max-width: 255px) {
-  .brand-copy span,
-  .workspace-group-actions,
-  .nav-section-title span {
-    display: none;
-  }
-
-  .brand {
-    gap: 8px;
-    padding-inline: 4px;
-  }
-
-  .primary-nav,
-  .nav-link,
-  .workspace-group-title {
-    padding-inline: 10px;
-  }
-
-  .task-link {
-    grid-template-columns: 16px minmax(0, 1fr);
-  }
-}
-
-@container workspace-main (max-width: 760px) {
-  .topbar {
-    align-items: flex-start;
-    padding: 18px 18px 14px;
-  }
-
-  .topbar h1 {
-    font-size: 20px;
-    line-height: 1.2;
-  }
-
-  .topbar-actions {
-    gap: 6px;
-  }
-
-  .topbar-actions .ghost-button {
-    justify-content: center;
-    width: 38px;
-    min-width: 38px;
-    padding: 0;
-    font-size: 0;
-  }
-
-  .topbar-actions .ghost-button svg {
-    margin: 0;
-  }
-
-  .conversation {
-    padding: 20px 18px 14px;
-  }
-
-  .conversation-history,
-  .message,
-  .agent-run-summary {
-    max-width: calc(100% - 8px);
-  }
-
-  .message.user {
-    max-width: calc(100% - 28px);
-    margin-right: 0;
-  }
-
-  .composer {
-    width: calc(100% - 28px);
-  }
-
-  .model-trigger {
-    justify-content: center;
-    width: 38px;
-    max-width: 38px;
-    padding: 0;
-  }
-
-  .model-trigger span,
-  .model-trigger svg:last-child {
-    display: none;
-  }
-}
-
-@container workspace-main (max-width: 620px) {
-  .composer textarea {
-    min-height: 92px;
-    padding: 14px;
-  }
-
-  .composer-bar {
-    gap: 6px;
-    min-height: 48px;
-    padding: 7px;
-  }
-
-  .composer-actions {
-    gap: 6px;
-  }
-
-  .conversation {
-    padding-inline: 14px;
-  }
-
-  .message-body {
-    padding: 14px;
-  }
-}
-
 @container inspector (max-width: 620px) {
   .inspector {
     padding: 16px 12px;
@@ -2791,187 +2684,48 @@
   }
 }
 
+@container workspace-main (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    padding: 18px 18px 14px;
+  }
+
+  .topbar h1 {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .topbar-actions .ghost-button {
+    justify-content: center;
+    width: 38px;
+    min-width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .topbar-actions .ghost-button svg {
+    margin: 0;
+  }
+}
+
 @media (max-width: 1180px) {
   body {
     min-width: 0;
   }
 
-  .app-shell,
-  .app-shell.skills-mode,
-  .app-shell.file-preview-mode {
-    grid-template-columns: 240px minmax(0, 1fr);
-  }
-
-  .app-shell.left-sidebar-collapsed,
-  .app-shell.skills-mode.left-sidebar-collapsed,
-  .app-shell.file-preview-mode.left-sidebar-collapsed,
-  .app-shell.left-sidebar-collapsed.right-sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-  }
-
-  .app-shell.right-sidebar-collapsed,
-  .app-shell.file-preview-mode.right-sidebar-collapsed {
-    grid-template-columns: 240px minmax(0, 1fr);
-  }
-
-  .inspector {
-    display: none;
-  }
-
-  .pane-resizer {
-    display: none;
-  }
-
-  .settings-modal {
-    width: calc(100vw - 28px);
-    height: calc(100vh - 28px);
-    max-height: calc(100vh - 28px);
-    grid-template-columns: 236px minmax(0, 1fr);
-  }
-
-  .settings-panel {
-    padding: 34px 24px 42px;
-  }
-
-  .model-health-grid,
-  .model-ability-grid,
-  .model-impact-grid,
-  .hermes-update-grid,
-  .hermes-auto-update-summary,
-  .hermes-update-checks,
   .dispatch-grid,
-  .schedule-grid,
-  .workspace-boundary-panel,
-  .workspace-home-grid {
+  .schedule-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workspace-template-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workspace-file-page {
-    width: min(1000px, calc(100% - 40px));
-  }
-
-  .workspace-file-grid,
-  .workspace-file-grid.previewing {
-    grid-template-columns: 1fr;
-  }
-
-  .file-preview-panel.compact {
-    max-height: none;
   }
 }
 
 @media (max-width: 820px) {
-  .app-shell,
-  .app-shell.skills-mode,
-  .app-shell.file-preview-mode {
-    grid-template-columns: 180px minmax(0, 1fr);
-  }
-
-  .app-shell.left-sidebar-collapsed,
-  .app-shell.skills-mode.left-sidebar-collapsed,
-  .app-shell.file-preview-mode.left-sidebar-collapsed,
-  .app-shell.left-sidebar-collapsed.right-sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-  }
-
-  .app-shell.right-sidebar-collapsed,
-  .app-shell.file-preview-mode.right-sidebar-collapsed {
-    grid-template-columns: 180px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding: 18px 10px;
-  }
-
-  .settings-modal {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .settings-sidebar {
-    max-height: 190px;
-    padding: 16px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .settings-user {
-    padding-bottom: 12px;
-  }
-
-  .settings-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .settings-nav button {
-    min-width: 0;
-  }
-
-  .settings-panel {
-    padding: 24px 16px 34px;
-  }
-
-  .settings-subtabs {
-    top: -24px;
-    display: flex;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    max-width: 100%;
-  }
-
-  .settings-control-row,
-  .cowork-model-row,
-  .fallback-model-summary,
-  .fallback-provider-row,
-  .hermes-auto-update-gate,
-  .hermes-smoke-card.pending,
-  .model-scenario-card {
-    grid-template-columns: 1fr;
-  }
-
-  .model-user-summary {
-    flex-direction: column;
-  }
-
-  .settings-control-action {
-    justify-content: flex-start;
-  }
-
-  .model-health-grid,
-  .model-ability-grid,
-  .model-impact-grid,
-  .model-scenario-grid,
-  .model-credential-grid,
-  .hermes-update-grid,
-  .hermes-auto-update-summary,
-  .hermes-update-checks,
   .dispatch-grid,
-  .schedule-grid,
-  .workspace-boundary-panel,
-  .workspace-template-grid,
-  .workspace-home-grid,
-  .workspace-context-grid {
+  .schedule-grid {
     grid-template-columns: 1fr;
-  }
-
-  .workspace-stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workspace-head-actions {
-    flex-wrap: wrap;
-  }
-
-  .workspace-file-page,
-  .workspace-home {
-    width: min(100% - 28px, 720px);
-  }
-
-  .file-preview-panel.compact .document-preview {
-    padding: 34px 26px 44px;
   }
 }

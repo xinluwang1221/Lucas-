@@ -116,3 +116,47 @@
 .pane-resizer-right {
   grid-column: 3;
 }
+
+@media (max-width: 1180px) {
+  .app-shell,
+  .app-shell.skills-mode,
+  .app-shell.file-preview-mode {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .app-shell.left-sidebar-collapsed,
+  .app-shell.skills-mode.left-sidebar-collapsed,
+  .app-shell.file-preview-mode.left-sidebar-collapsed,
+  .app-shell.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+
+  .app-shell.right-sidebar-collapsed,
+  .app-shell.file-preview-mode.right-sidebar-collapsed {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .pane-resizer {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .app-shell,
+  .app-shell.skills-mode,
+  .app-shell.file-preview-mode {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .app-shell.left-sidebar-collapsed,
+  .app-shell.skills-mode.left-sidebar-collapsed,
+  .app-shell.file-preview-mode.left-sidebar-collapsed,
+  .app-shell.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+
+  .app-shell.right-sidebar-collapsed,
+  .app-shell.file-preview-mode.right-sidebar-collapsed {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+}

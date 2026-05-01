@@ -2302,3 +2302,61 @@
 .card-heading-row h3 {
   margin: 0;
 }
+
+@container workspace-main (max-width: 760px) {
+  .conversation {
+    padding: 20px 18px 14px;
+  }
+
+  .conversation-history,
+  .message,
+  .agent-run-summary {
+    max-width: calc(100% - 8px);
+  }
+
+  .message.user {
+    max-width: calc(100% - 28px);
+    margin-right: 0;
+  }
+
+  .composer {
+    width: calc(100% - 28px);
+  }
+
+  .model-trigger {
+    justify-content: center;
+    width: 38px;
+    max-width: 38px;
+    padding: 0;
+  }
+
+  .model-trigger span,
+  .model-trigger svg:last-child {
+    display: none;
+  }
+}
+
+@container workspace-main (max-width: 620px) {
+  .composer textarea {
+    min-height: 92px;
+    padding: 14px;
+  }
+
+  .composer-bar {
+    gap: 6px;
+    min-height: 48px;
+    padding: 7px;
+  }
+
+  .composer-actions {
+    gap: 6px;
+  }
+
+  .conversation {
+    padding-inline: 14px;
+  }
+
+  .message-body {
+    padding: 14px;
+  }
+}
