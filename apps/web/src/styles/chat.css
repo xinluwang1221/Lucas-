@@ -1496,11 +1496,11 @@
 .composer {
   flex: 0 0 auto;
   width: min(820px, calc(100% - 56px));
-  margin: 0 auto 24px;
+  margin: 0 auto 26px;
   background: var(--panel);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow);
+  box-shadow: 0 18px 46px rgba(21, 31, 18, 0.12);
 }
 
 .composer-skill-strip {
@@ -1574,8 +1574,8 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid transparent;
@@ -1602,9 +1602,9 @@
 .icon-send-button {
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   padding: 0;
   border-radius: 999px;
 }

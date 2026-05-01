@@ -7,9 +7,9 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 
-const PANEL_LAYOUT_STORAGE_KEY = 'hermes-cowork-panel-layout-v1'
+const PANEL_LAYOUT_STORAGE_KEY = 'hermes-cowork-panel-layout-v2'
 const DEFAULT_SIDEBAR_WIDTH = 286
-const DEFAULT_INSPECTOR_WIDTH = 780
+const DEFAULT_INSPECTOR_WIDTH = 560
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_SIDEBAR_WIDTH = 380
 const MIN_MAIN_WIDTH = 520
@@ -52,7 +52,7 @@ function readPanelLayout(): PanelLayout {
   }
   return clampPanelLayout({
     left: DEFAULT_SIDEBAR_WIDTH,
-    right: Math.round((window.innerWidth || 1440) * 0.38)
+    right: Math.round((window.innerWidth || 1440) * 0.32)
   })
 }
 

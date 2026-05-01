@@ -10,18 +10,11 @@ body {
   font-family: var(--font-ui);
   font-size: var(--ui-font-size);
   line-height: var(--line-height-body);
-  background:
-    linear-gradient(90deg, rgba(23, 26, 22, 0.012) 1px, transparent 1px),
-    linear-gradient(rgba(23, 26, 22, 0.01) 1px, transparent 1px),
-    var(--background);
-  background-size: 36px 36px;
+  background: var(--background);
 }
 
 :root[data-theme-mode="dark"] body {
-  background:
-    linear-gradient(90deg, rgba(241, 245, 238, 0.012) 1px, transparent 1px),
-    linear-gradient(rgba(241, 245, 238, 0.01) 1px, transparent 1px),
-    var(--background);
+  background: var(--background);
 }
 
 :root[data-font-smoothing="true"] body {

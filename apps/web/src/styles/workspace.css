@@ -54,7 +54,7 @@
   flex-direction: column;
   min-width: 0;
   max-height: 100vh;
-  background: var(--background);
+  background: var(--surface);
   container: workspace-main / inline-size;
 }
 
