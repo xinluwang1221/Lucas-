@@ -2,20 +2,16 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
-  BookOpen,
   Bot,
   Brain,
   CheckCircle2,
   ChevronDown,
   Circle,
-  Code2,
-  Copy,
   Clock3,
   Database,
   ExternalLink,
   FileArchive,
   FileText,
-  Files,
   Folder,
   FolderSync,
   FolderOpen,
@@ -74,9 +70,8 @@ import {
 import { useModelState } from './features/settings/useModelState'
 import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import { useMcpState } from './features/settings/useMcpState'
-import { useSkillsState } from './features/skills/useSkillsState'
+import { SkillDetailModal, SkillsView, useSkillsState } from './features/skills'
 import {
-  ConnectorsView as McpConnectorsView,
   ManualMcpModal as SettingsManualMcpModal,
   McpMarketplaceModal as SettingsMcpMarketplaceModal,
   McpSettingsSection
@@ -152,7 +147,6 @@ import {
   taskExportUrl,
   tasksExportUrl,
   Skill,
-  SkillFile,
 } from './lib/api'
 import type {
   CSSProperties,
@@ -1912,200 +1906,6 @@ function App() {
   )
 }
 
-function SkillsView({
-  skills,
-  customizeTab,
-  tab,
-  query,
-  notice,
-  connectors,
-  mcpConfigPath,
-  mcpError,
-  onCustomizeTabChange,
-  onTabChange,
-  onQueryChange,
-  onToggleSkill,
-  onOpenSkill,
-  onRefresh,
-  onUploadClick,
-  onRefreshMcp,
-  onOpenMcpSettings,
-  onOpenMcpMarketplace
-}: {
-  skills: Skill[]
-  customizeTab: 'skills' | 'connectors'
-  tab: 'market' | 'installed'
-  query: string
-  notice: string | null
-  connectors: HermesMcpConfig['servers']
-  mcpConfigPath?: string
-  mcpError: string | null
-  onCustomizeTabChange: (tab: 'skills' | 'connectors') => void
-  onTabChange: (tab: 'market' | 'installed') => void
-  onQueryChange: (value: string) => void
-  onToggleSkill: (skill: Skill) => void
-  onOpenSkill: (skill: Skill) => void
-  onRefresh: () => void
-  onUploadClick: () => void
-  onRefreshMcp: () => void
-  onOpenMcpSettings: () => void
-  onOpenMcpMarketplace: () => void
-}) {
-  const normalizedQuery = query.trim().toLowerCase()
-  const installedSkills = skills
-  const marketSkills = skills.filter((skill) => skill.source === 'plugin' || skill.source === 'system')
-  const activeSkills = (tab === 'installed' ? installedSkills : marketSkills).filter((skill) => {
-    if (!normalizedQuery) return true
-    return `${skill.name} ${skill.description} ${skill.source} ${skill.path}`.toLowerCase().includes(normalizedQuery)
-  })
-  const enabledCount = skills.filter((skill) => skill.enabled).length
-  const sections = [
-    {
-      title: tab === 'market' ? '技能市场' : '内置与插件',
-      skills: activeSkills.filter((skill) => skill.source === 'plugin' || skill.source === 'system')
-    },
-    {
-      title: '来自用户',
-      skills: activeSkills.filter((skill) => skill.source === 'user' || skill.source === 'uploaded')
-    }
-  ].filter((section) => section.skills.length)
-
-  return (
-    <section className="customize-page">
-      <aside className="customize-sidebar">
-        <button className={customizeTab === 'skills' ? 'active' : ''} onClick={() => onCustomizeTabChange('skills')}>
-          <BookOpen size={15} />
-          Skills
-        </button>
-        <button className={customizeTab === 'connectors' ? 'active' : ''} onClick={() => onCustomizeTabChange('connectors')}>
-          <Plug size={15} />
-          Connectors
-        </button>
-        <div className="customize-plugin-box">
-          <strong>能力来源</strong>
-          <span>Skills 负责专业工作方法；Connectors 负责把 Hermes 接到本机工具和外部服务。</span>
-        </div>
-      </aside>
-
-      <div className="customize-content">
-      <div className="skills-actions">
-        {customizeTab === 'skills' ? (
-          <>
-            <button className="ghost-button" onClick={onRefresh}>
-              <RefreshCw size={15} />
-              刷新
-            </button>
-            <button className="send-button" onClick={onUploadClick}>
-              <Plus size={16} />
-              上传技能
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="ghost-button" onClick={onRefreshMcp}>
-              <RefreshCw size={15} />
-              刷新
-            </button>
-            <button className="send-button" onClick={onOpenMcpMarketplace}>
-              <Plus size={16} />
-              从市场添加
-            </button>
-          </>
-        )}
-      </div>
-
-      <header className="skills-hero">
-        <h1>{customizeTab === 'skills' ? 'Skills' : 'Connectors'}</h1>
-        <p>
-          {customizeTab === 'skills'
-            ? '安装和管理技能，扩展 Hermes Cowork 的本机工作方法。'
-            : '管理 Hermes 可调用的 MCP 服务，把本机文件、浏览器、飞书和数据工具连接进任务。'}
-        </p>
-      </header>
-
-      {customizeTab === 'skills' ? (
-        <>
-        <div className="skills-toolbar">
-        <div className="skills-tabs" role="tablist" aria-label="技能视图">
-          <button className={tab === 'market' ? 'active' : ''} onClick={() => onTabChange('market')}>
-            技能市场
-          </button>
-          <button className={tab === 'installed' ? 'active' : ''} onClick={() => onTabChange('installed')}>
-            已安装 <span>{installedSkills.length}</span>
-          </button>
-        </div>
-        <label className="skills-search">
-          <Search size={15} />
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索技能" />
-        </label>
-      </div>
-
-      {notice && <div className="skill-notice">{notice}</div>}
-
-      <div className="skills-summary">
-        <div>
-          <strong>{enabledCount}</strong>
-          <span>已启用</span>
-        </div>
-        <div>
-          <strong>{skills.length}</strong>
-          <span>本机可用</span>
-        </div>
-        <div>
-          <strong>{skills.filter((skill) => skill.source === 'user' || skill.source === 'uploaded').length}</strong>
-          <span>来自用户</span>
-        </div>
-      </div>
-
-      <div className="skills-content">
-        {!activeSkills.length && <p className="muted-copy">没有匹配的技能。</p>}
-        {sections.map((section) => (
-          <section className="skill-section" key={section.title}>
-            <h2>{section.title}</h2>
-            <div className="skill-grid">
-              {section.skills.map((skill) => (
-                <article className="skill-card" key={skill.id}>
-                  <button className="skill-open" onClick={() => onOpenSkill(skill)}>
-                    <div className="skill-icon">
-                      <BookOpen size={23} />
-                    </div>
-                    <div className="skill-card-body">
-                      <div className="skill-card-head">
-                        <strong>{skill.name}</strong>
-                        <span>{sourceLabel(skill.source)}</span>
-                      </div>
-                      <p>{skill.description}</p>
-                      <small title={skill.path}>{shortenSkillPath(skill.path)}</small>
-                    </div>
-                  </button>
-                  <button
-                    className={skill.enabled ? 'skill-switch enabled' : 'skill-switch'}
-                    aria-label={`${skill.enabled ? '停用' : '启用'} ${skill.name}`}
-                    aria-pressed={skill.enabled}
-                    onClick={() => onToggleSkill(skill)}
-                  >
-                    <span />
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-        </>
-      ) : (
-        <McpConnectorsView
-          connectors={connectors}
-          configPath={mcpConfigPath}
-          error={mcpError}
-          onOpenSettings={onOpenMcpSettings}
-        />
-      )}
-      </div>
-    </section>
-  )
-}
-
 function SearchTasksView({
   tasks,
   query,
@@ -3218,120 +3018,6 @@ function InlineExecutionTrace({ task }: { task: Task }) {
   )
 }
 
-function SkillDetailModal({
-  skill,
-  files,
-  selectedFile,
-  content,
-  error,
-  onClose,
-  onSelectFile,
-  onToggle,
-  onUseSkill
-}: {
-  skill: Skill
-  files: SkillFile[]
-  selectedFile: SkillFile | null
-  content: string
-  error: string | null
-  onClose: () => void
-  onSelectFile: (file: SkillFile) => void
-  onToggle: () => void
-  onUseSkill: () => void
-}) {
-  const fileCount = files.filter((file) => file.type === 'file').length
-  const directoryCount = files.filter((file) => file.type === 'directory').length
-
-  return (
-    <div className="modal skill-detail-modal">
-      <div className="skill-detail-head">
-        <div className="skill-detail-title">
-          <BookOpen size={28} />
-          <div>
-            <h2>{skill.name}</h2>
-            <p>
-              {sourceLabel(skill.source)} · {fileCount} 个文件 · {directoryCount} 个文件夹
-            </p>
-          </div>
-        </div>
-        <button className="icon-button" onClick={onClose} aria-label="关闭技能详情">
-          <XCircle size={18} />
-        </button>
-      </div>
-
-      <p className="skill-detail-description">{skill.description}</p>
-
-      <div className="skill-browser">
-        <aside className="skill-file-tree">
-          <div className="skill-browser-label">
-            <Files size={14} />
-            文件
-          </div>
-          {!files.length && <p className="muted-copy">正在读取文件列表...</p>}
-          {files.map((file) => (
-            <button
-              className={selectedFile?.relativePath === file.relativePath ? 'active' : ''}
-              key={file.relativePath}
-              onClick={() => onSelectFile(file)}
-              title={file.path}
-            >
-              {file.type === 'directory' ? <Folder size={14} /> : <FileText size={14} />}
-              <span>{file.relativePath}</span>
-            </button>
-          ))}
-        </aside>
-
-        <section className="skill-file-preview">
-          <div className="skill-file-preview-head">
-            <div>
-              <strong>{selectedFile?.relativePath ?? '选择文件'}</strong>
-              {selectedFile && (
-                <span>
-                  {selectedFile.type === 'file' ? formatBytes(selectedFile.size) : '文件夹'} · {formatTime(selectedFile.modifiedAt)}
-                </span>
-              )}
-            </div>
-            {selectedFile?.previewable && (
-              <button className="ghost-button" onClick={() => void copyToClipboard(content)}>
-                <Copy size={14} />
-                复制
-              </button>
-            )}
-          </div>
-          {error ? (
-            <div className="skill-file-error">{error}</div>
-          ) : selectedFile?.type === 'directory' ? (
-            <div className="skill-file-empty">
-              <Folder size={22} />
-              <span>这是一个文件夹，请选择其中的文件。</span>
-            </div>
-          ) : selectedFile ? (
-            <pre className="skill-file-content">{content || '正在读取...'}</pre>
-          ) : (
-            <div className="skill-file-empty">
-              <Code2 size={22} />
-              <span>选择左侧文件查看内容。</span>
-            </div>
-          )}
-        </section>
-      </div>
-
-      <div className="modal-actions skill-detail-actions">
-        <button className="ghost-button" onClick={onToggle}>
-          {skill.enabled ? '禁用' : '启用'}
-        </button>
-        <button className="ghost-button" onClick={onUseSkill}>
-          <Play size={14} />
-          使用技能
-        </button>
-        <button className="send-button" onClick={onClose}>
-          关闭
-        </button>
-      </div>
-    </div>
-  )
-}
-
 function StatusIcon({ status }: { status: Task['status'] }) {
   if (status === 'running') return <Loader2 size={15} className="spin" />
   if (status === 'completed') return <CheckCircle2 size={15} />
@@ -3403,22 +3089,6 @@ function TemplateIcon({ name }: { name: string }) {
   if (name === 'data') return <BarChart3 size={28} />
   if (name === 'files') return <FolderOpen size={28} />
   return <Hammer size={28} />
-}
-
-async function copyToClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
 }
 
 function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
@@ -3821,29 +3491,12 @@ function HermesAutoUpdateResultCard({
   )
 }
 
-function formatBytes(size: number) {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
-}
-
 function formatDuration(ms: number) {
   if (ms < 1000) return `${ms} ms`
   const seconds = Math.round(ms / 1000)
   if (seconds < 60) return `${seconds} 秒`
   const minutes = Math.floor(seconds / 60)
   return `${minutes} 分 ${seconds % 60} 秒`
-}
-
-function sourceLabel(source: Skill['source']) {
-  if (source === 'plugin') return '插件'
-  if (source === 'system') return '系统'
-  if (source === 'uploaded') return '上传'
-  return '用户'
-}
-
-function shortenSkillPath(value: string) {
-  return value.replace(/^\/Users\/[^/]+/, '~')
 }
 
 function statusLabel(status: Task['status']) {

@@ -661,11 +661,29 @@ HC_EVENT\t
 - 负责读取 Hermes MCP 配置、测试/启停/删除 MCP、手动新增和编辑、工具级选择、Hermes MCP serve 状态、每日推荐日报、后台服务安装状态。
 - 后续修复“MCP 状态刷新不一致”“市场安装后已安装列表不同步”“serve 状态误报”“推荐日报后台开关异常”等问题时，优先检查这里和 `apps/api/src/mcp.ts`。
 
+`apps/web/src/features/skills/SkillsView.tsx`
+
+- 技能主页面模块，已从 `App.tsx` 抽离。
+- 负责 Skills / Connectors 二级结构、技能市场/已安装切换、技能搜索、技能卡片、刷新、上传和跳转 MCP 管理入口。
+- 后续修复“左侧技能入口层级”“技能市场分类”“Connectors 和 MCP 设置入口一致性”等问题时，优先改这里。
+
+`apps/web/src/features/skills/SkillDetailModal.tsx`
+
+- 技能详情弹窗模块，已从 `App.tsx` 抽离。
+- 负责 Skill 基础信息、文件树、`SKILL.md`/子文件预览、复制内容、启用/禁用和加入下一次任务。
+- 后续做 skill 文件编辑、版本查看、依赖文件说明、运行前预载策略时，优先从这里扩展。
+
 `apps/web/src/features/skills/useSkillsState.ts`
 
 - 技能区状态和动作 hook，已从 `App.tsx` 抽离。
 - 负责 Skill 列表刷新、启用/停用、上传、打开 Skill、读取 Skill 文件、选择 `SKILL.md` 或子文件，以及 Skill 详情弹窗状态。
 - 后续修复“skill 区域文件不完整”“点击 skill 后看不到 skill.md 和子文件”“skill 启用状态不同步”等问题时，优先改这里。
+
+`apps/web/src/features/skills/skillFormatters.ts`
+
+- 技能区格式化和小工具模块，已从 `App.tsx` 抽离。
+- 负责 skill 来源中文名、路径缩写、文件大小、文件时间和复制到剪贴板。
+- 后续如果技能区需要更完整的文件元信息展示，先从这里统一格式化规则。
 
 `apps/web/src/lib/http.ts`
 
@@ -1209,7 +1227,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
-6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`，技能列表、上传、启用、文件浏览和详情弹窗状态都在 skills 模块；后续可继续把 `CustomizeView` 和 `SkillDetailModal` 从 `App.tsx` 拆出。
+6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
 7. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 8. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
