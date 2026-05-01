@@ -781,6 +781,12 @@ HC_EVENT\t
 - 负责 `SettingsTab`、`SettingsPrefs`、规则范围、MCP 范围引用，以及 `defaultSettingsPrefs`。
 - 后续做设置持久化、设置迁移、后台可配置默认值时，优先改这里和对应后端配置 API。
 
+`apps/web/src/features/settings/useSettingsPreferences.ts`
+
+- 设置偏好状态 hook，已从 `App.tsx` 抽离。
+- 负责界面语言、主题、隐私模式、设置偏好对象和规则新增。
+- 后续做“UI 主题化 / 设置持久化 / 设置迁移 / 后台可操作配置”时，优先改这里和 `settingsTypes.ts`，不要把设置偏好状态重新堆回 `App.tsx`。
+
 `apps/web/src/features/settings/HermesUpdatePanel.tsx`
 
 - “关于 Hermes Cowork > Hermes 后台更新”面板，已从 `App.tsx` 抽离。
@@ -1372,12 +1378,13 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts`、`apps/web/src/features/settings/useModelConfigForm.ts`、`apps/web/src/features/settings/useModelActions.ts` 和 `apps/web/src/features/settings/modelApi.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态、模型配置表单、模型动作和模型 API service 都在 settings 模块；后续如继续深化，再把模型 provider/form 子组件拆细。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`、`apps/web/src/features/settings/useMcpState.ts` 和 `apps/web/src/features/settings/mcpApi.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP 页面大组件拆成二级 Tab 子组件。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts`、`skillsApi.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面、详情弹窗和 Skill API service 都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
-7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts`、`useHermesRuntimeState.ts` 和 `runtimeApi.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态和 runtime API service 都不再留在 `App.tsx`；后续如继续深化，再把设置持久化迁移从总逻辑里拆出。
+7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts`、`useSettingsPreferences.ts`、`useHermesRuntimeState.ts` 和 `runtimeApi.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态、设置偏好状态和 runtime API service 都不再留在 `App.tsx`；后续如继续深化，再把设置持久化迁移从总逻辑里拆出。
 8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 10. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。
 11. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts`、`apps/web/src/features/app/useAppState.ts` 和 `apps/web/src/features/app/useAppBootstrap.ts`，`App.tsx` 不再直接调用 `/api/state`，启动初始化也不再堆在主组件里，`lib/api.ts` 只保留共享协议类型。
-12. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+12. 工程稳定阶段可以收尾：`App.tsx` 当前主要职责是页面组合、全局入口互联和少量 modal 开关；继续拆分收益已经低于进入文件预览与编辑阶段。下一阶段新增文件编辑、主题化、客户端化能力时，必须先落到对应 feature 模块，再让 `App.tsx` 只做组合。
+13. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 

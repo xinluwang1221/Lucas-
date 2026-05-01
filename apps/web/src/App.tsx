@@ -45,11 +45,8 @@ import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import { useMcpState } from './features/settings/useMcpState'
 import { useHermesRuntimeState } from './features/settings/useHermesRuntimeState'
 import { SettingsModal } from './features/settings/SettingsModal'
-import {
-  defaultSettingsPrefs,
-  type SettingsPrefs,
-  type SettingsTab
-} from './features/settings/settingsTypes'
+import { useSettingsPreferences } from './features/settings/useSettingsPreferences'
+import type { SettingsTab } from './features/settings/settingsTypes'
 import { SkillDetailModal, SkillsView, useSkillsState } from './features/skills'
 import {
   ManualMcpModal as SettingsManualMcpModal,
@@ -301,10 +298,17 @@ function App() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('account')
-  const [language, setLanguage] = useState('简体中文')
-  const [theme, setTheme] = useState('亮色')
-  const [privacyMode, setPrivacyMode] = useState(false)
-  const [settingsPrefs, setSettingsPrefs] = useState<SettingsPrefs>(defaultSettingsPrefs)
+  const {
+    language,
+    setLanguage,
+    theme,
+    setTheme,
+    privacyMode,
+    setPrivacyMode,
+    settingsPrefs,
+    updateSettingsPref,
+    handleAddSettingsRule
+  } = useSettingsPreferences()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const skillFileInputRef = useRef<HTMLInputElement | null>(null)
   const modelPickerRef = useRef<HTMLDivElement | null>(null)
@@ -529,19 +533,6 @@ function App() {
     setSelectedTaskId(null)
     setPrompt(task.prompt)
     focusComposer()
-  }
-
-  function updateSettingsPref<K extends keyof SettingsPrefs>(key: K, value: SettingsPrefs[K]) {
-    setSettingsPrefs((current) => ({ ...current, [key]: value }))
-  }
-
-  function handleAddSettingsRule(rule: string) {
-    const nextRule = rule.trim()
-    if (!nextRule) return
-    setSettingsPrefs((current) => ({
-      ...current,
-      rules: current.rules.includes(nextRule) ? current.rules : [...current.rules, nextRule]
-    }))
   }
 
   function insertFileContext(file: WorkspaceFile) {
