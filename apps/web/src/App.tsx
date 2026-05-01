@@ -2,26 +2,21 @@ import {
   Archive,
   ArchiveRestore,
   BarChart3,
-  Bot,
   Brain,
   CheckCircle2,
   ChevronDown,
   Circle,
-  Clock3,
   Database,
-  ExternalLink,
   FileArchive,
   FileText,
   Folder,
   FolderSync,
   FolderOpen,
-  FolderPlus,
   Globe2,
   Hammer,
   Languages,
   Loader2,
   MessageSquarePlus,
-  PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
@@ -39,11 +34,11 @@ import {
   Tags,
   Trash2,
   Upload,
-  User,
   Wrench,
   XCircle
 } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { AppSidebar } from './features/layout/AppSidebar'
 import { usePanelLayout } from './features/layout/usePanelLayout'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
@@ -97,7 +92,6 @@ import { mergeStreamedTask } from './features/chat/taskState'
 import { useTaskContext } from './features/chat/useTaskContext'
 import { useTaskStream, type TaskStreamStatus } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
-import { SidebarWorkspaceNode } from './features/workspace/SidebarWorkspaceNode'
 import { ProjectsView } from './features/workspace/ProjectsView'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
@@ -804,177 +798,61 @@ function App() {
         </button>
       )}
 
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">
-            <Bot size={19} />
-          </div>
-          <div className="brand-copy">
-            <strong>Hermes Cowork</strong>
-            <span>本机智能体工作台</span>
-          </div>
-          <button
-            type="button"
-            className="icon-button sidebar-collapse-button"
-            title="隐藏左侧导航"
-            aria-label="隐藏左侧导航"
-            onClick={() => setLeftSidebarCollapsed(true)}
-          >
-            <PanelLeftClose size={15} />
-          </button>
-        </div>
-
-        <button
-          className="primary-nav"
-          onClick={() => {
-            setViewMode('tasks')
-            setSelectedTaskId(null)
-            focusComposer()
-          }}
-        >
-          <MessageSquarePlus size={17} />
-          新建任务
-        </button>
-
-        <div className="sidebar-section workspace-tree-section">
-          <div className="section-title">
-            <span>工作区</span>
-            <button
-              className="icon-button"
-              title="新增工作区：选择一个新的本机文件夹授权给 Hermes"
-              aria-label="新增工作区"
-              onClick={() => void handleAuthorizeWorkspace()}
-              disabled={workspacePicking}
-            >
-              {workspacePicking ? <Loader2 size={15} className="spin" /> : <FolderPlus size={15} />}
-            </button>
-          </div>
-          <div className="workspace-tree-list">
-            {sidebarWorkspaceGroups.map((group) => (
-              <SidebarWorkspaceNode
-                key={group.workspace.id}
-                workspace={group.workspace}
-                tasks={group.tasks}
-                archivedTasks={group.archivedTasks}
-                activeWorkspace={group.workspace.id === selectedWorkspaceId && viewMode === 'projects'}
-                activeTaskId={selectedTaskId ?? null}
-                onOpenWorkspace={() => {
-                  setSelectedWorkspaceId(group.workspace.id)
-                  setSelectedTaskId(null)
-                  setViewMode('projects')
-                }}
-                onOpenTask={(task) => {
-                  setSelectedWorkspaceId(task.workspaceId)
-                  setSelectedTaskId(task.id)
-                  setViewMode('tasks')
-                }}
-                onArchiveTask={(task) => void handleArchiveTask(task)}
-                onDeleteTask={(task) => void handleDeleteTask(task)}
-                onReveal={() => {
-                  setSelectedWorkspaceId(group.workspace.id)
-                  void handleRevealWorkspace(group.workspace)
-                }}
-                onRename={() => void handleRenameWorkspace(group.workspace)}
-                onReauthorize={() => void handleReauthorizeWorkspace(group.workspace)}
-                onRemove={() => void handleRemoveWorkspace(group.workspace)}
-                updating={workspaceUpdatingId === group.workspace.id}
-              />
-            ))}
-            {!sidebarWorkspaceGroups.length && (
-              <p className="empty-copy">先选择一个文件夹授权给 Hermes。</p>
-            )}
-          </div>
-        </div>
-
-        <div className="sidebar-nav-group">
-          <button
-            className={viewMode === 'skills' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => {
-              setViewMode('skills')
-              void refreshSkills().catch(() => undefined)
-              void refreshHermesMcp()
-            }}
-          >
-            <Hammer size={17} />
-            技能
-          </button>
-
-          <button
-            className={viewMode === 'scheduled' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => setViewMode('scheduled')}
-          >
-            <Clock3 size={17} />
-            定时任务
-          </button>
-
-          <button
-            className={viewMode === 'dispatch' ? 'secondary-nav active' : 'secondary-nav'}
-            onClick={() => setViewMode('dispatch')}
-          >
-            <Globe2 size={17} />
-            调度
-          </button>
-        </div>
-
-        <div className="sidebar-foot">
-          {accountMenuOpen && (
-            <div className="account-popover">
-              <div className="account-popover-user">
-                <div className="account-avatar">
-                  <User size={16} />
-                </div>
-                <strong>Lucas</strong>
-              </div>
-              <button
-                onClick={() => {
-                  setSettingsTab('account')
-                  setSettingsOpen(true)
-                  setAccountMenuOpen(false)
-                }}
-              >
-                管理账号
-                <ExternalLink size={13} />
-              </button>
-              <button>
-                <span>语言</span>
-                <em>{language}</em>
-                <ChevronDown size={13} />
-              </button>
-              <button>
-                <span>主题</span>
-                <em>{theme}</em>
-                <ChevronDown size={13} />
-              </button>
-              <button
-                onClick={() => {
-                  setSettingsOpen(true)
-                  setAccountMenuOpen(false)
-                }}
-              >
-                设置
-              </button>
-              <button className="account-logout" onClick={() => setAccountMenuOpen(false)}>
-                退出登录
-              </button>
-            </div>
-          )}
-          <button
-            className="sidebar-user-button"
-            title="账号与设置"
-            aria-label="账号与设置"
-            onClick={() => setAccountMenuOpen((open) => !open)}
-          >
-            <span className="account-avatar">
-              <User size={15} />
-            </span>
-            <strong>Lucas</strong>
-            <span className="local-badge">本机</span>
-            <span className="sidebar-settings-cue">
-              <Settings size={13} />
-            </span>
-          </button>
-        </div>
-      </aside>
+      <AppSidebar
+        viewMode={viewMode}
+        selectedWorkspaceId={selectedWorkspaceId}
+        selectedTaskId={selectedTaskId}
+        sidebarWorkspaceGroups={sidebarWorkspaceGroups}
+        workspacePicking={workspacePicking}
+        workspaceUpdatingId={workspaceUpdatingId}
+        accountMenuOpen={accountMenuOpen}
+        language={language}
+        theme={theme}
+        onCollapse={() => setLeftSidebarCollapsed(true)}
+        onNewTask={() => {
+          setViewMode('tasks')
+          setSelectedTaskId(null)
+          focusComposer()
+        }}
+        onAuthorizeWorkspace={() => void handleAuthorizeWorkspace()}
+        onOpenWorkspace={(workspace) => {
+          setSelectedWorkspaceId(workspace.id)
+          setSelectedTaskId(null)
+          setViewMode('projects')
+        }}
+        onOpenTask={(task) => {
+          setSelectedWorkspaceId(task.workspaceId)
+          setSelectedTaskId(task.id)
+          setViewMode('tasks')
+        }}
+        onArchiveTask={(task) => void handleArchiveTask(task)}
+        onDeleteTask={(task) => void handleDeleteTask(task)}
+        onRevealWorkspace={(workspace) => {
+          setSelectedWorkspaceId(workspace.id)
+          void handleRevealWorkspace(workspace)
+        }}
+        onRenameWorkspace={(workspace) => void handleRenameWorkspace(workspace)}
+        onReauthorizeWorkspace={(workspace) => void handleReauthorizeWorkspace(workspace)}
+        onRemoveWorkspace={(workspace) => void handleRemoveWorkspace(workspace)}
+        onOpenSkills={() => {
+          setViewMode('skills')
+          void refreshSkills().catch(() => undefined)
+          void refreshHermesMcp()
+        }}
+        onOpenScheduled={() => setViewMode('scheduled')}
+        onOpenDispatch={() => setViewMode('dispatch')}
+        onOpenAccountSettings={() => {
+          setSettingsTab('account')
+          setSettingsOpen(true)
+          setAccountMenuOpen(false)
+        }}
+        onOpenSettings={() => {
+          setSettingsOpen(true)
+          setAccountMenuOpen(false)
+        }}
+        onCloseAccountMenu={() => setAccountMenuOpen(false)}
+        onToggleAccountMenu={() => setAccountMenuOpen((open) => !open)}
+      />
 
       <main className={viewMode === 'tasks' ? 'workspace-main' : 'skills-main'}>
         {viewMode === 'skills' ? (
