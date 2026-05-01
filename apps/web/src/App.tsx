@@ -65,6 +65,7 @@ import {
 import { useModelState } from './features/settings/useModelState'
 import { useModelConfigForm } from './features/settings/useModelConfigForm'
 import { useMcpState } from './features/settings/useMcpState'
+import { useHermesRuntimeState } from './features/settings/useHermesRuntimeState'
 import { SettingsModal } from './features/settings/SettingsModal'
 import {
   defaultSettingsPrefs,
@@ -119,23 +120,14 @@ import {
   configureHermesReasoning,
   deleteHermesModelProvider,
   deleteModel,
-  getHermesRuntime,
-  getHermesSessions,
-  getHermesUpdateStatus,
   HermesMcpConfig,
   HermesMcpRecommendations,
   HermesReasoningConfigureRequest,
-  HermesSessionSummary,
-  HermesAutoUpdateResult,
-  HermesCompatibilityTestResult,
-  HermesUpdateStatus,
   getState,
   HermesRuntime,
   Message,
   ModelOption,
   revealArtifact,
-  runHermesAutoUpdate,
-  runHermesCompatibilityTest,
   setHermesDefaultModel,
   setHermesFallbackProviders,
   selectModel,
@@ -307,17 +299,24 @@ function App() {
   const [selectedTaskTag, setSelectedTaskTag] = useState('all')
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [uploadNotice, setUploadNotice] = useState<string | null>(null)
-  const [runtime, setRuntime] = useState<HermesRuntime | null>(null)
-  const [hermesUpdate, setHermesUpdate] = useState<HermesUpdateStatus | null>(null)
-  const [hermesUpdateLoading, setHermesUpdateLoading] = useState(false)
-  const [hermesUpdateError, setHermesUpdateError] = useState<string | null>(null)
-  const [hermesCompatibilityResult, setHermesCompatibilityResult] = useState<HermesCompatibilityTestResult | null>(null)
-  const [hermesCompatibilityRunning, setHermesCompatibilityRunning] = useState(false)
-  const [hermesCompatibilityError, setHermesCompatibilityError] = useState<string | null>(null)
-  const [hermesAutoUpdateResult, setHermesAutoUpdateResult] = useState<HermesAutoUpdateResult | null>(null)
-  const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
-  const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
-  const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
+  const {
+    runtime,
+    hermesUpdate,
+    hermesUpdateLoading,
+    hermesUpdateError,
+    hermesCompatibilityResult,
+    hermesCompatibilityRunning,
+    hermesCompatibilityError,
+    hermesAutoUpdateResult,
+    hermesAutoUpdating,
+    hermesAutoUpdateError,
+    hermesSessions,
+    refreshRuntime,
+    refreshHermesUpdateStatus,
+    handleRunHermesCompatibilityTest,
+    handleRunHermesAutoUpdate,
+    refreshHermesSessions
+  } = useHermesRuntimeState({ onRuntimeError: setError })
   const [mcpMarketplaceOpen, setMcpMarketplaceOpen] = useState(false)
   const [manualMcpOpen, setManualMcpOpen] = useState(false)
   const [editingMcp, setEditingMcp] = useState<HermesMcpConfig['servers'][number] | null>(null)
@@ -996,67 +995,6 @@ function App() {
       await revealWorkspaceFile(selectedWorkspace.id, file.relativePath)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function refreshRuntime() {
-    try {
-      setRuntime(await getHermesRuntime())
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-
-  async function refreshHermesUpdateStatus() {
-    setHermesUpdateLoading(true)
-    setHermesUpdateError(null)
-    try {
-      setHermesUpdate(await getHermesUpdateStatus())
-    } catch (cause) {
-      setHermesUpdateError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesUpdateLoading(false)
-    }
-  }
-
-  async function handleRunHermesCompatibilityTest() {
-    setHermesCompatibilityRunning(true)
-    setHermesCompatibilityError(null)
-    try {
-      const result = await runHermesCompatibilityTest()
-      setHermesCompatibilityResult(result)
-      if (result.status === 'passed') {
-        setHermesAutoUpdateResult(null)
-      }
-      await refreshHermesUpdateStatus()
-    } catch (cause) {
-      setHermesCompatibilityError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesCompatibilityRunning(false)
-    }
-  }
-
-  async function handleRunHermesAutoUpdate() {
-    setHermesAutoUpdating(true)
-    setHermesAutoUpdateError(null)
-    try {
-      const result = await runHermesAutoUpdate()
-      setHermesAutoUpdateResult(result)
-      setHermesCompatibilityResult(result.postTest ?? result.preTest)
-      await refreshHermesUpdateStatus()
-    } catch (cause) {
-      setHermesAutoUpdateError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setHermesAutoUpdating(false)
-    }
-  }
-
-  async function refreshHermesSessions() {
-    try {
-      const response = await getHermesSessions()
-      setHermesSessions(response.sessions)
-    } catch {
-      setHermesSessions([])
     }
   }
 

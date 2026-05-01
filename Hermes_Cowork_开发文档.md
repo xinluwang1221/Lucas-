@@ -691,6 +691,12 @@ HC_EVENT\t
 - 负责 Hermes 版本检查、升级结论、复测结果、自动更新结果、诊断详情和 GitHub 入口展示。
 - 后续修复“升级前复测”“自动更新按钮状态”“旧失败信息残留”“诊断信息过多”等问题时，优先改这里和 `apps/api/src/hermes_runtime.ts`。
 
+`apps/web/src/features/settings/useHermesRuntimeState.ts`
+
+- Hermes runtime、版本更新、兼容性复测、自动更新和 Hermes session 数据 hook，已从 `App.tsx` 抽离。
+- 负责读取 runtime 信息、刷新升级状态、执行升级前后复测、触发自动更新、同步 Hermes sessions 给任务选择逻辑。
+- 后续修复“后台更新页状态不一致”“自动更新后状态未刷新”“Hermes session 关联异常”“runtime 报错显示”等问题时，优先改这里和 `apps/api/src/hermes_update.ts` / `apps/api/src/hermes_runtime.ts`。
+
 `apps/web/src/features/skills/SkillsView.tsx`
 
 - 技能主页面模块，已从 `App.tsx` 抽离。
@@ -1258,7 +1264,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
-7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx` 和 `settingsTypes.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型和默认偏好都不再留在 `App.tsx`；后续如继续深化，再把设置 API service 和持久化迁移从总逻辑里拆出。
+7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts` 和 `useHermesRuntimeState.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态都不再留在 `App.tsx`；后续如继续深化，再把设置 API service 和持久化迁移从总逻辑里拆出。
 8. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 9. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
