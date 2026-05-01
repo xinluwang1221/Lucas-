@@ -6,11 +6,9 @@ import {
   pinTask,
   sendTaskMessage,
   setTaskTags,
-  stopTask,
-  type ModelOption,
-  type Task,
-  type Workspace
-} from '../../lib/api'
+  stopTask
+} from './chatApi'
+import type { ModelOption, Task, Workspace } from '../../lib/api'
 import type { TaskScope } from './useTaskSelection'
 
 type UseTaskActionsParams = {

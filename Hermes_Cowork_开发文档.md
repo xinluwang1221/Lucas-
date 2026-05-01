@@ -661,6 +661,12 @@ HC_EVENT\t
 - 负责发送新任务/继续已有任务、停止任务、删除任务、置顶任务、归档/恢复任务、标签切换，以及提交中/停止中的局部状态。
 - 后续修复“发送后会话选中错位”“停止按钮状态不一致”“归档和删除入口行为不统一”“标签筛选和任务状态不同步”等问题时，优先改这里。
 
+`apps/web/src/features/chat/chatApi.ts`
+
+- Chat task API service，已从 `apps/web/src/lib/api.ts` 抽离。
+- 负责创建任务、继续追问、停止、删除、置顶、归档、标签、任务导出 URL 和 SSE stream URL。
+- 后续新增“任务重试 / 恢复归档 / 多 Agent 调度任务 / 更细粒度运行控制”时，先在这里定义前端 API 边界，再由 hook 或页面消费。
+
 `apps/web/src/features/chat/taskState.ts`
 
 - 对话任务状态合并工具，已从 `App.tsx` 抽离。
@@ -1296,7 +1302,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts`、工作区动作 hook `useWorkspaceActions.ts` 和拖拽上传 hook `useWorkspaceDropzone.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
-3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
+3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts` 和 `apps/web/src/features/settings/useModelConfigForm.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态和模型配置表单都在 settings 模块；后续如继续深化，再把模型 API service 从总 `lib/api.ts` 拆出。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx` 和 `apps/web/src/features/settings/useMcpState.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP API service 从总 `lib/api.ts` 拆出。
 6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。

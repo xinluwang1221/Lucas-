@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { taskStreamUrl, type Task } from '../../lib/api'
+import { taskStreamUrl } from './chatApi'
+import type { Task } from '../../lib/api'
 
 export type TaskStreamStatus = 'idle' | 'connecting' | 'live' | 'fallback'
 

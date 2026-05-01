@@ -55,6 +55,7 @@ import {
 import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
 import { latestUserMessageId } from './features/chat/messageUtils'
 import { mergeStreamedTask } from './features/chat/taskState'
+import { taskExportUrl, tasksExportUrl } from './features/chat/chatApi'
 import { useTaskContext } from './features/chat/useTaskContext'
 import { useTaskStream } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
@@ -76,8 +77,6 @@ import {
   setHermesFallbackProviders,
   selectModel,
   Task,
-  taskExportUrl,
-  tasksExportUrl,
   Skill,
 } from './lib/api'
 import type {
