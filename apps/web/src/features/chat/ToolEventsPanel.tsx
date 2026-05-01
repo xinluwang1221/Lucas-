@@ -49,7 +49,7 @@ export function ExecutionPane({ task, tab }: { task: Task; tab: 'response' | 'to
 
 export function EventTimeline({ events, formatTime }: { events: ExecutionEvent[]; formatTime: (value: string) => string }) {
   const visible = events.filter((event) =>
-    isUserVisibleExecutionEvent(event) && ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'artifact.created', 'approval.request', 'task.completed', 'task.failed'].includes(
+    isUserVisibleExecutionEvent(event) && ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'artifact.created', 'approval.request', 'approval.resolved', 'task.completed', 'task.failed'].includes(
       event.type
     )
   )
@@ -229,6 +229,8 @@ function eventTitle(event: ExecutionEvent) {
   if (event.type === 'tool.started') return `开始工具：${event.name ?? 'tool'}`
   if (event.type === 'tool.completed') return `完成工具：${event.name ?? 'tool'}`
   if (event.type === 'artifact.created') return `生成产物：${event.name ?? '文件'}`
+  if (event.type === 'approval.request') return '等待命令确认'
+  if (event.type === 'approval.resolved') return event.choice === 'deny' ? '已拒绝命令' : '已确认命令'
   if (event.type === 'task.completed') return '任务完成'
   if (event.type === 'task.failed') return '任务失败'
   return event.type
@@ -242,6 +244,8 @@ function eventSummary(event: ExecutionEvent) {
   if (event.type === 'tool.started') return stringifyPreview(event.args, 120)
   if (event.type === 'tool.completed') return event.isError ? '工具返回错误' : String(event.result ?? '工具执行完成').slice(0, 140)
   if (event.type === 'artifact.created') return String(event.summary ?? event.relativePath ?? '文件已加入产物区')
+  if (event.type === 'approval.request') return String(event.command ?? event.summary ?? 'Hermes 请求执行命令')
+  if (event.type === 'approval.resolved') return String(event.summary ?? '命令审批已处理')
   if (event.type === 'task.completed') return 'Hermes 已返回最终结果'
   if (event.type === 'task.failed') return String(event.error ?? 'Hermes 执行失败')
   return stringifyPreview(event, 140)

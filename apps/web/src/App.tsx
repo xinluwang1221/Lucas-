@@ -22,6 +22,7 @@ import { usePanelLayout } from './features/layout/usePanelLayout'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
+import { ApprovalRequestCard } from './features/chat/ApprovalRequestCard'
 import {
   FragmentWithTrace,
   LiveExecutionPanel,
@@ -450,8 +451,10 @@ function App() {
   const {
     isSubmitting,
     stoppingTaskId,
+    approvingTaskId,
     submitPrompt,
     handleStop,
+    handleRespondApproval,
     handleDeleteTask,
     handlePinTask,
     handleArchiveTask,
@@ -896,6 +899,12 @@ function App() {
                   <span className={`stream-pill ${taskStreamStatus}`}>{taskStreamLabel(taskStreamStatus)}</span>
                 </div>
               </div>
+              <ApprovalRequestCard
+                task={selectedTask}
+                busy={approvingTaskId === selectedTask.id}
+                formatTime={formatTime}
+                onRespond={(task, choice) => void handleRespondApproval(task, choice)}
+              />
               <LiveExecutionPanel
                 task={selectedTask}
                 streamStatus={taskStreamStatus}

@@ -44,6 +44,7 @@ const taskStreamClients = new Map<string, Set<Response>>()
 const maxStoredExecutionEvents = 180
 const TASK_STREAM_BROADCAST_MS = 180
 const taskStreamBroadcastTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const approvalChoices = new Set(['once', 'session', 'always', 'deny'])
 
 function stopRunningTask(taskId: string) {
   const handle = runningTasks.get(taskId)
@@ -1278,6 +1279,38 @@ app.post('/api/tasks/:taskId/stop', (req, res) => {
   res.json({ ok: true })
 })
 
+app.post('/api/tasks/:taskId/approval', async (req, res) => {
+  const taskId = req.params.taskId
+  const choice = String((req.body as { choice?: unknown }).choice ?? '').trim()
+  if (!approvalChoices.has(choice)) {
+    res.status(400).json({ error: 'approval choice must be one of once, session, always, deny' })
+    return
+  }
+
+  const task = store.snapshot.tasks.find((item) => item.id === taskId)
+  if (!task) {
+    res.status(404).json({ error: 'task not found' })
+    return
+  }
+  if (task.status !== 'running') {
+    res.status(409).json({ error: 'task is not running' })
+    return
+  }
+
+  const handle = runningTasks.get(taskId)
+  if (!handle?.approve) {
+    res.status(409).json({ error: '当前 Hermes runtime 不支持 Cowork 内审批，请重新运行普通任务或切换到 gateway runtime。' })
+    return
+  }
+
+  try {
+    await handle.approve(choice as 'once' | 'session' | 'always' | 'deny')
+    res.json({ ok: true })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
 app.post('/api/tasks/:taskId/pin', (req, res) => {
   const { pinned } = req.body as { pinned?: boolean }
   let updated: Task | undefined
@@ -1915,8 +1948,8 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
   const event = normalizeBridgeEvent(bridgeEvent)
   let changed = false
   const now = new Date().toISOString()
-  const approvalBlocked = event.type === 'approval.request'
-  if (approvalBlocked) {
+  const approvalRequiresFallbackStop = event.type === 'approval.request' && !runningTasks.get(taskId)?.approve
+  if (approvalRequiresFallbackStop) {
     stopRunningTask(taskId)
   }
 
@@ -1928,8 +1961,9 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
       task.stdout = `${task.stdout ?? ''}${bridgeEvent.text}`
       changed = true
     }
-    if (approvalBlocked) {
-      const message = approvalRequestMessage(event)
+
+    if (approvalRequiresFallbackStop) {
+      const message = `${approvalRequestMessage(event)} 当前运行通道不能继续审批，本轮已停止；请重新运行普通任务以使用 gateway 审批。`
       const failedEvent = enrichExecutionEvent({
         id: crypto.randomUUID(),
         type: 'task.failed',
@@ -1986,7 +2020,7 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
 function approvalRequestMessage(event: ExecutionEvent) {
   const command = String(event.command ?? '').replace(/\s+/g, ' ').trim()
   const shortCommand = command ? ` 请求命令：${sanitizeHermesRuntimeMessage(command).slice(0, 120)}` : ''
-  return `Hermes 请求执行需要人工审批的命令，Cowork 当前不能代为确认。本轮已停止，避免任务无限等待。${shortCommand}`
+  return `Hermes 请求执行需要人工审批的命令。${shortCommand}`
 }
 
 async function readTaskContextSnapshot(task: Task, workspacePath?: string): Promise<HermesContextSnapshot> {
@@ -2209,6 +2243,22 @@ function enrichExecutionEvent(event: ExecutionEvent): ExecutionEvent {
       ...event,
       category: 'result',
       summary: eventPrimaryText(event) || '用户已停止当前 Hermes 任务'
+    }
+  }
+
+  if (event.type === 'approval.request') {
+    return {
+      ...event,
+      category: 'approval',
+      summary: eventPrimaryText(event) || 'Hermes 请求人工确认命令'
+    }
+  }
+
+  if (event.type === 'approval.resolved') {
+    return {
+      ...event,
+      category: 'approval',
+      summary: eventPrimaryText(event) || '命令审批已处理'
     }
   }
 
@@ -2596,7 +2646,7 @@ function buildExecutionActivity(task: Task): ExecutionActivity[] {
   const events = taskRunEvents(task)
     .filter(shouldStoreExecutionEvent)
     .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'task.completed', 'task.stopped', 'task.failed'].includes(
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
       )
     )
@@ -2748,9 +2798,19 @@ function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
   if (event.type === 'approval.request') {
     return {
       id: event.id,
-      kind: 'error',
+      kind: 'status',
       title: '需要人工确认',
       detail: approvalRequestMessage(event),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'approval.resolved') {
+    return {
+      id: event.id,
+      kind: event.choice === 'deny' ? 'stopped' : 'status',
+      title: event.choice === 'deny' ? '已拒绝命令' : '已确认命令',
+      detail: eventPrimaryText(event) || '命令审批已处理',
       createdAt: event.createdAt,
       source: event.synthetic ? 'synthetic' : 'hermes'
     }

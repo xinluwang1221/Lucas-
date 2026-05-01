@@ -46,7 +46,7 @@ export type HermesGatewayTaskParams = {
   onEvent?: (event: HermesBridgeEvent) => void
   onStdout?: (chunk: string, accumulated: string) => void
   onStderr?: (chunk: string, accumulated: string) => void
-  onHandle?: (handle: { kind: string; stop: () => void }) => void
+  onHandle?: (handle: { kind: string; stop: () => void; approve?: (choice: 'once' | 'session' | 'always' | 'deny') => Promise<void> }) => void
 }
 
 class HermesGatewayClient extends EventEmitter {
@@ -262,6 +262,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
   let lastEventAt = Date.now()
   let reasoningNoticeIndex = 0
   let lastReasoningNoticeAt = 0
+  let approvalPending = false
   const events: HermesBridgeEvent[] = []
   let removeListener: (() => void) | undefined
 
@@ -295,6 +296,18 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
       kind: 'tui-gateway',
       stop: () => {
         void gateway.call('session.interrupt', { session_id: gatewaySessionId }, 5000).catch(() => undefined)
+      },
+      approve: async (choice) => {
+        await gateway.call('approval.respond', { session_id: gatewaySessionId, choice }, 15000)
+        approvalPending = false
+        lastEventAt = Date.now()
+        emit({
+          type: 'approval.resolved',
+          choice,
+          summary: approvalChoiceSummary(choice),
+          sessionId: hermesSessionId,
+          gatewaySessionId
+        })
       }
     })
     emit({
@@ -345,6 +358,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
       }
 
       if (event.type === 'message.complete') {
+        approvalPending = false
         finalResponse = typeof event.text === 'string' ? event.text : stdout.trim()
         stdout = finalResponse || stdout
         const usageEvent = contextEventFromUsage(event.usage, hermesSessionId)
@@ -361,10 +375,15 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
       }
 
       if (event.type === 'error') {
+        approvalPending = false
         bridgeError = String(event.message ?? event.summary ?? 'Hermes gateway 执行失败')
         emit({ type: 'task.failed', error: bridgeError, sessionId: hermesSessionId })
         settled = true
         return
+      }
+
+      if (event.type === 'approval.request') {
+        approvalPending = true
       }
 
       emit(event)
@@ -391,6 +410,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
       getError: () => bridgeError,
       getStderr: gateway.lastStderr.bind(gateway),
       getLastEventAt: () => lastEventAt,
+      isWaitingForApproval: () => approvalPending,
       onIdleNotice: (idleMs) => {
         emit({
           type: 'status',
@@ -443,6 +463,7 @@ function waitForGatewayTurn(options: {
   getError: () => string
   getStderr: () => string
   getLastEventAt: () => number
+  isWaitingForApproval?: () => boolean
   onIdleNotice?: (idleMs: number) => void
 }): Promise<{ stderr: string; timedOut: boolean; timeoutMessage?: string }> {
   return new Promise((resolve) => {
@@ -458,6 +479,18 @@ function waitForGatewayTurn(options: {
       if (error) {
         clearInterval(timer)
         resolve({ stderr: options.getStderr(), timedOut: false })
+        return
+      }
+      if (Date.now() - startedAt > 1000 * 60 * 60) {
+        clearInterval(timer)
+        resolve({
+          stderr: `${options.getStderr()}\nHermes gateway turn timed out`.trim(),
+          timedOut: true,
+          timeoutMessage: 'Hermes gateway turn timed out'
+        })
+        return
+      }
+      if (options.isWaitingForApproval?.()) {
         return
       }
       const now = Date.now()
@@ -476,16 +509,17 @@ function waitForGatewayTurn(options: {
         })
         return
       }
-      if (Date.now() - startedAt > 1000 * 60 * 60) {
-        clearInterval(timer)
-        resolve({
-          stderr: `${options.getStderr()}\nHermes gateway turn timed out`.trim(),
-          timedOut: true,
-          timeoutMessage: 'Hermes gateway turn timed out'
-        })
-      }
     }, 100)
   })
+}
+
+function approvalChoiceSummary(choice: 'once' | 'session' | 'always' | 'deny') {
+  return {
+    once: '已允许本次命令，Hermes 将继续执行。',
+    session: '已允许本会话同类命令，Hermes 将继续执行。',
+    always: '已长期允许同类命令，Hermes 将继续执行。',
+    deny: '已拒绝执行该命令，Hermes 将停止或改走其他方案。'
+  }[choice]
 }
 
 function numberEnv(name: string, fallback: number) {

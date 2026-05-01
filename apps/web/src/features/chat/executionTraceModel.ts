@@ -141,7 +141,7 @@ export function executionTraceRows(task: Task): TraceRow[] {
 
   const rows = taskRunEvents(task)
     .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'task.completed', 'task.stopped', 'task.failed'].includes(
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
       )
     )
@@ -222,9 +222,18 @@ export function executionTraceRows(task: Task): TraceRow[] {
       if (event.type === 'approval.request') {
         return {
           id: event.id,
-          kind: 'error',
+          kind: 'status',
           title: '需要人工确认',
           detail: approvalRequestMessage(event),
+          createdAt: event.createdAt
+        }
+      }
+      if (event.type === 'approval.resolved') {
+        return {
+          id: event.id,
+          kind: event.choice === 'deny' ? 'stopped' : 'status',
+          title: event.choice === 'deny' ? '已拒绝命令' : '已确认命令',
+          detail: eventSummary(event) || '命令审批已处理',
           createdAt: event.createdAt
         }
       }
@@ -746,8 +755,8 @@ function isDisplayableThinkingText(value: string) {
 function approvalRequestMessage(event: ExecutionEvent) {
   const command = String(event.command ?? '').replace(/\s+/g, ' ').trim()
   return command
-    ? `Hermes 请求执行需要人工确认的命令，Cowork 已停止本轮以避免无限等待。${command.slice(0, 120)}`
-    : 'Hermes 请求执行需要人工确认的命令，Cowork 已停止本轮以避免无限等待。'
+    ? `Hermes 请求执行需要人工确认的命令。${command.slice(0, 120)}`
+    : 'Hermes 请求执行需要人工确认的命令。'
 }
 
 function taskRunEvents(task: Task) {

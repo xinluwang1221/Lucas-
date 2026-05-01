@@ -1,5 +1,5 @@
 import { apiUrl, jsonHeaders, request } from '../../lib/http'
-import type { Task } from '../../lib/api'
+import type { ApprovalChoice, Task } from '../../lib/api'
 
 export async function createTask(
   workspaceId: string,
@@ -34,6 +34,14 @@ export async function sendTaskMessage(
 
 export async function stopTask(taskId: string) {
   return request(`/api/tasks/${taskId}/stop`, { method: 'POST' })
+}
+
+export async function respondTaskApproval(taskId: string, choice: ApprovalChoice) {
+  return request(`/api/tasks/${taskId}/approval`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ choice })
+  })
 }
 
 export async function deleteTask(taskId: string) {

@@ -75,6 +75,9 @@ export type ExecutionEvent = {
   type: string
   createdAt: string
   name?: string
+  command?: string
+  description?: string
+  choice?: ApprovalChoice
   message?: string
   kind?: string
   iteration?: number
@@ -86,6 +89,8 @@ export type ExecutionEvent = {
   text?: string
   [key: string]: unknown
 }
+
+export type ApprovalChoice = 'once' | 'session' | 'always' | 'deny'
 
 export type Task = {
   id: string

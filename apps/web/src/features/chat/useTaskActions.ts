@@ -4,11 +4,12 @@ import {
   createTask,
   deleteTask,
   pinTask,
+  respondTaskApproval,
   sendTaskMessage,
   setTaskTags,
   stopTask
 } from './chatApi'
-import type { ModelOption, Task, Workspace } from '../../lib/api'
+import type { ApprovalChoice, ModelOption, Task, Workspace } from '../../lib/api'
 import type { TaskScope } from './useTaskSelection'
 
 type UseTaskActionsParams = {
@@ -46,6 +47,7 @@ export function useTaskActions({
 }: UseTaskActionsParams) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
+  const [approvingTaskId, setApprovingTaskId] = useState<string | null>(null)
 
   const submitPrompt = useCallback(async () => {
     const nextPrompt = prompt.trim()
@@ -98,6 +100,23 @@ export function useTaskActions({
       }
     },
     [refresh, setError, stoppingTaskId]
+  )
+
+  const handleRespondApproval = useCallback(
+    async (task: Task, choice: ApprovalChoice) => {
+      if (approvingTaskId) return
+      try {
+        setApprovingTaskId(task.id)
+        setError(null)
+        await respondTaskApproval(task.id, choice)
+        await refresh()
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      } finally {
+        setApprovingTaskId(null)
+      }
+    },
+    [approvingTaskId, refresh, setError]
   )
 
   const handleDeleteTask = useCallback(
@@ -165,8 +184,10 @@ export function useTaskActions({
   return {
     isSubmitting,
     stoppingTaskId,
+    approvingTaskId,
     submitPrompt,
     handleStop,
+    handleRespondApproval,
     handleDeleteTask,
     handlePinTask,
     handleArchiveTask,
