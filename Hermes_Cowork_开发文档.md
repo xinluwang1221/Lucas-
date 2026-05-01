@@ -294,7 +294,8 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 │       │       ├── sidebar.css
 │       │       ├── settings.css
 │       │       ├── shell.css
-│       │       └── tokens.css
+│       │       ├── tokens.css
+│       │       └── workspace.css
 │       ├── tsconfig.json
 │       └── vite.config.ts
 ├── data
@@ -648,6 +649,12 @@ HC_EVENT\t
 - 设置区样式第一刀，已从 `app.css` 抽离。
 - 负责设置弹窗、模型设置、MCP 设置、市场弹窗、模型配置弹窗和通用 modal 外壳。
 - 当前少量设置弹窗响应式规则仍保留在 `app.css` 的全局断点里，后续做响应式规则归位时再迁入。
+
+`apps/web/src/styles/workspace.css`
+
+- 工作区样式第一刀，已从 `app.css` 抽离。
+- 负责工作区主容器、工作区文件页、目录浏览器、工作区切换卡片、工作区空状态和项目页通用壳。
+- 当前少量工作区响应式规则仍保留在 `app.css` 的全局断点里，后续做响应式规则归位时再迁入。
 
 ## 6. 本地数据结构
 
@@ -1125,7 +1132,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx` 和 `messageUtils.ts`；后续如继续深化，再把 chat 数据订阅/任务选择逻辑拆成 hook/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化和 MiMo 版本分组都在这个模块；后续如继续深化，再把模型状态请求和保存流程拆成 `modelsApi` / hook。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关和 Connectors 摘要都在这个模块；后续如继续深化，再把 MCP API 请求和市场搜索状态拆成 `mcpApi` / hook。
-6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`；`app.css` 继续作为业务组件样式入口。下一步可拆 `workspace.css` 和 `file-preview.css`。
+6. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`；`app.css` 继续作为业务组件样式入口。下一步可拆 `file-preview.css`，并逐步把全局响应式断点归位。
 7. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
