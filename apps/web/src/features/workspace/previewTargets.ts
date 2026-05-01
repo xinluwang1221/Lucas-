@@ -1,4 +1,5 @@
-import { artifactRawUrl, type Artifact, type WorkspaceFile } from '../../lib/api'
+import { artifactRawUrl } from '../file-preview/artifactApi'
+import type { Artifact, WorkspaceFile } from '../../lib/api'
 import type { FilePreviewTarget } from '../file-preview/FilePreviewPanel'
 import { workspaceFileRawUrl } from './workspaceApi'
 

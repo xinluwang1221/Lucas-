@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { previewArtifact, type Artifact, type WorkspaceFile } from '../../lib/api'
+import { previewArtifact } from './artifactApi'
+import type { Artifact, WorkspaceFile } from '../../lib/api'
 import { previewWorkspaceFile } from '../workspace/workspaceApi'
 import { artifactPreviewTarget, previewRawUrl, workspacePreviewTarget } from '../workspace/previewTargets'
 import {

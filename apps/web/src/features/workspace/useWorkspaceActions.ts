@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Artifact } from '../../lib/api'
-import { revealArtifact } from '../../lib/api'
+import { revealArtifact } from '../file-preview/artifactApi'
 import type { FilePreviewTarget } from '../file-preview/FilePreviewPanel'
 import {
   addWorkspace,

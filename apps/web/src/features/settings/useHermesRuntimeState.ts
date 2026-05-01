@@ -4,12 +4,14 @@ import {
   getHermesSessions,
   getHermesUpdateStatus,
   runHermesAutoUpdate,
-  runHermesCompatibilityTest,
-  type HermesAutoUpdateResult,
-  type HermesCompatibilityTestResult,
-  type HermesRuntime,
-  type HermesSessionSummary,
-  type HermesUpdateStatus
+  runHermesCompatibilityTest
+} from './runtimeApi'
+import type {
+  HermesAutoUpdateResult,
+  HermesCompatibilityTestResult,
+  HermesRuntime,
+  HermesSessionSummary,
+  HermesUpdateStatus
 } from '../../lib/api'
 
 function errorMessage(cause: unknown) {

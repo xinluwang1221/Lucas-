@@ -531,6 +531,12 @@ HC_EVENT\t
 - 负责打开任务产物预览、打开工作区文件预览、inline 文件直接就绪、文本预览请求、预览错误状态和关闭预览。
 - 后续做“主流文件高保真预览”“可编辑文件”“预览刷新/保存后回写”时，优先从这里扩展预览状态机。
 
+`apps/web/src/features/file-preview/artifactApi.ts`
+
+- 任务产物 API service，已从 `apps/web/src/lib/api.ts` 抽离。
+- 负责 artifact 下载 URL、raw URL、Finder reveal 和正文预览请求。
+- 后续扩展“产物重命名 / 产物删除 / 产物版本 / 文件编辑后的产物刷新”时，先在这里确认 API 边界，再由 file-preview、workspace 和右侧任务产物卡消费。
+
 `apps/web/src/features/markdown/MarkdownContent.tsx`
 
 - Markdown 渲染模块，已从 `App.tsx` 抽离。
@@ -655,6 +661,12 @@ HC_EVENT\t
 - 负责读取 Hermes context snapshot、上下文加载/错误/压缩状态、手动刷新和手动压缩。
 - 后续修复“上下文资源和本轮过程资源重叠”“上下文中文件占比不清楚”“压缩后资源区不同步”等问题时，优先改这里和 `TaskInspectorCards.tsx`。
 
+`apps/web/src/features/chat/taskContextApi.ts`
+
+- 任务上下文 API service，已从 `apps/web/src/lib/api.ts` 抽离。
+- 负责读取 Hermes context snapshot 和触发当前任务上下文压缩。
+- 后续扩展“手动压缩策略 / 文件占比明细 / 上下文资源实时刷新 / 压缩历史”时，先在这里确认 API 边界，再由 `useTaskContext.ts` 和 `TaskInspectorCards.tsx` 消费。
+
 `apps/web/src/features/chat/useTaskActions.ts`
 
 - 对话任务动作 hook，已从 `App.tsx` 抽离。
@@ -751,6 +763,12 @@ HC_EVENT\t
 - 负责读取 runtime 信息、刷新升级状态、执行升级前后复测、触发自动更新、同步 Hermes sessions 给任务选择逻辑。
 - 后续修复“后台更新页状态不一致”“自动更新后状态未刷新”“Hermes session 关联异常”“runtime 报错显示”等问题时，优先改这里和 `apps/api/src/hermes_update.ts` / `apps/api/src/hermes_runtime.ts`。
 
+`apps/web/src/features/settings/runtimeApi.ts`
+
+- Hermes runtime / 更新 API service，已从 `apps/web/src/lib/api.ts` 抽离。
+- 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新和 Hermes session 索引。
+- 后续扩展“后端 managed runtime 安装 / 版本锁定 / 回滚 / 多电脑迁移检查”时，先在这里确认 API 边界，再由 `useHermesRuntimeState.ts` 和 `HermesUpdatePanel.tsx` 消费。
+
 `apps/web/src/features/skills/SkillsView.tsx`
 
 - 技能主页面模块，已从 `App.tsx` 抽离。
@@ -769,6 +787,12 @@ HC_EVENT\t
 - 负责 Skill 列表刷新、启用/停用、上传、打开 Skill、读取 Skill 文件、选择 `SKILL.md` 或子文件，以及 Skill 详情弹窗状态。
 - 后续修复“skill 区域文件不完整”“点击 skill 后看不到 skill.md 和子文件”“skill 启用状态不同步”等问题时，优先改这里。
 
+`apps/web/src/features/skills/skillsApi.ts`
+
+- Skills API service，已从 `apps/web/src/lib/api.ts` 抽离。
+- 负责 Skill 列表、启停、上传、文件树读取和 Skill 文件内容读取。
+- 后续扩展“skill 文件编辑 / skill 版本 / skill 市场安装 / 运行前预载策略”时，先在这里确认 API 边界，再由 `useSkillsState.ts` 和技能页面消费。
+
 `apps/web/src/features/skills/skillFormatters.ts`
 
 - 技能区格式化和小工具模块，已从 `App.tsx` 抽离。
@@ -783,8 +807,8 @@ HC_EVENT\t
 
 `apps/web/src/lib/api.ts`
 
-- 前端 API client。
-- 类型定义。
+- 前后端共享协议类型和全局 `getState()`。
+- feature 相关请求已经迁入对应 feature API service；后续不要把模型、MCP、Skill、文件预览、任务执行、runtime 等请求重新加回这里，除非它是跨全应用的共享状态入口。
 
 `apps/web/src/styles/app.css`
 
@@ -1312,13 +1336,13 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 工程稳定阶段拆分顺序：
 
-1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
+1. 已完成第一刀：`file-preview`。前端拆出 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`、`apps/web/src/features/file-preview/useFilePreview.ts`、`apps/web/src/features/file-preview/artifactApi.ts` 和 `apps/web/src/features/markdown/MarkdownContent.tsx`；后端拆出 `apps/api/src/file_preview.ts`。
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts`、工作区动作 hook `useWorkspaceActions.ts` 和拖拽上传 hook `useWorkspaceDropzone.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
-3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
+3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts`、`taskContextApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts`、`apps/web/src/features/settings/useModelConfigForm.ts` 和 `apps/web/src/features/settings/modelApi.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态、模型配置表单和模型 API service 都在 settings 模块；后续如继续深化，再把模型 provider/form 子组件拆细。
 5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`、`apps/web/src/features/settings/useMcpState.ts` 和 `apps/web/src/features/settings/mcpApi.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP 页面大组件拆成二级 Tab 子组件。
-6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面和详情弹窗都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
-7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts` 和 `useHermesRuntimeState.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态都不再留在 `App.tsx`；后续如继续深化，再把设置 API service 和持久化迁移从总逻辑里拆出。
+6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts`、`skillsApi.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面、详情弹窗和 Skill API service 都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
+7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts`、`useHermesRuntimeState.ts` 和 `runtimeApi.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态和 runtime API service 都不再留在 `App.tsx`；后续如继续深化，再把设置持久化迁移从总逻辑里拆出。
 8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
 10. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。

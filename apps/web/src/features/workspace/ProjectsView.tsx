@@ -15,8 +15,8 @@ import {
   Upload,
   XCircle
 } from 'lucide-react'
+import { artifactDownloadUrl } from '../file-preview/artifactApi'
 import {
-  artifactDownloadUrl,
   type Artifact,
   type Task,
   type Workspace,

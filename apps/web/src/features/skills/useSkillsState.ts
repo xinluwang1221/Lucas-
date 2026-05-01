@@ -4,10 +4,9 @@ import {
   listSkills,
   readSkillFile,
   toggleSkill,
-  uploadSkill,
-  type Skill,
-  type SkillFile
-} from '../../lib/api'
+  uploadSkill
+} from './skillsApi'
+import type { Skill, SkillFile } from '../../lib/api'
 
 export function useSkillsState() {
   const [skills, setSkills] = useState<Skill[]>([])

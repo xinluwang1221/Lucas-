@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  compressTaskContext,
-  getTaskContext,
-  type HermesContextSnapshot,
-  type Task
-} from '../../lib/api'
+import { compressTaskContext, getTaskContext } from './taskContextApi'
+import type { HermesContextSnapshot, Task } from '../../lib/api'
 
 type UseTaskContextParams = {
   selectedTask?: Task

@@ -1,5 +1,5 @@
 import { Copy, Download, FileText, FolderOpen, Info, Loader2, Plus, XCircle } from 'lucide-react'
-import { artifactDownloadUrl } from '../../lib/api'
+import { artifactDownloadUrl } from './artifactApi'
 import { MarkdownContent } from '../markdown/MarkdownContent'
 
 export type Preview = {
