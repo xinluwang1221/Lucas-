@@ -13,6 +13,18 @@
   background: var(--surface-subtle);
 }
 
+.file-preview-panel.fullscreen {
+  position: fixed;
+  inset: 12px;
+  z-index: 45;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.24);
+}
+
 .file-preview-panel.compact {
   min-height: 680px;
   height: 100%;
@@ -41,6 +53,7 @@
   gap: 10px;
   align-items: center;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .file-preview-title > svg {
@@ -71,6 +84,34 @@
   margin-top: 2px;
   color: var(--ink-soft);
   font-size: 11px;
+}
+
+.file-preview-toolbar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.file-preview-toolbar .icon-button {
+  width: 30px;
+  height: 30px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.file-preview-toolbar .icon-button:hover {
+  color: var(--ink);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
+.file-preview-toolbar .icon-button.active {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 36%, var(--line));
 }
 
 .file-preview-actions {
@@ -116,6 +157,10 @@
   overflow: auto;
   padding: 18px;
   background: var(--surface-subtle);
+}
+
+.file-preview-panel.fullscreen .file-preview-surface {
+  padding: 24px;
 }
 
 .file-preview-panel.compact .file-preview-surface {
@@ -168,6 +213,11 @@
   line-height: 1.88;
 }
 
+.file-preview-panel.fullscreen .document-preview {
+  max-width: 880px;
+  min-height: calc(100vh - 162px);
+}
+
 .file-preview-panel.compact .document-preview {
   max-width: 860px;
   min-height: 760px;
@@ -198,6 +248,10 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+
+.file-preview-panel.fullscreen .embedded-preview {
+  min-height: calc(100vh - 154px);
 }
 
 .file-preview-panel.compact .embedded-preview {
@@ -273,6 +327,13 @@ audio.media-preview-player {
   border: 1px solid var(--line);
   border-radius: 7px;
   line-height: 1.7;
+}
+
+.file-preview-panel.fullscreen .markdown-preview,
+.file-preview-panel.fullscreen .text-preview,
+.file-preview-panel.fullscreen .markdown-table-wrap,
+.file-preview-panel.fullscreen .csv-table-wrap {
+  max-height: calc(100vh - 176px);
 }
 
 .markdown-preview h1,

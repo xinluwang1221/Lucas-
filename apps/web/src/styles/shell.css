@@ -44,6 +44,10 @@
   grid-template-columns: 0 minmax(720px, 1fr);
 }
 
+.app-shell.file-preview-expanded .pane-resizer-right {
+  display: none;
+}
+
 .drop-overlay {
   position: fixed;
   inset: 14px;

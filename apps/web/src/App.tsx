@@ -353,6 +353,8 @@ function App() {
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([])
   const [composerAttachmentUploading, setComposerAttachmentUploading] = useState(false)
+  const [filePreviewPinned, setFilePreviewPinned] = useState(false)
+  const [filePreviewFullscreen, setFilePreviewFullscreen] = useState(false)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('account')
@@ -415,9 +417,18 @@ function App() {
     openWorkspaceFilePreview
   } = useFilePreview({
     selectedWorkspaceId,
-    onOpen: () => setRightSidebarCollapsed(false),
+    onOpen: () => {
+      setRightSidebarCollapsed(false)
+      setFilePreviewFullscreen(false)
+    },
     onError: setError
   })
+  function handleCloseFilePreview() {
+    closeFilePreview()
+    setFilePreviewPinned(false)
+    setFilePreviewFullscreen(false)
+  }
+
   const {
     workspaceFiles,
     workspaceTree,
@@ -429,7 +440,9 @@ function App() {
   } = useWorkspaceFiles({
     selectedWorkspaceId,
     refreshKey: state.artifacts.length,
-    onWorkspaceChange: closeFilePreview
+    onWorkspaceChange: () => {
+      if (!filePreviewPinned) handleCloseFilePreview()
+    }
   })
   const {
     workspacePicking,
@@ -443,6 +456,7 @@ function App() {
     handleRevealWorkspace,
     handleRevealWorkspaceFile,
     handleRevealPreviewTarget,
+    handleOpenPreviewTarget,
     handleRevealArtifact,
     handleUsePreviewTarget
   } = useWorkspaceActions({
@@ -651,6 +665,7 @@ function App() {
         isDraggingFiles ? 'dragging-files' : '',
         viewMode !== 'tasks' ? 'skills-mode' : '',
         viewMode === 'tasks' && filePreview ? 'file-preview-mode' : '',
+        viewMode === 'tasks' && filePreviewFullscreen ? 'file-preview-expanded' : '',
         leftSidebarCollapsed ? 'left-sidebar-collapsed' : '',
         viewMode === 'tasks' && rightSidebarCollapsed ? 'right-sidebar-collapsed' : ''
       ].filter(Boolean).join(' ')}
@@ -837,10 +852,11 @@ function App() {
             onRevealFile={(file) => void handleRevealWorkspaceFile(file)}
             onOpenFolder={(path) => {
               setWorkspaceTreePath(path)
-              closeFilePreview()
+              if (!filePreviewPinned) handleCloseFilePreview()
             }}
             onWorkspaceQueryChange={setWorkspaceFileQuery}
-            onCloseFilePreview={closeFilePreview}
+            onCloseFilePreview={handleCloseFilePreview}
+            onOpenPreviewTarget={(target) => void handleOpenPreviewTarget(target)}
             onUsePreviewTarget={handleUsePreviewTarget}
             onRevealPreviewTarget={(target) => void handleRevealPreviewTarget(target)}
             onUploadClick={() => fileInputRef.current?.click()}
@@ -1074,9 +1090,14 @@ function App() {
         {filePreview ? (
           <FilePreviewPanel
             preview={filePreview}
-            onClose={closeFilePreview}
+            pinned={filePreviewPinned}
+            fullscreen={filePreviewFullscreen}
+            onClose={handleCloseFilePreview}
+            onOpenNative={(target) => void handleOpenPreviewTarget(target)}
             onUseContext={handleUsePreviewTarget}
             onReveal={(target) => void handleRevealPreviewTarget(target)}
+            onTogglePin={() => setFilePreviewPinned((current) => !current)}
+            onToggleFullscreen={() => setFilePreviewFullscreen((current) => !current)}
           />
         ) : (
           <>

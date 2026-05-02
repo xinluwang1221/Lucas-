@@ -12,6 +12,10 @@ export async function revealArtifact(artifactId: string) {
   return request(`/api/artifacts/${artifactId}/reveal`, { method: 'POST' })
 }
 
+export async function openArtifact(artifactId: string) {
+  return request(`/api/artifacts/${artifactId}/open`, { method: 'POST' })
+}
+
 export async function previewArtifact(artifactId: string): Promise<string> {
   const response = await fetch(apiUrl(`/api/artifacts/${artifactId}/preview`))
   if (!response.ok) {

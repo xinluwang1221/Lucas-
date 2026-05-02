@@ -49,6 +49,7 @@ export function ProjectsView({
   onOpenFolder,
   onWorkspaceQueryChange,
   onCloseFilePreview,
+  onOpenPreviewTarget,
   onUsePreviewTarget,
   onRevealPreviewTarget,
   onUploadClick,
@@ -76,6 +77,7 @@ export function ProjectsView({
   onOpenFolder: (path: string) => void
   onWorkspaceQueryChange: (query: string) => void
   onCloseFilePreview: () => void
+  onOpenPreviewTarget: (target: FilePreviewTarget) => void
   onUsePreviewTarget: (target: FilePreviewTarget) => void
   onRevealPreviewTarget: (target: FilePreviewTarget) => void
   onUploadClick: () => void
@@ -198,8 +200,11 @@ export function ProjectsView({
                   preview={workspaceFilePreview}
                   compact
                   onClose={onCloseFilePreview}
+                  onOpenNative={onOpenPreviewTarget}
                   onUseContext={onUsePreviewTarget}
                   onReveal={onRevealPreviewTarget}
+                  onTogglePin={() => undefined}
+                  onToggleFullscreen={() => undefined}
                 />
               ) : (
                 <>

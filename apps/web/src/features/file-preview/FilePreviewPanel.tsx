@@ -1,4 +1,18 @@
-import { Copy, Download, FileText, FolderOpen, Info, Loader2, Plus, XCircle } from 'lucide-react'
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  Info,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Pin,
+  PinOff,
+  Plus,
+  X
+} from 'lucide-react'
 import { artifactDownloadUrl } from './artifactApi'
 import { MarkdownContent } from '../markdown/MarkdownContent'
 
@@ -31,19 +45,34 @@ export type FilePreviewState = Preview & {
 export function FilePreviewPanel({
   preview,
   compact = false,
+  pinned = false,
+  fullscreen = false,
   onClose,
+  onOpenNative,
   onUseContext,
-  onReveal
+  onReveal,
+  onTogglePin,
+  onToggleFullscreen
 }: {
   preview: FilePreviewState
   compact?: boolean
+  pinned?: boolean
+  fullscreen?: boolean
   onClose: () => void
+  onOpenNative: (target: FilePreviewTarget) => void
   onUseContext: (target: FilePreviewTarget) => void
   onReveal: (target: FilePreviewTarget) => void
+  onTogglePin: () => void
+  onToggleFullscreen: () => void
 }) {
   const target = preview.target
   return (
-    <section className={compact ? 'file-preview-panel compact' : 'file-preview-panel'}>
+    <section className={[
+      'file-preview-panel',
+      compact ? 'compact' : '',
+      fullscreen ? 'fullscreen' : '',
+      pinned ? 'pinned' : ''
+    ].filter(Boolean).join(' ')}>
       <header className="file-preview-topbar">
         <div className="file-preview-title">
           <FileText size={18} />
@@ -52,19 +81,45 @@ export function FilePreviewPanel({
             <span>{target.relativePath}</span>
           </div>
         </div>
-        <button type="button" className="icon-button" title="关闭预览" onClick={onClose}>
-          <XCircle size={16} />
-        </button>
+        <div className="file-preview-toolbar" aria-label="文件预览操作">
+          <button type="button" className="icon-button" title="在本机应用中打开" onClick={() => onOpenNative(target)}>
+            <ExternalLink size={16} />
+          </button>
+          <button type="button" className="icon-button" title="在 Finder 中显示" onClick={() => onReveal(target)}>
+            <FolderOpen size={16} />
+          </button>
+          {!compact && (
+            <>
+              <button
+                type="button"
+                className={pinned ? 'icon-button active' : 'icon-button'}
+                title={pinned ? '取消固定预览' : '固定预览'}
+                aria-pressed={pinned}
+                onClick={onTogglePin}
+              >
+                {pinned ? <PinOff size={16} /> : <Pin size={16} />}
+              </button>
+              <button
+                type="button"
+                className={fullscreen ? 'icon-button active' : 'icon-button'}
+                title={fullscreen ? '退出全屏预览' : '全屏预览'}
+                aria-pressed={fullscreen}
+                onClick={onToggleFullscreen}
+              >
+                {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+            </>
+          )}
+          <button type="button" className="icon-button" title="关闭预览" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
       </header>
 
       <div className="file-preview-actions">
         <button type="button" className="ghost-button" onClick={() => onUseContext(target)}>
           <Plus size={14} />
           作为上下文
-        </button>
-        <button type="button" className="ghost-button" onClick={() => onReveal(target)}>
-          <FolderOpen size={14} />
-          Finder
         </button>
         {target.source === 'artifact' && target.artifactId && (
           <a className="ghost-button" href={artifactDownloadUrl(target.artifactId)}>

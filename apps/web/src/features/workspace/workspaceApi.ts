@@ -68,6 +68,14 @@ export async function revealWorkspaceFile(workspaceId: string, relativePath: str
   })
 }
 
+export async function openWorkspaceFile(workspaceId: string, relativePath: string) {
+  return request(`/api/workspaces/${workspaceId}/files/open`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ path: relativePath })
+  })
+}
+
 export function workspaceFileRawUrl(workspaceId: string, relativePath: string) {
   return apiUrl(`/api/workspaces/${workspaceId}/files/raw?path=${encodeURIComponent(relativePath)}`)
 }

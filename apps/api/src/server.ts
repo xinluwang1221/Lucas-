@@ -1460,6 +1460,22 @@ app.post('/api/workspaces/:workspaceId/files/reveal', (req, res) => {
   res.json({ ok: true })
 })
 
+app.post('/api/workspaces/:workspaceId/files/open', (req, res) => {
+  const workspace = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
+  const { path: relativePath } = req.body as { path?: string }
+  if (!workspace || !relativePath) {
+    res.status(404).json({ error: 'workspace or file not found' })
+    return
+  }
+  const targetPath = ensureInsideWorkspace(path.join(workspace.path, relativePath), workspace.path)
+  if (!fs.existsSync(targetPath)) {
+    res.status(404).json({ error: 'file not found' })
+    return
+  }
+  openPath(targetPath)
+  res.json({ ok: true })
+})
+
 app.post('/api/artifacts/:artifactId/reveal', (req, res) => {
   const artifact = store.snapshot.artifacts.find((item) => item.id === req.params.artifactId)
   if (!artifact || !fs.existsSync(artifact.path)) {
@@ -1467,6 +1483,16 @@ app.post('/api/artifacts/:artifactId/reveal', (req, res) => {
     return
   }
   revealPath(artifact.path)
+  res.json({ ok: true })
+})
+
+app.post('/api/artifacts/:artifactId/open', (req, res) => {
+  const artifact = store.snapshot.artifacts.find((item) => item.id === req.params.artifactId)
+  if (!artifact || !fs.existsSync(artifact.path)) {
+    res.status(404).json({ error: 'artifact not found' })
+    return
+  }
+  openPath(artifact.path)
   res.json({ ok: true })
 })
 
@@ -3039,6 +3065,11 @@ function isToolLine(line: string) {
 function revealPath(targetPath: string) {
   const args = fs.statSync(targetPath).isDirectory() ? [targetPath] : ['-R', targetPath]
   const child = spawn('open', args, { stdio: 'ignore', detached: true })
+  child.unref()
+}
+
+function openPath(targetPath: string) {
+  const child = spawn('open', [targetPath], { stdio: 'ignore', detached: true })
   child.unref()
 }
 

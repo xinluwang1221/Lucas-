@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { Artifact } from '../../lib/api'
-import { revealArtifact } from '../file-preview/artifactApi'
+import { openArtifact, revealArtifact } from '../file-preview/artifactApi'
 import type { FilePreviewTarget } from '../file-preview/FilePreviewPanel'
 import {
   addWorkspace,
   deleteWorkspace,
   pickWorkspaceDirectory,
+  openWorkspaceFile,
   revealWorkspace,
   revealWorkspaceFile,
   updateWorkspace,
@@ -182,6 +183,19 @@ export function useWorkspaceActions({
     }
   }
 
+  async function handleOpenPreviewTarget(target: FilePreviewTarget) {
+    onError(null)
+    try {
+      if (target.source === 'artifact' && target.artifactId) {
+        await openArtifact(target.artifactId)
+      } else if (target.workspaceId) {
+        await openWorkspaceFile(target.workspaceId, target.relativePath)
+      }
+    } catch (cause) {
+      onError(errorMessage(cause))
+    }
+  }
+
   async function handleRevealArtifact(artifact: Artifact) {
     onError(null)
     try {
@@ -210,6 +224,7 @@ export function useWorkspaceActions({
     handleRevealWorkspace,
     handleRevealWorkspaceFile,
     handleRevealPreviewTarget,
+    handleOpenPreviewTarget,
     handleRevealArtifact,
     handleUsePreviewTarget
   }

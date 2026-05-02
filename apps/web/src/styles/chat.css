@@ -1083,37 +1083,49 @@
 }
 
 .message-attachment-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
-  margin-top: 9px;
+  width: min(100%, 620px);
+  margin-top: 12px;
 }
 
 .message-attachment-list button {
-  display: inline-grid;
-  grid-template-columns: 15px minmax(0, 1fr) auto;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  max-width: min(360px, 100%);
-  min-height: 32px;
-  padding: 0 10px;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
   color: var(--ink);
-  background: var(--surface-muted);
+  background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   text-align: left;
+  box-shadow: var(--shadow-soft);
 }
 
 .message-attachment-list button:hover {
   color: var(--accent-strong);
+  background: color-mix(in srgb, var(--success-soft) 38%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.message-attachment-list svg {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  color: var(--accent);
+  background: var(--success-soft);
+  border-radius: 7px;
 }
 
 .message-attachment-list span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--text-caption);
+  font-size: var(--text-body);
   font-weight: 800;
 }
 
