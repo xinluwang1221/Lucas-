@@ -10,6 +10,7 @@ import { findChangedArtifacts, takeSnapshot } from './artifacts.js'
 import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgroundServices } from './background.js'
 import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPreview } from './file_preview.js'
 import { cleanHermesOutput } from './hermes.js'
+import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
@@ -205,6 +206,63 @@ app.post('/api/background/uninstall', (_req, res) => {
     res.json(uninstallBackgroundServices())
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/cron', async (_req, res) => {
+  try {
+    res.json(await readHermesCronState())
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/cron', async (req, res) => {
+  try {
+    res.status(201).json(await createHermesCronJob(req.body ?? {}))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.patch('/api/hermes/cron/:jobId', async (req, res) => {
+  try {
+    res.json(await updateHermesCronJob(req.params.jobId, req.body ?? {}))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/cron/:jobId/pause', async (req, res) => {
+  try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined
+    res.json(await pauseHermesCronJob(req.params.jobId, reason))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/cron/:jobId/resume', async (req, res) => {
+  try {
+    res.json(await resumeHermesCronJob(req.params.jobId))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/cron/:jobId/run', async (req, res) => {
+  try {
+    res.json(await triggerHermesCronJob(req.params.jobId))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.delete('/api/hermes/cron/:jobId', async (req, res) => {
+  try {
+    res.json(await removeHermesCronJob(req.params.jobId))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
   }
 })
 

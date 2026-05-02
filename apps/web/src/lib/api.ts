@@ -516,6 +516,88 @@ export type BackgroundServiceStatus = {
   logsDir: string
 }
 
+export type HermesCronSchedule =
+  | { kind: 'once'; run_at?: string; display?: string }
+  | { kind: 'interval'; minutes?: number; display?: string }
+  | { kind: 'cron'; expr?: string; display?: string }
+
+export type HermesCronRepeat = {
+  times: number | null
+  completed: number
+}
+
+export type HermesCronOutput = {
+  name: string
+  path: string
+  size: number
+  createdAt: string
+  preview: string
+}
+
+export type HermesCronJob = {
+  id: string
+  name: string
+  prompt: string
+  promptPreview: string
+  schedule: HermesCronSchedule
+  scheduleDisplay: string
+  repeat: HermesCronRepeat
+  deliver: string
+  enabled: boolean
+  state: string
+  skills: string[]
+  skill?: string | null
+  model?: string | null
+  provider?: string | null
+  baseUrl?: string | null
+  script?: string | null
+  contextFrom?: string[] | null
+  enabledToolsets?: string[] | null
+  workdir?: string | null
+  nextRunAt?: string | null
+  lastRunAt?: string | null
+  lastStatus?: string | null
+  lastError?: string | null
+  lastDeliveryError?: string | null
+  pausedAt?: string | null
+  pausedReason?: string | null
+  createdAt?: string | null
+  outputs: HermesCronOutput[]
+  latestOutput?: HermesCronOutput
+}
+
+export type HermesCronState = {
+  jobs: HermesCronJob[]
+  scheduler: {
+    running: boolean
+    statusText: string
+    command: string
+    checkedAt: string
+  }
+  paths: {
+    hermesHome: string
+    jobsFile: string
+    outputDir: string
+  }
+  updatedAt: string
+}
+
+export type HermesCronJobInput = {
+  name?: string
+  prompt?: string
+  schedule?: string
+  deliver?: string
+  repeat?: number | null
+  skills?: string[]
+  model?: string
+  provider?: string
+  baseUrl?: string
+  script?: string
+  contextFrom?: string[]
+  enabledToolsets?: string[]
+  workdir?: string
+}
+
 export type HermesUpdateStatus = {
   repoPath: string
   repoUrl: string

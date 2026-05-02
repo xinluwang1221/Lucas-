@@ -14,10 +14,10 @@ import { AppSidebar } from './features/layout/AppSidebar'
 import {
   DispatchView,
   IdeasView,
-  ScheduledTasksView,
   SearchTasksView,
   TemplateIcon
 } from './features/layout/SecondaryViews'
+import { ScheduledTasksView, useScheduledState } from './features/scheduled'
 import { usePanelLayout } from './features/layout/usePanelLayout'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
@@ -344,6 +344,18 @@ function App() {
     handleSetMcpToolSelection
   } = useMcpState()
   const {
+    cronState,
+    cronLoading,
+    cronError,
+    cronSaving,
+    cronMutatingId,
+    cronNotice,
+    refreshCronState,
+    handleCreateCronJob,
+    handleUpdateCronJob,
+    runJobAction
+  } = useScheduledState()
+  const {
     skills,
     customizeTab,
     setCustomizeTab,
@@ -631,6 +643,7 @@ function App() {
     refreshMcpServeStatus,
     refreshMcpRecommendationsState,
     refreshBackgroundStatus,
+    refreshCronState,
     refreshSkills,
     refreshModels
   })
@@ -935,12 +948,24 @@ function App() {
           />
         ) : viewMode === 'scheduled' ? (
           <ScheduledTasksView
+            cronState={cronState}
+            cronLoading={cronLoading}
+            cronError={cronError}
+            cronSaving={cronSaving}
+            cronMutatingId={cronMutatingId}
+            cronNotice={cronNotice}
+            workspaces={state.workspaces}
+            skills={skills}
             backgroundStatus={backgroundStatus}
             backgroundUpdating={backgroundUpdating}
             backgroundError={backgroundError}
             recommendations={mcpRecommendations}
             recommendationsLoading={mcpRecommendationsLoading}
             recommendationsError={mcpRecommendationsError}
+            onRefreshCron={() => void refreshCronState()}
+            onCreateCronJob={(input, onSuccess) => void handleCreateCronJob(input, onSuccess)}
+            onUpdateCronJob={(jobId, input, onSuccess) => void handleUpdateCronJob(jobId, input, onSuccess)}
+            onRunCronAction={(jobId, action) => void runJobAction(jobId, action)}
             onToggleBackground={(enabled) => void handleToggleBackgroundServices(enabled)}
             onGenerateReport={() => void handleRefreshMcpRecommendationsWithAi()}
           />

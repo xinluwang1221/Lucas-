@@ -10,6 +10,7 @@ type UseAppBootstrapParams = {
   refreshMcpServeStatus: AsyncRefresh
   refreshMcpRecommendationsState: AsyncRefresh
   refreshBackgroundStatus: AsyncRefresh
+  refreshCronState: AsyncRefresh
   refreshSkills: AsyncRefresh
   refreshModels: AsyncRefresh
 }
@@ -22,6 +23,7 @@ export function useAppBootstrap({
   refreshMcpServeStatus,
   refreshMcpRecommendationsState,
   refreshBackgroundStatus,
+  refreshCronState,
   refreshSkills,
   refreshModels
 }: UseAppBootstrapParams) {
@@ -33,10 +35,12 @@ export function useAppBootstrap({
     void refreshMcpServeStatus()
     void refreshMcpRecommendationsState()
     void refreshBackgroundStatus()
+    void refreshCronState()
     void refreshSkills().catch(() => undefined)
     void refreshModels().catch(() => undefined)
   }, [
     refreshBackgroundStatus,
+    refreshCronState,
     refreshHermesMcp,
     refreshHermesSessions,
     refreshHermesUpdateStatus,

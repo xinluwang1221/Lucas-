@@ -10,20 +10,16 @@ import {
   MessageSquarePlus,
   Plug,
   Presentation,
-  RefreshCw,
   Search,
   Square,
   XCircle
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type {
-  BackgroundServiceStatus,
   HermesMcpConfig,
-  HermesMcpRecommendations,
   Skill,
   Task
 } from '../../lib/api'
-import { Toggle } from '../settings/settingsControls'
 
 export type PromptExample = {
   title: string
@@ -83,90 +79,6 @@ export function SearchTasksView({
           </button>
         ))}
       </div>
-    </section>
-  )
-}
-
-export function ScheduledTasksView({
-  backgroundStatus,
-  backgroundUpdating,
-  backgroundError,
-  recommendations,
-  recommendationsLoading,
-  recommendationsError,
-  onToggleBackground,
-  onGenerateReport
-}: {
-  backgroundStatus: BackgroundServiceStatus | null
-  backgroundUpdating: boolean
-  backgroundError: string | null
-  recommendations: HermesMcpRecommendations | null
-  recommendationsLoading: boolean
-  recommendationsError: string | null
-  onToggleBackground: (enabled: boolean) => void
-  onGenerateReport: () => void
-}) {
-  const backgroundEnabled = Boolean(backgroundStatus?.api.loaded && backgroundStatus.dailyMcp.loaded)
-
-  return (
-    <section className="product-page">
-      <header className="product-page-head">
-        <div>
-          <h1>定时任务</h1>
-          <p>把固定时间要做的工作交给 Hermes。当前先接入每日 MCP 推荐日报和 Cowork 后台保活。</p>
-        </div>
-        <button className="send-button" onClick={onGenerateReport} disabled={recommendationsLoading}>
-          {recommendationsLoading ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-          立即生成日报
-        </button>
-      </header>
-
-      <div className="schedule-grid">
-        <article className="schedule-card primary">
-          <div className="schedule-card-head">
-            <div>
-              <strong>每日 MCP 推荐日报</strong>
-              <span>每天 00:10 后，由 Hermes 复盘最近任务、卡点和关键词，生成 MCP 推荐。</span>
-            </div>
-            <Toggle checked={backgroundEnabled} disabled={backgroundUpdating} onChange={onToggleBackground} />
-          </div>
-          <div className="schedule-report">
-            <strong>{recommendations?.generatedAt ? `日报 ${formatMaybeDate(recommendations.generatedAt)}` : '暂无日报'}</strong>
-            <p>{recommendations?.aiSummary || recommendations?.sourceSummary || '开启后台服务或点击立即生成后，这里会显示推荐摘要。'}</p>
-            <div className="schedule-tags">
-              {(recommendations?.keywords ?? ['MCP', '文件整理', '网页调研']).slice(0, 8).map((keyword) => (
-                <span key={keyword}>{keyword}</span>
-              ))}
-            </div>
-          </div>
-          <div className="schedule-foot">
-            <span>下次自动生成：{formatMaybeDate(recommendations?.nextRunAt)}</span>
-            <span>{backgroundEnabled ? '后台已启用' : '后台未启用'}</span>
-          </div>
-        </article>
-
-        <article className="schedule-card">
-          <strong>Cowork 后台服务</strong>
-          <div className="schedule-status-list">
-            <div>
-              <span>API 后台</span>
-              <em>{backgroundStatus?.api.loaded ? '运行中' : backgroundStatus?.api.installed ? '已安装未运行' : '未安装'}</em>
-            </div>
-            <div>
-              <span>每日推荐</span>
-              <em>{backgroundStatus?.dailyMcp.loaded ? '运行中' : backgroundStatus?.dailyMcp.installed ? '已安装未运行' : '未安装'}</em>
-            </div>
-            <div>
-              <span>日志目录</span>
-              <em>{backgroundStatus?.logsDir ?? '待读取'}</em>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      {(backgroundError || recommendationsError) && (
-        <div className="settings-error-line">{backgroundError || recommendationsError}</div>
-      )}
     </section>
   )
 }
@@ -330,16 +242,4 @@ function formatTaskTime(value: string) {
     hour: '2-digit',
     minute: '2-digit'
   }).format(new Date(value))
-}
-
-function formatMaybeDate(value?: string) {
-  if (!value) return '待生成'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '待生成'
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }

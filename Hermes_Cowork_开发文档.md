@@ -240,6 +240,7 @@ flowchart TB
 | 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
 | MCP Server、工具列表、市场、工具级开关 | 设置 > MCP、技能页 Connectors、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
+| Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；运行由 Hermes gateway/tick 负责 | 任务必须写入 `~/.hermes/cron/jobs.json`；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
 | Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 已支持扫描、查看文件树、上传、启停、加入下一次任务；gateway 场景仍缺 Cowork skill 预载参数 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；真正执行时要确认 Hermes 是否读到了 skill |
 | Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
 | 工作区、附件、产物、文件预览 | 工作区页、输入框附件、消息文件卡片、右侧预览 | `/api/workspaces`、`/api/artifacts`、`file_preview.ts`、`workspaceApi.ts`、`FilePreviewPanel.tsx` | 已支持目录授权、附件上传、产物识别、文件卡片、右侧预览和本机打开 | 拖入文件必须先进入对话框；Office 预览要尽量接近本机打开；预览不能造成布局抖动 |
@@ -353,7 +354,32 @@ flowchart TB
 - Skill 详情必须能打开完整文件树。
 - 任务过程中调用的 MCP/Skill 要进入过程资源，不要污染任务拆解。
 
-### 3.3.5 工作区与本机客户端化
+### 3.3.5 定时任务与 Hermes Cron
+
+当前方案：
+
+- 定时任务页直接管理 Hermes Cron，而不是 Cowork 自己保存一套假任务。
+- 后端 Adapter 通过 Hermes 自己的 `cronjob` 工具函数执行 create/update/pause/resume/run/remove，列表和输出读取 `~/.hermes/cron/jobs.json` 与 `~/.hermes/cron/output/<job_id>/`。
+- 前端只展示对用户有决策意义的信息：是否自动执行、下次执行时间、绑定工作区、绑定 Skill、最近输出和可操作动作。
+
+为什么这样做：
+
+- Hermes Cron 运行在后台，不继承当前聊天上下文，也不能临场反问用户，所以 Cowork 必须让任务说明自包含。
+- “运行一次”在 Hermes 语义上是把 job 排到下一次 scheduler tick；如果 gateway 没运行，任务不会自动触发，所以界面必须显示 gateway 状态，而不是假装已经执行。
+
+可升级空间：
+
+- 后续可以把每日 MCP 推荐日报迁移为一个真实 Hermes Cron job，而不是单独 LaunchAgent。
+- 可以增加输出文件卡片和右侧预览，把 cron 输出纳入任务产物体系。
+- 可以增加 delivery 配置页，把 Feishu/Slack/Email 等投递目标从高级字段变成可配置渠道。
+
+判断标准：
+
+- 新建/编辑/删除必须真实改变 Hermes cron 数据，不允许只改 Cowork 状态。
+- 定时任务 prompt 需要提示用户写清目标、目录、输入来源和输出格式。
+- gateway 未运行时，静态提示只能告诉用户下一步动作，不展示无用日志。
+
+### 3.3.6 工作区与本机客户端化
 
 当前方案：
 
@@ -377,7 +403,7 @@ flowchart TB
 - 归档/删除会话不能误删真实文件。
 - 升级 Hermes 前后必须自动复测 Cowork 的核心链路。
 
-### 3.3.6 UI 主题与信息披露
+### 3.3.7 UI 主题与信息披露
 
 当前方案：
 
@@ -751,6 +777,7 @@ HC_EVENT\t
 - 支持 macOS 常驻后台：设置页启用后写入两个 LaunchAgent：
   - `com.hermes-cowork.api.plist`：登录时启动 Hermes Cowork API 后台。
   - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
+- 支持 Hermes Cron 管理：`/api/hermes/cron` 读取 Hermes 本机 cron job、gateway 状态和输出目录；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 `~/.hermes/cron/jobs.json`，输出读取 `~/.hermes/cron/output/<job_id>/`。
 
 ### 前端
 
@@ -765,7 +792,7 @@ HC_EVENT\t
 - 左侧一级导航已收敛为：新建任务、工作区目录树、技能、定时任务、调度、本机偏好。搜索和模板暂不放主导航，避免和工作区会话树重复。
 - 左侧工作区已经回到目录树结构：工作区行代表授权文件夹，展开后展示该工作区内的工作会话；点击工作区进入文件管理页，点击会话进入对话页。
 - 搜索页：支持搜索任务标题、prompt、错误、Hermes session、执行结果、技能名和标签；当前作为内部能力保留，暂不在左侧主入口展示。
-- 定时任务页：接入真实后台服务状态，展示 Cowork API 后台、每日 MCP 推荐 LaunchAgent、日志目录、下一次日报生成时间，并可手动生成 MCP 推荐日报。
+- 定时任务页：已升级为 Hermes Cron 管理页，展示真实 job 列表、gateway 自动执行状态、下次执行、绑定工作区/Skill、最近输出，并支持新建、编辑、暂停/恢复、排队运行和删除；Cowork 后台保活和 MCP 推荐日报作为辅助卡片展示。
 - 工作区页：点击左侧工作区进入，展示该授权目录的文件管理、最近会话、最近产物和可执行入口；项目页/搜索页只作为高级管理和跨工作区检索入口。
 - 工作区第一阶段已落地：左侧工作区以目录树展示，工作区下挂活跃会话；点击工作区进入文件管理页，点击会话进入对话页；“授权文件夹”通过本机 API 调 macOS Finder 选择目录，不再展示手动路径输入表单。
 - 工作区第二阶段已落地：后端新增目录树、重命名、重新授权和移除工作区 API；文件管理页接入面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。移除工作区只删除 Cowork 记录和该工作区会话索引，不删除真实文件；`.DS_Store`、`.gitkeep` 等系统占位文件默认不展示。
@@ -829,8 +856,13 @@ HC_EVENT\t
 `apps/web/src/features/layout/SecondaryViews.tsx`
 
 - 次级页面组件集合，已从 `App.tsx` 抽离。
-- 负责搜索页、定时任务页、调度页、任务模板页，以及模板图标渲染。
-- 后续调整“任务搜索”“定时任务日报”“调度入口能力归类”“任务模板沉淀方式”时，优先改这里；不要把这些次级页重新写回 `App.tsx`。
+- 负责搜索页、调度页、任务模板页，以及模板图标渲染。
+- 后续调整“任务搜索”“调度入口能力归类”“任务模板沉淀方式”时，优先改这里；不要把这些次级页重新写回 `App.tsx`。定时任务已经迁移到 `features/scheduled`。
+
+`apps/web/src/features/scheduled/`
+
+- 负责 Hermes Cron 定时任务页、Cron API service 和定时任务状态 hook。
+- 后续调整定时任务列表、新建/编辑弹窗、Cron 输出展示、gateway 状态提示和每日 MCP 推荐迁移时，优先改这里。
 
 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`
 
@@ -1372,7 +1404,7 @@ POST /api/models/fallbacks
 - 备用模型页覆盖 Hermes `fallback_providers`：只列出已配置且不是当前 Provider 的候选，用户开关后写回 Hermes 配置；空状态会提示先去凭据页确认服务是否可用。
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区规划已回正：授权目录必须作为左侧目录树存在，工作区下展示该目录内的工作会话；点击工作区进入文件管理页，跨工作区搜索和归档仍放在搜索/高级页面。
-- 定时任务页不再是静态占位，已读取 `BackgroundServiceStatus` 和 `HermesMcpRecommendations`；调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
+- 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：读取 `~/.hermes/cron/jobs.json`、gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除；`BackgroundServiceStatus` 与 `HermesMcpRecommendations` 只作为后台保活和推荐日报辅助信息。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
 - 账户菜单与设置弹窗：左下角 Lucas 可展开菜单，并打开多分类设置页；通用/MCP/模型/对话流/规则已具备截图中的主要行控件、开关、选择器、空状态和二级添加模型弹窗。
 - MCP 设置页已改为读取 Hermes 的真实 MCP 配置；开关会写回 Hermes `config.yaml` 的 `enabled` 字段。
 - MCP 设置页已从单页堆叠整理为二级 Tab：本地服务、Hermes Server、每日推荐、云端；设置弹窗改成固定高度和内部滚动，避免长内容撑出屏幕。
@@ -1765,8 +1797,9 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 11. UI 体系当前缺口：还缺少完整组件规范表，包括按钮尺寸、列表行高度、卡片密度、表格样式、弹窗宽度、输入区状态、文件预览工具条、任务进度事件展示等；还需要继续清理 `app.css`、`chat.css` 和 `settings.css` 中未进入主路径的历史硬编码颜色。后续新增 UI 不应再直接写 `#fffdf7`、`#fff1eb`、`#e3b8aa` 这类历史色值，应先判断它属于 surface / status / semantic icon / border 哪一层；如果必须临时兼容旧组件，只能放进暗色兼容层并标明后续拆模块计划。
 12. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。
 13. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts`、`apps/web/src/features/app/useAppState.ts` 和 `apps/web/src/features/app/useAppBootstrap.ts`，`App.tsx` 不再直接调用 `/api/state`，启动初始化也不再堆在主组件里，`lib/api.ts` 只保留共享协议类型。
-14. 工程稳定阶段可以收尾：`App.tsx` 当前主要职责是页面组合、全局入口互联和少量 modal 开关；继续拆分收益已经低于进入文件预览与编辑阶段。下一阶段新增文件编辑、主题化、客户端化能力时，必须先落到对应 feature 模块，再让 `App.tsx` 只做组合。
-15. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+14. Scheduled 第一刀完成：已拆 `apps/web/src/features/scheduled/ScheduledTasksView.tsx`、`useScheduledState.ts`、`scheduledApi.ts` 和 `apps/api/src/hermes_cron.ts`；定时任务页开始覆盖 Hermes Cron 的真实 job 数据、输出目录和操作链路，不再只是 Cowork 后台状态页。
+15. 工程稳定阶段可以收尾：`App.tsx` 当前主要职责是页面组合、全局入口互联和少量 modal 开关；继续拆分收益已经低于进入文件预览与编辑阶段。下一阶段新增文件编辑、主题化、客户端化能力时，必须先落到对应 feature 模块，再让 `App.tsx` 只做组合。
+16. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 
