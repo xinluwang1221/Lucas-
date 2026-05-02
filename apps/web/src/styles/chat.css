@@ -1089,7 +1089,8 @@
   margin-top: 12px;
 }
 
-.message-attachment-list button {
+.message-attachment-list button,
+.message-reference-file-card {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
@@ -1121,7 +1122,8 @@
   border-radius: 7px;
 }
 
-.message-attachment-list span {
+.message-attachment-list button > span,
+.message-reference-file-card > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1129,7 +1131,8 @@
   font-weight: 800;
 }
 
-.message-attachment-list em {
+.message-attachment-list button > em,
+.message-reference-file-card > em {
   color: var(--ink-soft);
   font-size: 10px;
   font-style: normal;
@@ -1152,6 +1155,30 @@
 
 .message-output-file-list svg {
   color: var(--success);
+}
+
+.message-reference-file-list {
+  margin-top: 14px;
+}
+
+.message-reference-file-list::before {
+  color: var(--ink-soft);
+  content: "相关文件";
+  font-size: var(--text-caption);
+  font-weight: 800;
+}
+
+.message-reference-file-list button,
+.message-reference-file-list .message-reference-file-card {
+  border-color: color-mix(in srgb, var(--success) 26%, var(--line));
+}
+
+.message-reference-file-list svg {
+  color: var(--success);
+}
+
+.message-reference-file-card.passive {
+  color: var(--ink);
 }
 
 .message-markdown {
