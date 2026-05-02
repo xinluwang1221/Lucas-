@@ -80,6 +80,10 @@ export function workspaceFileRawUrl(workspaceId: string, relativePath: string) {
   return apiUrl(`/api/workspaces/${workspaceId}/files/raw?path=${encodeURIComponent(relativePath)}`)
 }
 
+export function workspaceFileQuickLookUrl(workspaceId: string, relativePath: string) {
+  return apiUrl(`/api/workspaces/${workspaceId}/files/quicklook?path=${encodeURIComponent(relativePath)}`)
+}
+
 export async function previewWorkspaceFile(workspaceId: string, relativePath: string): Promise<string> {
   const response = await fetch(
     apiUrl(`/api/workspaces/${workspaceId}/files/preview?path=${encodeURIComponent(relativePath)}`)

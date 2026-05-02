@@ -8,6 +8,10 @@ export function artifactRawUrl(artifactId: string) {
   return apiUrl(`/api/artifacts/${artifactId}/raw`)
 }
 
+export function artifactQuickLookUrl(artifactId: string) {
+  return apiUrl(`/api/artifacts/${artifactId}/quicklook`)
+}
+
 export async function revealArtifact(artifactId: string) {
   return request(`/api/artifacts/${artifactId}/reveal`, { method: 'POST' })
 }

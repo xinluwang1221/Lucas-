@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Response } from 'express'
+
+export const quickLookPreviewRoot = path.join(process.cwd(), 'data', 'quicklook-previews')
 
 export function readPreviewBody(filePath: string) {
   const ext = path.extname(filePath).toLowerCase()
@@ -28,6 +31,21 @@ export function readPreviewBody(filePath: string) {
   throw new Error('这个文件暂不支持正文预览。你仍然可以把它交给 Hermes 作为上下文，或在 Finder 中打开。')
 }
 
+export function sendQuickLookPreview(res: Response, filePath: string) {
+  if (!isQuickLookPreviewable(filePath)) {
+    res.status(415).type('text/html').send(renderQuickLookError('这个文件类型不走高保真预览。'))
+    return
+  }
+
+  try {
+    const { key, htmlPath } = ensureQuickLookPreview(filePath)
+    const html = fs.readFileSync(htmlPath, 'utf8')
+    res.type('text/html').send(injectQuickLookBase(html, key))
+  } catch {
+    res.status(200).type('text/html').send(renderQuickLookError('无法生成高保真预览。请用本机应用打开，或安装可用的 Office/Quick Look 预览组件。'))
+  }
+}
+
 export function sendInlineFile(res: Response, filePath: string, fileName: string) {
   res.setHeader('Content-Type', mimeTypeForPath(filePath))
   const asciiName = fileName.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '')
@@ -36,12 +54,96 @@ export function sendInlineFile(res: Response, filePath: string, fileName: string
   res.sendFile(filePath)
 }
 
+export function isQuickLookPreviewable(filePath: string) {
+  return ['.doc', '.docx', '.rtf', '.ppt', '.pptx', '.ppsx', '.xls', '.xlsx', '.xlsm'].includes(path.extname(filePath).toLowerCase())
+}
+
 function isTextPreviewable(filePath: string) {
   const ext = path.extname(filePath).toLowerCase()
   if (['.txt', '.md', '.json', '.csv', '.html', '.htm', '.log', '.xml', '.yaml', '.yml'].includes(ext)) {
     return true
   }
   return !ext && fs.statSync(filePath).size < 1024 * 1024
+}
+
+function ensureQuickLookPreview(filePath: string) {
+  const stat = fs.statSync(filePath)
+  const key = crypto
+    .createHash('sha1')
+    .update(`${filePath}:${stat.size}:${stat.mtimeMs}`)
+    .digest('hex')
+  const targetDir = path.join(quickLookPreviewRoot, key)
+  const htmlPath = path.join(targetDir, 'Preview.html')
+
+  if (fs.existsSync(htmlPath)) return { key, htmlPath }
+
+  fs.mkdirSync(quickLookPreviewRoot, { recursive: true })
+  const tempDir = fs.mkdtempSync(path.join(quickLookPreviewRoot, '.tmp-'))
+
+  try {
+    execFileSync('qlmanage', ['-p', '-o', tempDir, filePath], {
+      encoding: 'utf8',
+      timeout: 30000,
+      maxBuffer: 20 * 1024 * 1024
+    })
+    const previewDirName = fs.readdirSync(tempDir).find((entry) => entry.endsWith('.qlpreview'))
+    if (!previewDirName) throw new Error('quick look preview missing')
+    const previewDir = path.join(tempDir, previewDirName)
+    if (fs.existsSync(targetDir)) fs.rmSync(targetDir, { recursive: true, force: true })
+    fs.cpSync(previewDir, targetDir, { recursive: true })
+    normalizeQuickLookAssets(targetDir)
+    if (!fs.existsSync(htmlPath)) throw new Error('quick look html missing')
+    return { key, htmlPath }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  }
+}
+
+function normalizeQuickLookAssets(previewDir: string) {
+  const htmlPath = path.join(previewDir, 'Preview.html')
+  if (!fs.existsSync(htmlPath)) return
+  let html = fs.readFileSync(htmlPath, 'utf8')
+  const converted = new Set<string>()
+
+  for (const entry of fs.readdirSync(previewDir)) {
+    if (path.extname(entry).toLowerCase() !== '.pdf') continue
+    const pdfPath = path.join(previewDir, entry)
+    const pngName = `${path.basename(entry, path.extname(entry))}.png`
+    const pngPath = path.join(previewDir, pngName)
+    try {
+      execFileSync('sips', ['-s', 'format', 'png', pdfPath, '--out', pngPath], {
+        encoding: 'utf8',
+        timeout: 10000,
+        maxBuffer: 4 * 1024 * 1024
+      })
+      if (fs.existsSync(pngPath)) converted.add(entry)
+    } catch {
+      // Keep the original PDF reference if macOS cannot rasterize this asset.
+    }
+  }
+
+  for (const pdfName of converted) {
+    const pngName = `${path.basename(pdfName, path.extname(pdfName))}.png`
+    html = html.replaceAll(pdfName, pngName)
+  }
+  fs.writeFileSync(htmlPath, html, 'utf8')
+}
+
+function injectQuickLookBase(html: string, key: string) {
+  const base = `<base href="/api/quicklook/${key}/">`
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head([^>]*)>/i, `<head$1>${base}`)
+  return `${base}${html}`
+}
+
+function renderQuickLookError(message: string) {
+  return `<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 14px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; color: #4f5b52; background: #faf8f2; }
+  div { max-width: 360px; padding: 24px; text-align: center; border: 1px solid #ddd6c8; border-radius: 10px; background: #fffef9; }
+  strong { display: block; margin-bottom: 8px; color: #171a16; font-size: 15px; }
+</style>
+<div><strong>无法生成原版预览</strong>${escapeHtml(message)}</div>`
 }
 
 function readDocxPreview(filePath: string) {
@@ -227,4 +329,12 @@ function decodeXmlEntities(value: string) {
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
     .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }

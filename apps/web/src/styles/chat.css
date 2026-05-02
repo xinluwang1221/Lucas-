@@ -1549,6 +1549,7 @@
 }
 
 .composer {
+  position: relative;
   flex: 0 0 auto;
   width: min(820px, calc(100% - 56px));
   margin: 0 auto 26px;
@@ -1648,6 +1649,27 @@
 .composer:focus-within {
   border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), var(--shadow);
+}
+
+.composer.dragging-attachments {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow);
+}
+
+.composer.dragging-attachments::before {
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  color: var(--accent-strong);
+  content: "松开后作为本轮对话附件";
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 62%, var(--line));
+  border-radius: 8px;
+  font-size: var(--text-caption);
+  font-weight: 800;
+  pointer-events: none;
 }
 
 .composer textarea {

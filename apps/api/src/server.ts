@@ -8,7 +8,7 @@ import { execFile, spawn } from 'node:child_process'
 import multer from 'multer'
 import { findChangedArtifacts, takeSnapshot } from './artifacts.js'
 import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgroundServices } from './background.js'
-import { readPreviewBody, sendInlineFile } from './file_preview.js'
+import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPreview } from './file_preview.js'
 import { cleanHermesOutput } from './hermes.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -56,6 +56,10 @@ function stopRunningTask(taskId: string) {
 
 app.use(cors({ origin: ['http://127.0.0.1:5173', 'http://localhost:5173'] }))
 app.use(express.json({ limit: '2mb' }))
+app.use('/api/quicklook', express.static(quickLookPreviewRoot, {
+  dotfiles: 'deny',
+  fallthrough: false
+}))
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, name: 'Hermes Cowork API' })
@@ -853,6 +857,26 @@ app.get('/api/workspaces/:workspaceId/files/raw', (req, res) => {
   }
 })
 
+app.get('/api/workspaces/:workspaceId/files/quicklook', (req, res) => {
+  const workspace = store.snapshot.workspaces.find((item) => item.id === req.params.workspaceId)
+  const relativePath = String(req.query.path ?? '')
+  if (!workspace || !relativePath) {
+    res.status(404).json({ error: 'workspace or file not found' })
+    return
+  }
+
+  try {
+    const targetPath = ensureInsideWorkspace(path.join(workspace.path, relativePath), workspace.path)
+    if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) {
+      res.status(404).json({ error: 'file not found' })
+      return
+    }
+    sendQuickLookPreview(res, targetPath)
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
 app.post('/api/workspaces', (req, res) => {
   const { name, path: workspacePath } = req.body as { name?: string; path?: string }
   if (!name || !workspacePath) {
@@ -1432,6 +1456,15 @@ app.get('/api/artifacts/:artifactId/raw', (req, res) => {
     return
   }
   sendInlineFile(res, artifact.path, artifact.name)
+})
+
+app.get('/api/artifacts/:artifactId/quicklook', (req, res) => {
+  const artifact = store.snapshot.artifacts.find((item) => item.id === req.params.artifactId)
+  if (!artifact || !fs.existsSync(artifact.path)) {
+    res.status(404).json({ error: 'artifact not found' })
+    return
+  }
+  sendQuickLookPreview(res, artifact.path)
 })
 
 app.post('/api/workspaces/:workspaceId/reveal', (req, res) => {
@@ -3274,8 +3307,14 @@ function uniqueUploadTargetPath(rootPath: string, originalName: string) {
 }
 
 function sanitizeUploadedFilename(value: string) {
-  const baseName = path.basename(value || '').replace(/[\r\n\t]/g, ' ').trim()
+  const baseName = path.basename(decodeUploadedFilename(value || '')).replace(/[\r\n\t]/g, ' ').trim()
   return baseName || `upload-${Date.now()}`
+}
+
+function decodeUploadedFilename(value: string) {
+  if (!/[\u0080-\u009f]/.test(value)) return value
+  const decoded = Buffer.from(value, 'latin1').toString('utf8')
+  return decoded.includes('\uFFFD') ? value : decoded
 }
 
 recoverInterruptedRunningTasks()

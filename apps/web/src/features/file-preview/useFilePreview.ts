@@ -38,7 +38,7 @@ export function useFilePreview({ selectedWorkspaceId, onOpen, onError }: UseFile
 
   const setLoadingPreview = useCallback((target: FilePreviewTarget) => {
     const kind = previewKind(target.title)
-    const rawUrl = previewRawUrl(target)
+    const rawUrl = previewRawUrl(target, kind)
     setFilePreview({
       target,
       title: target.title,
@@ -52,7 +52,7 @@ export function useFilePreview({ selectedWorkspaceId, onOpen, onError }: UseFile
 
   const setReadyPreview = useCallback((target: FilePreviewTarget, body = '') => {
     const kind = previewKind(target.title)
-    const rawUrl = previewRawUrl(target)
+    const rawUrl = previewRawUrl(target, kind)
     setFilePreview({
       target,
       title: target.title,
@@ -65,7 +65,7 @@ export function useFilePreview({ selectedWorkspaceId, onOpen, onError }: UseFile
 
   const setErrorPreview = useCallback((target: FilePreviewTarget, message: string) => {
     const kind = previewKind(target.title)
-    const rawUrl = previewRawUrl(target)
+    const rawUrl = previewRawUrl(target, kind)
     setFilePreview({
       target,
       title: target.title,

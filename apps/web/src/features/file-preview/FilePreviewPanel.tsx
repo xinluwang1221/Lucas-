@@ -19,7 +19,7 @@ import { MarkdownContent } from '../markdown/MarkdownContent'
 export type Preview = {
   title: string
   body: string
-  kind: 'markdown' | 'csv' | 'document' | 'spreadsheet' | 'presentation' | 'pdf' | 'image' | 'media' | 'html' | 'text'
+  kind: 'markdown' | 'csv' | 'document' | 'spreadsheet' | 'presentation' | 'quicklook' | 'pdf' | 'image' | 'media' | 'html' | 'text'
   rawUrl?: string
 }
 
@@ -165,10 +165,7 @@ export function previewKind(title: string): Preview['kind'] {
   const lower = title.toLowerCase()
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown'
   if (lower.endsWith('.csv') || lower.endsWith('.tsv')) return 'csv'
-  if (lower.endsWith('.docx') || lower.endsWith('.doc')) return 'document'
-  if (lower.endsWith('.rtf')) return 'document'
-  if (lower.endsWith('.pptx') || lower.endsWith('.ppsx')) return 'presentation'
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xlsm')) return 'spreadsheet'
+  if (/\.(docx?|rtf|pptx?|ppsx|xlsx?|xlsm)$/i.test(lower)) return 'quicklook'
   if (lower.endsWith('.pdf')) return 'pdf'
   if (/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(lower)) return 'image'
   if (/\.(mp4|webm|mov|mp3|wav|m4a)$/i.test(lower)) return 'media'
@@ -177,7 +174,7 @@ export function previewKind(title: string): Preview['kind'] {
 }
 
 export function isInlinePreviewKind(kind: Preview['kind']) {
-  return ['pdf', 'image', 'media', 'html'].includes(kind)
+  return ['quicklook', 'pdf', 'image', 'media', 'html'].includes(kind)
 }
 
 function PreviewBody({ preview }: { preview: Preview }) {
@@ -187,6 +184,10 @@ function PreviewBody({ preview }: { preview: Preview }) {
 
   if (preview.kind === 'html' && preview.rawUrl) {
     return <iframe className="embedded-preview html-embedded-preview" title={preview.title} src={preview.rawUrl} sandbox="allow-same-origin allow-scripts allow-forms" />
+  }
+
+  if (preview.kind === 'quicklook' && preview.rawUrl) {
+    return <iframe className="embedded-preview quicklook-embedded-preview" title={preview.title} src={preview.rawUrl} sandbox="allow-same-origin allow-scripts" />
   }
 
   if (preview.kind === 'image' && preview.rawUrl) {

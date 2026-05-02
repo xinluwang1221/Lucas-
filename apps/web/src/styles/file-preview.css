@@ -250,6 +250,10 @@
   border-radius: 6px;
 }
 
+.quicklook-embedded-preview {
+  background: #f7f7f7;
+}
+
 .file-preview-panel.fullscreen .embedded-preview {
   min-height: calc(100vh - 154px);
 }

@@ -369,8 +369,8 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 `apps/api/src/file_preview.ts`
 
 - 后端文件预览服务模块，已从 `server.ts` 抽离。
-- 对外提供 `readPreviewBody()` 和 `sendInlineFile()`。
-- 负责文本、Markdown、CSV、HTML、JSON、docx/doc/rtf、pptx/ppsx、xlsx/xlsm 的正文级预览，以及 PDF、图片、音视频、HTML 等 raw inline 响应的 MIME / Content-Disposition。
+- 对外提供 `readPreviewBody()`、`sendInlineFile()` 和 `sendQuickLookPreview()`。
+- 负责文本、Markdown、CSV、HTML、JSON 的正文级预览，PDF、图片、音视频、HTML 等 raw inline 响应的 MIME / Content-Disposition，以及 Office 文件的 macOS Quick Look HTML 高保真预览包生成。
 - 后续文件编辑能力必须先扩展这个模块或新增并列 `file_edit.ts`，不要把解析、写入、备份逻辑重新塞回 `server.ts`。
 
 `apps/api/src/hermes_runtime.ts`
@@ -535,7 +535,7 @@ HC_EVENT\t
 - 任务停止：运行中的任务可在对话区 pending 消息和右侧“任务进度”直接停止；后端会向 Hermes 子进程发送 `SIGTERM`，记录 `task.stopped` 事件，并避免子进程退出码把用户主动停止误判为失败。
 - 任务实时流：后端新增 `/api/tasks/:taskId/stream` SSE 事件流；前端选中运行任务时自动订阅该任务快照，实时更新 live response、执行轨迹、工具事件、产物和停止/完成状态，原轮询机制保留为兜底。运行消息和右侧任务总览会显示“连接中 / 实时同步 / 轮询兜底”等状态，帮助用户判断当前是否实时连接 Hermes。
 - 输入框底部模型切换：默认项跟随 Hermes 当前模型，另支持显式选择当前供应商、fallback 供应商和已配置模型服务下的模型候选；候选必须来自 `/api/models`，不能单独读取旧的本次任务模型清单；创建任务时把选中模型传给后端。
-- 输入框附件第一版已落地：支持从对话框选择 PPT、Word、Excel/CSV、PDF、图片、Markdown/TXT 等主流文件；文件会先上传到当前授权工作区，输入框展示附件 chip；发送任务时附件写入 `Message.attachments`，并把本机路径附加到 Hermes 实际 prompt 中。对话流里的用户消息会显示附件卡片；未点击时只作为流式对话中的轻量文件卡片存在，点击后右侧工作区切换为文件预览。
+- 输入框附件第一版已落地：支持从对话框选择或拖入 PPT、Word、Excel/CSV、PDF、图片、Markdown/TXT 等主流文件；文件会先进入本轮对话附件区，再上传到当前授权工作区，输入框展示附件 chip；发送任务时附件写入 `Message.attachments`，并把本机路径附加到 Hermes 实际 prompt 中。对话流里的用户消息会显示附件卡片；未点击时只作为流式对话中的轻量文件卡片存在，点击后右侧工作区切换为文件预览。
 - 文件预览交互第一版已按“对话流卡片 -> 右侧预览区”收敛：点击附件、工作区文件或任务产物后，右侧任务上下文让位给预览区；预览顶部提供本机默认应用打开、Finder 定位、固定预览、全屏预览和关闭。固定预览用于避免切换目录时自动收起，关闭预览会恢复右侧工作区。
 - 右侧任务上下文：默认顺序固定为任务拆解、任务产出物、上下文与资源。任务拆解不能写死固定五步，只能展示产品级计划：少量、面向用户目标、能表达“先做什么、再做什么、交付什么”的步骤。Hermes `todo` 如果只是运行清单（例如读取文件、调用工具、检索资料、整理结果，或超过 6 步的操作流），必须放到对话区过程流，不进入任务拆解。Hermes 未暴露产品级拆解时，任务拆解显示空态，不能再从 thinking/status/tool/artifact/complete 事件推导假步骤。工具调用、网页、文件、Skill 归入“上下文与资源”或过程记录，不污染任务拆解。Plan、ReAct、Reflection、Result 只作为每步后面的中文小标签（计划/行动/校验/结果），不能在顶部铺成静态模式条；表情化 thinking、后台心跳、`The user is`、`reasoning.available`、`Hermes 已返回最终结果` 等原始事件不能作为用户可见步骤或说明。
 - 左下角本机偏好菜单：点击 Lucas 弹出本机菜单，可切换语言展示项、循环切换主题、进入设置弹窗；点击菜单外空白区域会关闭。
@@ -585,7 +585,7 @@ HC_EVENT\t
 
 - 前端文件预览 feature 模块，已从 `App.tsx` 抽离。
 - 对外导出 `FilePreviewPanel`、`Preview`、`FilePreviewTarget`、`FilePreviewState`、`previewKind()`、`isInlinePreviewKind()`。
-- 负责文件详情面板、PDF/HTML/image/media iframe 或原生预览、Markdown/演示文稿渲染、CSV/表格预览、正文级文档预览、复制路径，以及预览顶部轻量操作栏（本机打开、Finder 定位、固定、全屏、关闭）。
+- 负责文件详情面板、PDF/HTML/image/media iframe 或原生预览、Office Quick Look iframe、Markdown/CSV/表格预览、复制路径，以及预览顶部轻量操作栏（本机打开、Finder 定位、固定、全屏、关闭）。
 - 后续文件编辑 UI 先在这个 feature 里扩展“查看 / 编辑 / 历史”，再通过后端文件 API 写入，不要在 `App.tsx` 里新增编辑器。
 
 `apps/web/src/features/file-preview/useFilePreview.ts`
@@ -1164,7 +1164,7 @@ POST /api/models/fallbacks
 - 工作区文本文件预览。
 - Markdown 文件渲染预览。
 - CSV/TSV 文件表格预览。
-- 主流文件预览：PDF、图片、音视频、HTML 原样内嵌预览；docx/doc/rtf、pptx/ppsx、xlsx/xlsm 走内容级抽取预览。
+- 主流文件预览：PDF、图片、音视频、HTML 原样内嵌预览；doc/docx/rtf、ppt/pptx/ppsx、xls/xlsx/xlsm 优先走 macOS Quick Look 生成的 HTML 高保真预览包，不再用抽文本/抽表格冒充原版预览。
 - 工作区文件 Finder 定位。
 - 产物识别。
 - 产物识别增强：任务完成时会生成 `artifact.created` 事件，右侧“最近操作”和对话区过程流能直接显示新增产物。
@@ -1499,9 +1499,9 @@ Hermes runtime 融合顺序：
 - 当前不是 macOS 原生客户端，还是本地 Web。
 - 工作区授权已改为左侧“+ / 授权文件夹”触发 macOS Finder 目录选择；当前仍是本地 Web + Node Adapter 方案，未来打包成客户端后要替换为 Tauri/Electron 原生授权和安全书签。
 - 文件预览已经统一到右侧文件详情面板：点击工作区文件、任务产物或对话附件时，右侧任务上下文会切换为文件预览；顶部操作统一为本机默认应用打开、Finder 定位、固定预览、全屏预览和关闭，次级操作保留复制路径、下载和“作为上下文”。
-- 对话附件第一版已补齐：输入框可选择主流文件并上传到当前授权工作区；发送任务时附件写入消息记录和 Hermes prompt；对话流展示附件卡片，点击复用右侧文件预览，右侧“上下文与资源”会把消息附件计入文件上下文。
+- 对话附件第一版已补齐：输入框可选择或拖入主流文件并上传到当前授权工作区；拖到输入框时必须作为本轮对话附件，不能只触发工作区上传；发送任务时附件写入消息记录和 Hermes prompt；对话流展示附件卡片，点击复用右侧文件预览，右侧“上下文与资源”会把消息附件计入文件上下文。
 - 当前预览覆盖文本类、小型无扩展文本文件、Markdown、CSV/TSV、PDF、图片、音视频、HTML、docx/doc/rtf、pptx/ppsx、xlsx/xlsm。
-- Office 文件当前是内容级预览：docx/doc/rtf 抽正文，pptx/ppsx 抽幻灯片文字，xlsx/xlsm 抽前几个工作表为表格；不保留原版分页、字体、图表、图片和复杂排版。后续如需高保真，应接系统 Quick Look 或专门文档渲染服务。
+- Office 文件当前切到 macOS Quick Look 高保真 HTML 预览：后端用 `qlmanage -p -o` 生成 `.qlpreview` 包，并把其中 PDF 资源转成 PNG 以适配 Chromium iframe。它比正文抽取更接近本机预览；如果 Quick Look 生成失败，界面应提示用本机应用打开，不能回退成误导性的简化版 PPT/Word/Excel。
 - 任务状态存在 `data/state.json`，大规模数据不适合长期使用。
 - Hermes session 已有只读元数据索引和 Cowork 任务关联；原生 session 删除、重命名、全文浏览和双向同步还没有接。
 - 工具事件依赖 Hermes 当前 callbacks 暴露程度。

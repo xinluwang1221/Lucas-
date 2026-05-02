@@ -479,7 +479,7 @@ function App() {
     appendPrompt: appendPromptSnippet,
     onError: setError
   })
-  const { isDraggingFiles, dropzoneHandlers } = useWorkspaceDropzone({
+  const { isDraggingFiles, clearDropzone, dropzoneHandlers } = useWorkspaceDropzone({
     canDropFiles: Boolean(selectedWorkspace),
     onUploadFiles: (files) => void handleUploadFiles(files)
   })
@@ -1069,6 +1069,7 @@ function App() {
           onPromptKeyDown={handlePromptKeyDown}
           onRemoveSkill={(name) => setComposerSkillNames((current) => current.filter((item) => item !== name))}
           onAttachFiles={(files) => void handleAttachComposerFiles(files)}
+          onAttachmentDrag={clearDropzone}
           onRemoveAttachment={(attachmentId) => setComposerAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
           onPreviewAttachment={handlePreviewMessageAttachment}
           onOpenWorkspace={() => {

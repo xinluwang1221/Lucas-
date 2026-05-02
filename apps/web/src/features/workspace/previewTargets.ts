@@ -1,7 +1,7 @@
-import { artifactRawUrl } from '../file-preview/artifactApi'
+import { artifactQuickLookUrl, artifactRawUrl } from '../file-preview/artifactApi'
 import type { Artifact, WorkspaceFile } from '../../lib/api'
 import type { FilePreviewTarget } from '../file-preview/FilePreviewPanel'
-import { workspaceFileRawUrl } from './workspaceApi'
+import { workspaceFileQuickLookUrl, workspaceFileRawUrl } from './workspaceApi'
 
 export function workspacePreviewTarget(file: WorkspaceFile, workspaceId: string): FilePreviewTarget {
   return {
@@ -32,7 +32,11 @@ export function artifactPreviewTarget(artifact: Artifact): FilePreviewTarget {
   }
 }
 
-export function previewRawUrl(target: FilePreviewTarget) {
+export function previewRawUrl(target: FilePreviewTarget, kind?: string) {
+  if (kind === 'quicklook') {
+    if (target.source === 'artifact' && target.artifactId) return artifactQuickLookUrl(target.artifactId)
+    if (target.workspaceId) return workspaceFileQuickLookUrl(target.workspaceId, target.relativePath)
+  }
   if (target.source === 'artifact' && target.artifactId) return artifactRawUrl(target.artifactId)
   if (target.workspaceId) return workspaceFileRawUrl(target.workspaceId, target.relativePath)
   return undefined

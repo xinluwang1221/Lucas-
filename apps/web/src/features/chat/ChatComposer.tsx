@@ -18,11 +18,12 @@ import {
   Zap
 } from 'lucide-react'
 import type {
+  DragEvent as ReactDragEvent,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   RefObject
 } from 'react'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type {
   HermesModelOverview,
   HermesReasoningConfigureRequest,
@@ -60,6 +61,7 @@ export function ChatComposer({
   onPromptKeyDown,
   onRemoveSkill,
   onAttachFiles,
+  onAttachmentDrag,
   onRemoveAttachment,
   onPreviewAttachment,
   onOpenWorkspace,
@@ -92,6 +94,7 @@ export function ChatComposer({
   onPromptKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void
   onRemoveSkill: (name: string) => void
   onAttachFiles: (files: File[]) => void
+  onAttachmentDrag: () => void
   onRemoveAttachment: (attachmentId: string) => void
   onPreviewAttachment: (attachment: MessageAttachment) => void
   onOpenWorkspace: () => void
@@ -104,10 +107,57 @@ export function ChatComposer({
 }) {
   const effectiveEffort = hermesModel?.reasoning.effectiveEffort ?? 'medium'
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
+  const attachmentDragDepthRef = useRef(0)
+  const [attachmentDragging, setAttachmentDragging] = useState(false)
   const canSend = Boolean(prompt.trim() || composerAttachments.length)
 
+  function handleAttachmentDragEnter(event: ReactDragEvent<HTMLFormElement>) {
+    if (!hasDraggedFiles(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    onAttachmentDrag()
+    attachmentDragDepthRef.current += 1
+    setAttachmentDragging(true)
+  }
+
+  function handleAttachmentDragOver(event: ReactDragEvent<HTMLFormElement>) {
+    if (!hasDraggedFiles(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    onAttachmentDrag()
+    event.dataTransfer.dropEffect = attachmentUploading || runningTask ? 'none' : 'copy'
+    setAttachmentDragging(true)
+  }
+
+  function handleAttachmentDragLeave(event: ReactDragEvent<HTMLFormElement>) {
+    if (!hasDraggedFiles(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    attachmentDragDepthRef.current = Math.max(0, attachmentDragDepthRef.current - 1)
+    if (attachmentDragDepthRef.current === 0) setAttachmentDragging(false)
+  }
+
+  function handleAttachmentDrop(event: ReactDragEvent<HTMLFormElement>) {
+    if (!hasDraggedFiles(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    onAttachmentDrag()
+    attachmentDragDepthRef.current = 0
+    setAttachmentDragging(false)
+    if (attachmentUploading || runningTask) return
+    const files = Array.from(event.dataTransfer.files ?? [])
+    if (files.length) onAttachFiles(files)
+  }
+
   return (
-    <form className="composer" onSubmit={onSubmit}>
+    <form
+      className={attachmentDragging ? 'composer dragging-attachments' : 'composer'}
+      onSubmit={onSubmit}
+      onDragEnter={handleAttachmentDragEnter}
+      onDragOver={handleAttachmentDragOver}
+      onDragLeave={handleAttachmentDragLeave}
+      onDrop={handleAttachmentDrop}
+    >
       {composerSkillNames.length > 0 && (
         <div className="composer-skill-strip">
           <span>本次预载技能</span>
@@ -368,6 +418,10 @@ function composerModelTriggerLabel(model: ModelOption) {
   const label = model.label.includes('·') ? model.label.split('·').pop()?.trim() : model.label
   const compact = label?.replace(/^Hermes\s*默认模型$/, '默认模型') || model.id || '模型'
   return compact.length > 18 ? `${compact.slice(0, 16)}...` : compact
+}
+
+function hasDraggedFiles(event: ReactDragEvent<HTMLElement>) {
+  return Array.from(event.dataTransfer.types).includes('Files')
 }
 
 function formatBytes(size: number) {
