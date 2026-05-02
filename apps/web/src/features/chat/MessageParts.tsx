@@ -1,4 +1,4 @@
-import { FileArchive, FileText } from 'lucide-react'
+import { FileArchive, FileText, GitCompareArrows } from 'lucide-react'
 import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
@@ -76,6 +76,20 @@ export type MessagePart =
     streamStatus: TaskStreamStatus
     streamUpdatedAt: string | null
   }
+  | {
+    id: string
+    type: 'diff_card'
+    changedFiles: number
+    additions: number
+    deletions: number
+    files: DiffFileChange[]
+  }
+
+type DiffFileChange = {
+  path: string
+  additions: number
+  deletions: number
+}
 
 export function buildMessageParts({
   role,
@@ -100,9 +114,11 @@ export function buildMessageParts({
   }
 
   const fileOverview = extractFileOverviewTables(content, fileReferences)
+  const diffOverview = extractDiffSummaryBlocks(fileOverview.source)
   return [
-    { id: 'assistant-text', type: 'assistant_text', source: fileOverview.source, live },
+    { id: 'assistant-text', type: 'assistant_text', source: diffOverview.source, live },
     ...referencePart(fileOverview.references),
+    ...diffPart(diffOverview.diffs),
     ...artifactPart(artifactCards),
     ...attachmentPart(attachments)
   ]
@@ -186,6 +202,9 @@ export function MessagePartList({
             />
           )
         }
+        if (part.type === 'diff_card') {
+          return <MessageDiffCard part={part} key={part.id} />
+        }
         return (
           <MessageFileCards
             key={part.id}
@@ -197,6 +216,30 @@ export function MessagePartList({
         )
       })}
     </>
+  )
+}
+
+function MessageDiffCard({ part }: { part: Extract<MessagePart, { type: 'diff_card' }> }) {
+  return (
+    <details className="message-diff-card" open>
+      <summary>
+        <span className="message-diff-icon"><GitCompareArrows size={15} /></span>
+        <strong>{part.changedFiles} 个文件已更改</strong>
+        <em className="diff-addition">+{part.additions}</em>
+        <em className="diff-deletion">-{part.deletions}</em>
+      </summary>
+      {part.files.length > 0 && (
+        <ol>
+          {part.files.map((file) => (
+            <li key={`${file.path}-${file.additions}-${file.deletions}`}>
+              <code>{file.path}</code>
+              <span className="diff-addition">+{file.additions}</span>
+              <span className="diff-deletion">-{file.deletions}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </details>
   )
 }
 
@@ -359,6 +402,10 @@ function referencePart(references: MarkdownFileReference[]): MessagePart[] {
   return [{ id: 'file-references', type: 'file_cards', variant: 'references', references }]
 }
 
+function diffPart(diffs: Array<Extract<MessagePart, { type: 'diff_card' }>>): MessagePart[] {
+  return diffs
+}
+
 function formatBytes(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '0 B'
   if (size < 1024) return `${size} B`
@@ -398,6 +445,91 @@ function extractFileOverviewTables(source: string, fileReferences: MarkdownFileR
     source: compactMarkdown(lines.filter((_, lineIndex) => keep[lineIndex]).join('\n')),
     references
   }
+}
+
+function extractDiffSummaryBlocks(source: string) {
+  const lines = source.split(/\r?\n/)
+  const keep = lines.map(() => true)
+  const diffs: Array<Extract<MessagePart, { type: 'diff_card' }>> = []
+  let index = 0
+
+  while (index < lines.length) {
+    const summary = parseDiffSummaryLine(lines[index])
+    if (!summary) {
+      index += 1
+      continue
+    }
+
+    const files: DiffFileChange[] = []
+    let end = index + 1
+    while (end < lines.length) {
+      const file = parseDiffFileLine(lines[end])
+      if (!file) break
+      files.push(file)
+      end += 1
+    }
+
+    if (!files.length && !/文件已更改/.test(lines[index])) {
+      index += 1
+      continue
+    }
+
+    for (let lineIndex = index; lineIndex < end; lineIndex += 1) {
+      keep[lineIndex] = false
+    }
+    diffs.push({
+      id: `diff-${diffs.length + 1}`,
+      type: 'diff_card',
+      changedFiles: summary.changedFiles,
+      additions: summary.additions,
+      deletions: summary.deletions,
+      files
+    })
+    index = end
+  }
+
+  return {
+    source: compactMarkdown(lines.filter((_, lineIndex) => keep[lineIndex]).join('\n')),
+    diffs
+  }
+}
+
+function parseDiffSummaryLine(line: string) {
+  const clean = cleanDiffLine(line)
+  const match = clean.match(/(?:^|\s)(\d+)\s*个文件已更改\s*\+(\d+)\s*-(\d+)(?:\s|$)/)
+  if (!match) return null
+  return {
+    changedFiles: Number(match[1]),
+    additions: Number(match[2]),
+    deletions: Number(match[3])
+  }
+}
+
+function parseDiffFileLine(line: string): DiffFileChange | null {
+  const clean = cleanDiffLine(line)
+  const match = clean.match(/^(.+?)\s+\+(\d+)\s*-(\d+)$/)
+  if (!match) return null
+  const path = match[1].trim()
+  if (!isLikelyDiffPath(path)) return null
+  return {
+    path,
+    additions: Number(match[2]),
+    deletions: Number(match[3])
+  }
+}
+
+function cleanDiffLine(line: string) {
+  return line
+    .trim()
+    .replace(/^[-*•]\s+/, '')
+    .replace(/^\d+[.)]\s+/, '')
+    .replace(/`/g, '')
+    .replace(/\*\*/g, '')
+    .trim()
+}
+
+function isLikelyDiffPath(value: string) {
+  return /(?:^|[\\/])?[\w\u4e00-\u9fff .@()[\]-]+(?:[\\/][\w\u4e00-\u9fff .@()[\]-]+)*\.(?:ts|tsx|js|jsx|css|scss|md|json|yaml|yml|py|txt|html|docx?|xlsx?|pptx?|pdf)$/i.test(value)
 }
 
 function isMarkdownTableStart(header: string, separator: string) {

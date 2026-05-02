@@ -62,6 +62,40 @@ assert.equal(dataText.type, 'assistant_text')
 assert.match(dataText.source, /指标/)
 assert.match(dataText.source, /转化率/)
 
+const diffReply = [
+  '我已经完成这轮调整：',
+  '',
+  '3 个文件已更改 +120 -8',
+  'apps/web/src/App.tsx +20 -2',
+  'apps/web/src/features/chat/MessageParts.tsx +90 -4',
+  'Hermes_Cowork_开发文档.md +10 -2',
+  '',
+  '可以继续验证。'
+].join('\n')
+
+const diffParts = buildMessageParts({
+  role: 'assistant',
+  content: diffReply
+})
+const diffText = diffParts.find((part) => part.type === 'assistant_text')
+assert.ok(diffText)
+assert.doesNotMatch(diffText.source, /文件已更改/)
+assert.match(diffText.source, /我已经完成/)
+assert.match(diffText.source, /可以继续验证/)
+const diffCard = diffParts.find((part) => part.type === 'diff_card')
+assert.ok(diffCard)
+assert.equal(diffCard.changedFiles, 3)
+assert.equal(diffCard.additions, 120)
+assert.equal(diffCard.deletions, 8)
+assert.deepEqual(
+  diffCard.files.map((file) => [file.path, file.additions, file.deletions]),
+  [
+    ['apps/web/src/App.tsx', 20, 2],
+    ['apps/web/src/features/chat/MessageParts.tsx', 90, 4],
+    ['Hermes_Cowork_开发文档.md', 10, 2]
+  ]
+)
+
 const now = new Date().toISOString()
 const approvalTask: Task = {
   id: 'task-approval',
