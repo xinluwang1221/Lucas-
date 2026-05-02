@@ -60,10 +60,18 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  color: var(--panel);
-  background: var(--ink);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow-soft);
+}
+
+.brand-mark img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
 }
 
 .brand strong {

@@ -1,5 +1,4 @@
 import {
-  Bot,
   ChevronDown,
   Clock3,
   FolderPlus,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { Task, Workspace } from '../../lib/api'
+import hermesAgentIcon from '../../assets/hermes-agent-icon.png'
 import { SidebarWorkspaceNode } from '../workspace/SidebarWorkspaceNode'
 
 type SidebarViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
@@ -109,7 +109,7 @@ export function AppSidebar({
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark">
-          <Bot size={19} />
+          <img src={hermesAgentIcon} alt="" aria-hidden="true" />
         </div>
         <div className="brand-copy">
           <strong>Hermes Cowork</strong>
