@@ -64,6 +64,7 @@ import { useTaskContext } from './features/chat/useTaskContext'
 import { useTaskStream } from './features/chat/useTaskStream'
 import { useTaskSelection } from './features/chat/useTaskSelection'
 import { ProjectsView } from './features/workspace/ProjectsView'
+import { artifactPreviewTarget, workspacePreviewTarget } from './features/workspace/previewTargets'
 import { useWorkspaceFiles } from './features/workspace/useWorkspaceFiles'
 import { useWorkspaceActions } from './features/workspace/useWorkspaceActions'
 import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
@@ -687,16 +688,69 @@ function App() {
     void openWorkspaceFilePreview(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
   }
 
-  function handleOpenMessageFileReference(reference: MarkdownFileReference) {
+  function previewTargetFromAttachment(attachment: MessageAttachment) {
+    return workspacePreviewTarget(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
+  }
+
+  function previewTargetFromFileReference(reference: MarkdownFileReference) {
     const matched = selectedTaskFileReferences.find((item) => item.id === reference.id)
-    if (!matched) return
+    if (!matched) return null
     if (matched.source === 'artifact' && matched.artifact) {
-      void openArtifactPreview(matched.artifact)
-      return
+      return artifactPreviewTarget(matched.artifact)
     }
     if (matched.source === 'workspace' && matched.workspaceFile) {
-      void openWorkspaceFilePreview(matched.workspaceFile, matched.workspaceId ?? selectedWorkspaceId)
+      return workspacePreviewTarget(matched.workspaceFile, matched.workspaceId ?? selectedWorkspaceId)
     }
+    return null
+  }
+
+  function handleOpenMessageFileReference(reference: MarkdownFileReference) {
+    const target = previewTargetFromFileReference(reference)
+    if (!target) return
+    if (target.source === 'artifact' && target.artifactId) {
+      const matched = selectedTaskFileReferences.find((item) => item.id === reference.id)
+      if (matched?.artifact) void openArtifactPreview(matched.artifact)
+      return
+    }
+    if (target.source === 'workspace') {
+      const matched = selectedTaskFileReferences.find((item) => item.id === reference.id)
+      if (matched?.workspaceFile) void openWorkspaceFilePreview(matched.workspaceFile, target.workspaceId)
+    }
+  }
+
+  function handleOpenMessageAttachmentNative(attachment: MessageAttachment) {
+    void handleOpenPreviewTarget(previewTargetFromAttachment(attachment))
+  }
+
+  function handleRevealMessageAttachment(attachment: MessageAttachment) {
+    void handleRevealPreviewTarget(previewTargetFromAttachment(attachment))
+  }
+
+  function handleUseMessageAttachment(attachment: MessageAttachment) {
+    handleUsePreviewTarget(previewTargetFromAttachment(attachment))
+  }
+
+  function handleOpenMessageArtifactNative(artifact: Artifact) {
+    void handleOpenPreviewTarget(artifactPreviewTarget(artifact))
+  }
+
+  function handleUseMessageArtifact(artifact: Artifact) {
+    handleUsePreviewTarget(artifactPreviewTarget(artifact))
+  }
+
+  function handleOpenMessageFileReferenceNative(reference: MarkdownFileReference) {
+    const target = previewTargetFromFileReference(reference)
+    if (target) void handleOpenPreviewTarget(target)
+  }
+
+  function handleRevealMessageFileReference(reference: MarkdownFileReference) {
+    const target = previewTargetFromFileReference(reference)
+    if (target) void handleRevealPreviewTarget(target)
+  }
+
+  function handleUseMessageFileReference(reference: MarkdownFileReference) {
+    const target = previewTargetFromFileReference(reference)
+    if (target) handleUsePreviewTarget(target)
   }
 
   function handleUseSkill(skill: Skill) {
@@ -1065,7 +1119,13 @@ function App() {
                       attachments={message.attachments}
                       fileReferences={selectedTaskFileReferences}
                       onOpenAttachment={handlePreviewMessageAttachment}
+                      onOpenAttachmentNative={handleOpenMessageAttachmentNative}
+                      onRevealAttachment={handleRevealMessageAttachment}
+                      onUseAttachment={handleUseMessageAttachment}
                       onOpenFileReference={handleOpenMessageFileReference}
+                      onOpenFileReferenceNative={handleOpenMessageFileReferenceNative}
+                      onRevealFileReference={handleRevealMessageFileReference}
+                      onUseFileReference={handleUseMessageFileReference}
                     />
                   </article>
                 ))}
@@ -1083,8 +1143,17 @@ function App() {
               artifactCards={message.id === selectedTaskLatestAssistantMessageId ? selectedTask?.artifacts ?? [] : []}
               fileReferences={selectedTaskFileReferences}
               onOpenAttachment={handlePreviewMessageAttachment}
+              onOpenAttachmentNative={handleOpenMessageAttachmentNative}
+              onRevealAttachment={handleRevealMessageAttachment}
+              onUseAttachment={handleUseMessageAttachment}
               onOpenArtifact={(artifact) => void openArtifactPreview(artifact)}
+              onOpenArtifactNative={handleOpenMessageArtifactNative}
+              onRevealArtifact={(artifact) => void handleRevealArtifact(artifact)}
+              onUseArtifact={handleUseMessageArtifact}
               onOpenFileReference={handleOpenMessageFileReference}
+              onOpenFileReferenceNative={handleOpenMessageFileReferenceNative}
+              onRevealFileReference={handleRevealMessageFileReference}
+              onUseFileReference={handleUseMessageFileReference}
             />
           ))}
 
@@ -1118,6 +1187,9 @@ function App() {
                     live
                     fileReferences={selectedTaskFileReferences}
                     onOpenFileReference={handleOpenMessageFileReference}
+                    onOpenFileReferenceNative={handleOpenMessageFileReferenceNative}
+                    onRevealFileReference={handleRevealMessageFileReference}
+                    onUseFileReference={handleUseMessageFileReference}
                   />
                 ) : (
                   <div className="running-inline-status">

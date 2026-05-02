@@ -1090,14 +1090,13 @@
   margin-top: 12px;
 }
 
-.message-attachment-list button,
-.message-reference-file-card {
+.message-file-card {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 52px;
-  padding: 8px 12px;
+  padding: 7px 8px 7px 12px;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1106,13 +1105,29 @@
   box-shadow: var(--shadow-soft);
 }
 
-.message-attachment-list button:hover {
+.message-file-card:hover {
   color: var(--accent-strong);
   background: color-mix(in srgb, var(--success-soft) 38%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
-.message-attachment-list svg {
+.message-file-card.passive:hover {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.message-file-main {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.message-file-main > svg {
   display: grid;
   place-items: center;
   width: 30px;
@@ -1123,8 +1138,7 @@
   border-radius: 7px;
 }
 
-.message-attachment-list button > span,
-.message-reference-file-card > span {
+.message-file-main > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1132,11 +1146,33 @@
   font-weight: 800;
 }
 
-.message-attachment-list button > em,
-.message-reference-file-card > em {
+.message-file-main > em {
   color: var(--ink-soft);
   font-size: 10px;
   font-style: normal;
+}
+
+.message-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.message-file-actions button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.message-file-actions button:hover {
+  color: var(--accent-strong);
+  background: var(--surface-muted);
+  border-color: var(--line);
 }
 
 .message-output-file-list {
@@ -1150,11 +1186,11 @@
   font-weight: 800;
 }
 
-.message-output-file-list button {
+.message-output-file-list .message-file-card {
   border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 
-.message-output-file-list svg {
+.message-output-file-list .message-file-main > svg {
   color: var(--success);
 }
 
@@ -1169,17 +1205,12 @@
   font-weight: 800;
 }
 
-.message-reference-file-list button,
-.message-reference-file-list .message-reference-file-card {
+.message-reference-file-list .message-file-card {
   border-color: color-mix(in srgb, var(--success) 26%, var(--line));
 }
 
-.message-reference-file-list svg {
+.message-reference-file-list .message-file-main > svg {
   color: var(--success);
-}
-
-.message-reference-file-card.passive {
-  color: var(--ink);
 }
 
 .message-diff-card {

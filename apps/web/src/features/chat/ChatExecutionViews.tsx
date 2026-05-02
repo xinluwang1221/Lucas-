@@ -11,8 +11,17 @@ export function FragmentWithTrace({
   artifactCards = [],
   fileReferences = [],
   onOpenAttachment,
+  onOpenAttachmentNative,
+  onRevealAttachment,
+  onUseAttachment,
   onOpenArtifact,
-  onOpenFileReference
+  onOpenArtifactNative,
+  onRevealArtifact,
+  onUseArtifact,
+  onOpenFileReference,
+  onOpenFileReferenceNative,
+  onRevealFileReference,
+  onUseFileReference
 }: {
   message: Message
   task: Task | undefined
@@ -21,8 +30,17 @@ export function FragmentWithTrace({
   artifactCards?: Artifact[]
   fileReferences?: MarkdownFileReference[]
   onOpenAttachment?: (attachment: MessageAttachment) => void
+  onOpenAttachmentNative?: (attachment: MessageAttachment) => void
+  onRevealAttachment?: (attachment: MessageAttachment) => void
+  onUseAttachment?: (attachment: MessageAttachment) => void
   onOpenArtifact?: (artifact: Artifact) => void
+  onOpenArtifactNative?: (artifact: Artifact) => void
+  onRevealArtifact?: (artifact: Artifact) => void
+  onUseArtifact?: (artifact: Artifact) => void
   onOpenFileReference?: (reference: MarkdownFileReference) => void
+  onOpenFileReferenceNative?: (reference: MarkdownFileReference) => void
+  onRevealFileReference?: (reference: MarkdownFileReference) => void
+  onUseFileReference?: (reference: MarkdownFileReference) => void
 }) {
   return (
     <>
@@ -38,8 +56,17 @@ export function FragmentWithTrace({
           artifactCards={message.role === 'assistant' ? artifactCards : []}
           fileReferences={fileReferences}
           onOpenAttachment={onOpenAttachment}
+          onOpenAttachmentNative={onOpenAttachmentNative}
+          onRevealAttachment={onRevealAttachment}
+          onUseAttachment={onUseAttachment}
           onOpenArtifact={onOpenArtifact}
+          onOpenArtifactNative={onOpenArtifactNative}
+          onRevealArtifact={onRevealArtifact}
+          onUseArtifact={onUseArtifact}
           onOpenFileReference={onOpenFileReference}
+          onOpenFileReferenceNative={onOpenFileReferenceNative}
+          onRevealFileReference={onRevealFileReference}
+          onUseFileReference={onUseFileReference}
         />
       </article>
       {task && task.status !== 'running' && message.id === traceAfterMessageId && (

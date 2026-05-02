@@ -1,4 +1,5 @@
-import { FileArchive, FileText, GitCompareArrows } from 'lucide-react'
+import { ExternalLink, FileArchive, FileText, FolderOpen, GitCompareArrows, Plus } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
@@ -128,16 +129,34 @@ export function MessagePartList({
   parts,
   fileReferences,
   onOpenAttachment,
+  onOpenAttachmentNative,
+  onRevealAttachment,
+  onUseAttachment,
   onOpenArtifact,
+  onOpenArtifactNative,
+  onRevealArtifact,
+  onUseArtifact,
   onOpenFileReference,
+  onOpenFileReferenceNative,
+  onRevealFileReference,
+  onUseFileReference,
   formatTime,
   onRespondApproval
 }: {
   parts: MessagePart[]
   fileReferences?: MarkdownFileReference[]
   onOpenAttachment?: (attachment: MessageAttachment) => void
+  onOpenAttachmentNative?: (attachment: MessageAttachment) => void
+  onRevealAttachment?: (attachment: MessageAttachment) => void
+  onUseAttachment?: (attachment: MessageAttachment) => void
   onOpenArtifact?: (artifact: Artifact) => void
+  onOpenArtifactNative?: (artifact: Artifact) => void
+  onRevealArtifact?: (artifact: Artifact) => void
+  onUseArtifact?: (artifact: Artifact) => void
   onOpenFileReference?: (reference: MarkdownFileReference) => void
+  onOpenFileReferenceNative?: (reference: MarkdownFileReference) => void
+  onRevealFileReference?: (reference: MarkdownFileReference) => void
+  onUseFileReference?: (reference: MarkdownFileReference) => void
   formatTime?: (value: string) => string
   onRespondApproval?: (task: Task, choice: ApprovalChoice) => void
 }) {
@@ -210,8 +229,17 @@ export function MessagePartList({
             key={part.id}
             part={part}
             onOpenAttachment={onOpenAttachment}
+            onOpenAttachmentNative={onOpenAttachmentNative}
+            onRevealAttachment={onRevealAttachment}
+            onUseAttachment={onUseAttachment}
             onOpenArtifact={onOpenArtifact}
+            onOpenArtifactNative={onOpenArtifactNative}
+            onRevealArtifact={onRevealArtifact}
+            onUseArtifact={onUseArtifact}
             onOpenFileReference={onOpenFileReference}
+            onOpenFileReferenceNative={onOpenFileReferenceNative}
+            onRevealFileReference={onRevealFileReference}
+            onUseFileReference={onUseFileReference}
           />
         )
       })}
@@ -310,28 +338,47 @@ function taskStreamDescription(
 function MessageFileCards({
   part,
   onOpenAttachment,
+  onOpenAttachmentNative,
+  onRevealAttachment,
+  onUseAttachment,
   onOpenArtifact,
-  onOpenFileReference
+  onOpenArtifactNative,
+  onRevealArtifact,
+  onUseArtifact,
+  onOpenFileReference,
+  onOpenFileReferenceNative,
+  onRevealFileReference,
+  onUseFileReference
 }: {
   part: Extract<MessagePart, { type: 'file_cards' }>
   onOpenAttachment?: (attachment: MessageAttachment) => void
+  onOpenAttachmentNative?: (attachment: MessageAttachment) => void
+  onRevealAttachment?: (attachment: MessageAttachment) => void
+  onUseAttachment?: (attachment: MessageAttachment) => void
   onOpenArtifact?: (artifact: Artifact) => void
+  onOpenArtifactNative?: (artifact: Artifact) => void
+  onRevealArtifact?: (artifact: Artifact) => void
+  onUseArtifact?: (artifact: Artifact) => void
   onOpenFileReference?: (reference: MarkdownFileReference) => void
+  onOpenFileReferenceNative?: (reference: MarkdownFileReference) => void
+  onRevealFileReference?: (reference: MarkdownFileReference) => void
+  onUseFileReference?: (reference: MarkdownFileReference) => void
 }) {
   if (part.variant === 'attachments') {
     return (
       <div className="message-attachment-list" aria-label="消息附件">
         {part.attachments.map((attachment) => (
-          <button
-            type="button"
+          <MessageFileCard
             key={attachment.id}
+            icon={<FileText size={14} />}
+            name={attachment.name}
+            meta={formatBytes(attachment.size)}
             title={`打开附件：${attachment.relativePath}`}
-            onClick={() => onOpenAttachment?.(attachment)}
-          >
-            <FileText size={14} />
-            <span>{attachment.name}</span>
-            <em>{formatBytes(attachment.size)}</em>
-          </button>
+            onOpen={() => onOpenAttachment?.(attachment)}
+            onOpenNative={onOpenAttachmentNative ? () => onOpenAttachmentNative(attachment) : undefined}
+            onReveal={onRevealAttachment ? () => onRevealAttachment(attachment) : undefined}
+            onUseContext={onUseAttachment ? () => onUseAttachment(attachment) : undefined}
+          />
         ))}
       </div>
     )
@@ -341,16 +388,17 @@ function MessageFileCards({
     return (
       <div className="message-attachment-list message-output-file-list" aria-label="Hermes 输出文件">
         {part.artifacts.map((artifact) => (
-          <button
-            type="button"
+          <MessageFileCard
             key={artifact.id}
+            icon={<FileArchive size={14} />}
+            name={artifact.name}
+            meta={formatBytes(artifact.size)}
             title={`打开输出文件：${artifact.relativePath}`}
-            onClick={() => onOpenArtifact?.(artifact)}
-          >
-            <FileArchive size={14} />
-            <span>{artifact.name}</span>
-            <em>{formatBytes(artifact.size)}</em>
-          </button>
+            onOpen={() => onOpenArtifact?.(artifact)}
+            onOpenNative={onOpenArtifactNative ? () => onOpenArtifactNative(artifact) : undefined}
+            onReveal={onRevealArtifact ? () => onRevealArtifact(artifact) : undefined}
+            onUseContext={onUseArtifact ? () => onUseArtifact(artifact) : undefined}
+          />
         ))}
       </div>
     )
@@ -363,26 +411,89 @@ function MessageFileCards({
         const label = reference.relativePath ?? reference.type ?? '文件'
         if (!canOpen) {
           return (
-            <span className="message-reference-file-card passive" key={reference.id}>
-              <FileText size={14} />
-              <span>{reference.name}</span>
-              <em>{label}</em>
-            </span>
+            <MessageFileCard
+              key={reference.id}
+              icon={<FileText size={14} />}
+              name={reference.name}
+              meta={label}
+              passive
+            />
           )
         }
         return (
-          <button
-            type="button"
+          <MessageFileCard
             key={reference.id}
+            icon={<FileText size={14} />}
+            name={reference.name}
+            meta={label}
             title={`打开文件：${reference.relativePath ?? reference.name}`}
-            onClick={() => onOpenFileReference?.(reference)}
-          >
-            <FileText size={14} />
-            <span>{reference.name}</span>
-            <em>{label}</em>
-          </button>
+            onOpen={() => onOpenFileReference?.(reference)}
+            onOpenNative={onOpenFileReferenceNative ? () => onOpenFileReferenceNative(reference) : undefined}
+            onReveal={onRevealFileReference ? () => onRevealFileReference(reference) : undefined}
+            onUseContext={onUseFileReference ? () => onUseFileReference(reference) : undefined}
+          />
         )
       })}
+    </div>
+  )
+}
+
+function MessageFileCard({
+  icon,
+  name,
+  meta,
+  title,
+  passive = false,
+  onOpen,
+  onOpenNative,
+  onReveal,
+  onUseContext
+}: {
+  icon: ReactNode
+  name: string
+  meta: string
+  title?: string
+  passive?: boolean
+  onOpen?: () => void
+  onOpenNative?: () => void
+  onReveal?: () => void
+  onUseContext?: () => void
+}) {
+  const main = (
+    <>
+      {icon}
+      <span>{name}</span>
+      <em>{meta}</em>
+    </>
+  )
+  return (
+    <div className={passive ? 'message-file-card passive' : 'message-file-card'}>
+      {passive ? (
+        <span className="message-file-main">{main}</span>
+      ) : (
+        <button type="button" className="message-file-main" title={title} onClick={onOpen}>
+          {main}
+        </button>
+      )}
+      {!passive && (
+        <div className="message-file-actions" aria-label={`${name} 文件操作`}>
+          {onOpenNative && (
+            <button type="button" title="在本机应用中打开" onClick={onOpenNative}>
+              <ExternalLink size={14} />
+            </button>
+          )}
+          {onReveal && (
+            <button type="button" title="在 Finder 中显示" onClick={onReveal}>
+              <FolderOpen size={14} />
+            </button>
+          )}
+          {onUseContext && (
+            <button type="button" title="作为下一轮上下文" onClick={onUseContext}>
+              <Plus size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
