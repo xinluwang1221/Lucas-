@@ -100,79 +100,114 @@ Hermes 对接：
 
 Hermes Cowork 的产品边界必须按下面这张图理解：Cowork 是 Hermes 的本机工作台，不替代 Hermes Agent。Cowork 的价值是把 Hermes 后端已经具备但原本隐藏在 CLI/TUI、配置文件、session、事件流里的能力，变成用户能看到、能确认、能复测、能继续操作的产品入口。
 
+官网依据：
+
+- Hermes 官网把 Hermes 定位为“会长期运行、能记住经验、能通过多平台入口工作的自主 Agent”，不是单个聊天 API：`https://hermes-agent.nousresearch.com/`
+- Hermes 官方架构把系统分成入口层、`AIAgent`、提示词组装、模型选择、工具派发、Session 存储和工具后端：`https://hermes-agent.nousresearch.com/docs/developer-guide/architecture`
+- Hermes MCP 文档说明 MCP 是外接工具服务器能力，Hermes 会在启动时发现并注册工具：`https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp`
+- Hermes 安全文档说明危险命令审批、人类确认、隔离和上下文文件扫描是后端安全模型的一部分：`https://hermes-agent.nousresearch.com/docs/user-guide/security`
+
 这张图的读法：
 
-- 左侧是用户看见的 Cowork 产品入口。
-- 中间是 Cowork 自己维护的本机 Adapter 和状态层。
-- 右侧是 Hermes 已有或应优先对齐的后端能力。
-- 新开发功能时，必须先确认右侧 Hermes 是否有对应能力；如果有，就做前后端覆盖；如果没有，就明确标记为 Cowork 补充能力或产品假设，不能伪装成 Hermes 原生能力。
+- 第一层：你通过 Cowork 提出任务、放文件、选择模型、确认风险命令、查看结果。
+- 第二层：Cowork 把这些操作翻译成 Hermes 能理解的任务、配置、文件路径、审批回复和状态查询。
+- 第三层：Hermes 真正执行 Agent 循环：理解任务、组装上下文、选择模型、调用工具、读写文件、保存会话、必要时请求人工审批。
+- 第四层：模型、MCP、Skill、文件系统、浏览器、终端、记忆和安全隔离都是 Hermes 的后端资源；Cowork 只负责把它们变成可管理界面。
 
 ```mermaid
-flowchart LR
-  subgraph CoworkUI["Cowork 用户入口"]
-    Chat["对话区<br/>用户消息 / Hermes 回复 / 流式过程 / 审批卡"]
-    Composer["输入框<br/>附件 / 模型 / 思考强度 / 发送停止"]
-    Inspector["右侧工作区<br/>任务拆解 / 产物 / 上下文资源 / 文件预览"]
-    WorkspaceUI["工作区<br/>授权目录 / 文件 / 会话 / 产物"]
-    SettingsUI["设置<br/>模型 / MCP / 外观 / 更新 / 规则"]
-    SkillUI["技能<br/>Skill 文件 / 启停 / 预载"]
+flowchart TB
+  User["你<br/>提出任务、拖入文件、选择模型、确认风险命令"]
+
+  subgraph Cowork["Hermes Cowork：本机可视化工作台"]
+    C1["对话区<br/>显示你的问题、Hermes 回复、运行过程"]
+    C2["输入框<br/>附件、模型、思考强度、发送和停止"]
+    C3["右侧工作区<br/>任务目标、产物、上下文资源、文件预览"]
+    C4["设置<br/>模型、MCP、Skill、更新、外观"]
+    C5["工作区<br/>授权本机文件夹、管理文件和会话"]
   end
 
-  subgraph CoworkAdapter["Cowork Local Adapter 127.0.0.1:8787"]
-    StateApi["/api/state<br/>任务 / 消息 / 工作区索引"]
-    TaskApi["/api/tasks<br/>创建 / 继续 / 停止 / SSE stream"]
-    ApprovalApi["/api/tasks/:id/approval<br/>人工审批响应"]
-    ModelApi["/api/models<br/>模型目录 / 默认模型 / Key 状态 / reasoning"]
-    McpApi["/api/hermes/mcp<br/>MCP 读取 / 安装 / 测试 / 工具级开关"]
-    ContextApi["/api/tasks/:id/context<br/>上下文用量 / 资源 / 手动压缩"]
-    FileApi["/api/workspaces + /api/artifacts<br/>授权目录 / 附件 / 产物 / 预览"]
-    SkillApi["/api/skills<br/>Skill 扫描 / 文件查看 / 预载"]
-    RuntimeApi["/api/hermes/runtime + update<br/>版本 / 复测 / 自动更新"]
-    Runtime["Hermes Runtime Adapter<br/>tui_gateway 优先 / bridge 回退"]
+  subgraph Adapter["Cowork 本机后端：翻译层和记录层"]
+    A1["任务翻译<br/>把一次对话变成 Hermes 任务"]
+    A2["状态记录<br/>保存 Cowork 任务、消息、附件、产物索引"]
+    A3["配置管理<br/>读写 Hermes 模型、MCP、更新和安全配置"]
+    A4["审批转发<br/>把你点的允许或拒绝发回 Hermes"]
+    A5["文件服务<br/>上传、预览、Finder 定位、本机打开"]
   end
 
-  subgraph HermesCore["Hermes 后端能力"]
-    Gateway["tui_gateway.entry<br/>常驻 JSON-RPC / session / event stream"]
-    Agent["HermesCLI + AIAgent<br/>Agent loop / tools / MCP / skills"]
-    Approval["Approval / interrupt<br/>命令人工确认 / allow deny"]
-    ModelConfig["~/.hermes/config.yaml + .env<br/>provider / model / fallback / key / reasoning"]
-    McpConfig["mcp_servers<br/>server / transport / tools include exclude"]
-    Sessions["~/.hermes/sessions + state.db<br/>消息 / token / usage / session 元数据"]
-    Compressor["Context compressor<br/>上下文压缩 / usage"]
-    FileSystem["授权工作目录<br/>附件 / 产物 / 文件读写"]
-    RuntimeCode["Hermes repo / version<br/>升级 / 回滚 / 兼容性"]
+  subgraph Hermes["Hermes Agent：真正干活的智能体"]
+    H1["入口层<br/>CLI、Gateway、API、批处理、多平台消息入口"]
+    H2["AIAgent<br/>核心任务循环：思考、行动、观察、继续"]
+    H3["上下文组装<br/>系统提示、你的问题、工作区文件、Skill、记忆"]
+    H4["模型选择<br/>Provider、模型、Fallback、Reasoning"]
+    H5["工具派发<br/>终端、文件、网页、浏览器、代码执行、MCP"]
+    H6["会话与记忆<br/>Session、SQLite、搜索、上下文压缩"]
+    H7["安全边界<br/>危险命令审批、沙箱、权限和注入检查"]
   end
 
-  Chat --> StateApi
-  Chat --> TaskApi
-  Chat --> ApprovalApi
-  Composer --> TaskApi
-  Composer --> ModelApi
-  Composer --> FileApi
-  Inspector --> ContextApi
-  Inspector --> FileApi
-  WorkspaceUI --> FileApi
-  WorkspaceUI --> StateApi
-  SettingsUI --> ModelApi
-  SettingsUI --> McpApi
-  SettingsUI --> RuntimeApi
-  SkillUI --> SkillApi
+  subgraph Resources["Hermes 可调用的外部资源"]
+    R1["大模型服务<br/>MiMo、DeepSeek、Qwen、Kimi 等"]
+    R2["MCP 外接工具<br/>GitHub、数据库、文件系统、内部 API"]
+    R3["本机工作区<br/>用户授权给 Hermes 读写的文件夹"]
+    R4["浏览器和网页<br/>搜索、打开网页、自动化操作"]
+    R5["终端和沙箱<br/>命令执行、隔离环境、后台进程"]
+  end
 
-  StateApi --> Sessions
-  TaskApi --> Runtime
-  ApprovalApi --> Gateway
-  ModelApi --> ModelConfig
-  McpApi --> McpConfig
-  ContextApi --> Sessions
-  ContextApi --> Compressor
-  FileApi --> FileSystem
-  SkillApi --> Agent
-  RuntimeApi --> RuntimeCode
-  Runtime --> Gateway
-  Runtime --> Agent
-  Gateway --> Approval
-  Agent --> Approval
+  User --> Cowork
+  Cowork --> Adapter
+  Adapter --> H1
+  H1 --> H2
+  H2 --> H3
+  H2 --> H4
+  H2 --> H5
+  H2 --> H6
+  H2 --> H7
+  H4 --> R1
+  H5 --> R2
+  H5 --> R3
+  H5 --> R4
+  H5 --> R5
+  H7 --> A4
+  H6 --> A2
+  H5 --> A5
+  Adapter --> Cowork
 ```
+
+用一句话理解：
+
+```text
+你在 Cowork 里开车；Cowork 是方向盘、仪表盘和刹车；Hermes 是发动机和自动驾驶系统；模型、MCP、浏览器、文件和终端是 Hermes 可以调用的动力和工具。
+```
+
+### 3.1.1 新手术语翻译表
+
+| 官网或代码里的词 | 用人话理解 | Cowork 里应该对应什么 |
+| --- | --- | --- |
+| Entry Points | Hermes 可以从哪里被叫醒。CLI、Gateway、API、消息平台都是入口。 | Cowork 当前主要使用本机 Gateway/bridge，未来客户端也会成为入口。 |
+| Gateway | 常驻通道。让 Hermes 不必每次都重新启动，可以持续接收任务和返回事件。 | Cowork 的实时流式输出、停止任务、审批回复都应该优先走 Gateway。 |
+| AIAgent | Hermes 的大脑。它负责决定下一步想什么、用什么模型、调什么工具。 | Cowork 不重写它，只展示它的过程和结果。 |
+| Prompt Builder | 任务资料打包器。把系统规则、用户问题、文件、Skill、记忆组装给模型。 | Cowork 的附件、工作区文件、Skill 预载都要进入这里。 |
+| Provider Resolution | 模型调度器。决定这次用哪个模型、哪个供应商、哪个备用模型。 | Cowork 的模型设置、Key 重填、Fallback 和思考强度入口。 |
+| Tool Dispatch | 工具派发器。Hermes 决定要读文件、跑命令、查网页、用浏览器或调 MCP 时经过这里。 | Cowork 的过程流、右侧资源、MCP 管理和工具调用展示。 |
+| MCP | 外接工具插座。让 Hermes 使用 GitHub、数据库、文件系统、内部 API 等外部工具。 | 设置 > MCP、技能页 Connectors、过程资源里的工具调用。 |
+| Session Storage | 工作记忆和历史记录。保存对话、任务状态、检索索引和上下文。 | 左侧会话、继续对话、上下文用量、手动压缩。 |
+| Context Compression | 长对话压缩。对话太长时，把历史压缩成可继续使用的摘要。 | 右侧上下文资源里的用量、压缩建议和手动压缩按钮。 |
+| Skills | 工作方法说明书。告诉 Hermes 某类任务应该怎么做。 | 技能页、Skill 文件预览、加入下一次任务。 |
+| Approval | 安全刹车。危险命令执行前要求用户确认。 | 对话区审批卡，必须能允许一次、本会话允许、总是允许或拒绝。 |
+| Sandbox | 隔离房间。让命令和代码在受控环境中运行，降低误伤本机风险。 | 设置和任务过程里只展示用户能处理的安全状态，不展示大量原始日志。 |
+
+### 3.1.2 用户操作与 Hermes 后端能力的对应关系
+
+| 你在 Cowork 做什么 | Cowork 要做什么 | Hermes 背后发生什么 | 如果没做 UI 会怎样 |
+| --- | --- | --- | --- |
+| 发一句任务 | 立刻显示你的消息，创建 Hermes task，订阅流式事件 | Gateway/Agent 开始一次任务循环 | 用户会以为消息丢了，或者长时间空白 |
+| 拖入 PPT、Excel、Word、图片 | 先放进输入框附件，再上传到授权工作区 | Prompt Builder 把文件路径作为上下文给 Agent | 文件会变成后台上传，用户无法告诉 AI 要怎么处理 |
+| 选择模型或重填 Key | 写入 Hermes 配置或 `.env`，刷新模型状态 | Provider Resolution 选择供应商、模型和备用路线 | Cowork 显示一个模型，Hermes 实际用另一个模型 |
+| 添加 MCP | 写入 `mcp_servers`，测试连接，显示工具列表 | Hermes 启动时发现 MCP 工具并注册到工具派发器 | 用户不知道这个 MCP 能干什么，也不知道是否可用 |
+| 打开 Skill | 展示 `SKILL.md` 和子文件，可加入下一次任务 | Skill 内容进入 Prompt Builder 或 Hermes skill 系统 | 用户不知道 Skill 具体做什么，也无法确认是否被用到 |
+| 查看任务过程 | 把工具、网页、文件、审批、产物分成可读过程 | AIAgent 按“思考、行动、观察、继续”循环执行 | 原始日志会刷屏，用户看不到 Agent 当前在做哪一步 |
+| 确认风险命令 | 弹出审批卡，把结果发回 Hermes | Hermes 的 Approval 层决定继续、拒绝或超时失败 | 任务会卡住或失败，用户不知道需要自己确认 |
+| 继续追问 | 找到同一个 Hermes session 或按规则新开 session | Session Storage 继续同一上下文，或用新模型开新会话 | 上下文会错位，旧模型和新模型会混用 |
+| 查看/打开产物 | 显示文件卡片、右侧预览、本机打开、Finder 定位 | 文件工具或 MCP 在工作区生成真实文件 | 结果只是一段文字，用户找不到生成物 |
 
 架构约束：
 
