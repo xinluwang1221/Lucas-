@@ -956,18 +956,10 @@ function App() {
             cronNotice={cronNotice}
             workspaces={state.workspaces}
             skills={skills}
-            backgroundStatus={backgroundStatus}
-            backgroundUpdating={backgroundUpdating}
-            backgroundError={backgroundError}
-            recommendations={mcpRecommendations}
-            recommendationsLoading={mcpRecommendationsLoading}
-            recommendationsError={mcpRecommendationsError}
             onRefreshCron={() => void refreshCronState()}
             onCreateCronJob={(input, onSuccess) => void handleCreateCronJob(input, onSuccess)}
             onUpdateCronJob={(jobId, input, onSuccess) => void handleUpdateCronJob(jobId, input, onSuccess)}
             onRunCronAction={(jobId, action) => void runJobAction(jobId, action)}
-            onToggleBackground={(enabled) => void handleToggleBackgroundServices(enabled)}
-            onGenerateReport={() => void handleRefreshMcpRecommendationsWithAi()}
           />
         ) : viewMode === 'projects' ? (
           <ProjectsView

@@ -14,15 +14,12 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type {
-  BackgroundServiceStatus,
   HermesCronJob,
   HermesCronJobInput,
   HermesCronState,
-  HermesMcpRecommendations,
   Skill,
   Workspace
 } from '../../lib/api'
-import { Toggle } from '../settings/settingsControls'
 
 type ScheduledTasksViewProps = {
   cronState: HermesCronState | null
@@ -33,18 +30,10 @@ type ScheduledTasksViewProps = {
   cronNotice: string | null
   workspaces: Workspace[]
   skills: Skill[]
-  backgroundStatus: BackgroundServiceStatus | null
-  backgroundUpdating: boolean
-  backgroundError: string | null
-  recommendations: HermesMcpRecommendations | null
-  recommendationsLoading: boolean
-  recommendationsError: string | null
   onRefreshCron: () => void
   onCreateCronJob: (input: HermesCronJobInput, onSuccess?: () => void) => void
   onUpdateCronJob: (jobId: string, input: HermesCronJobInput, onSuccess?: () => void) => void
   onRunCronAction: (jobId: string, action: 'pause' | 'resume' | 'run' | 'remove') => void
-  onToggleBackground: (enabled: boolean) => void
-  onGenerateReport: () => void
 }
 
 export function ScheduledTasksView({
@@ -56,18 +45,10 @@ export function ScheduledTasksView({
   cronNotice,
   workspaces,
   skills,
-  backgroundStatus,
-  backgroundUpdating,
-  backgroundError,
-  recommendations,
-  recommendationsLoading,
-  recommendationsError,
   onRefreshCron,
   onCreateCronJob,
   onUpdateCronJob,
-  onRunCronAction,
-  onToggleBackground,
-  onGenerateReport
+  onRunCronAction
 }: ScheduledTasksViewProps) {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [editingJob, setEditingJob] = useState<HermesCronJob | null>(null)
@@ -77,14 +58,14 @@ export function ScheduledTasksView({
     () => jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null,
     [jobs, selectedJobId]
   )
-  const backgroundEnabled = Boolean(backgroundStatus?.api.loaded && backgroundStatus.dailyMcp.loaded)
+  const schedulerRunning = Boolean(cronState?.scheduler.running)
 
   return (
     <section className="product-page scheduled-page">
       <header className="product-page-head">
         <div>
           <h1>定时任务</h1>
-          <p>管理 Hermes Cron。这里创建的任务会写入 Hermes，按 gateway 的定时器自动执行。</p>
+          <p>管理会按时间自动执行的 Hermes 任务。保存后由 Hermes 后台按计划运行。</p>
         </div>
         <div className="scheduled-actions">
           <button className="ghost-button" onClick={onRefreshCron} disabled={cronLoading}>
@@ -98,9 +79,9 @@ export function ScheduledTasksView({
         </div>
       </header>
 
-      {(cronError || backgroundError || recommendationsError || cronNotice) && (
-        <div className={cronError || backgroundError || recommendationsError ? 'scheduled-banner danger' : 'scheduled-banner'}>
-          {cronError || backgroundError || recommendationsError || cronNotice}
+      {(cronError || cronNotice) && (
+        <div className={cronError ? 'scheduled-banner danger' : 'scheduled-banner'}>
+          {cronError || cronNotice}
         </div>
       )}
 
@@ -108,11 +89,15 @@ export function ScheduledTasksView({
         <aside className="scheduled-list-panel">
           <div className="scheduled-health-card">
             <div>
-              <strong>Hermes Cron</strong>
-              <span>{cronState?.scheduler.running ? '自动执行已运行' : '自动执行未启动'}</span>
+              <strong>{schedulerRunning ? '自动执行已开启' : '自动执行未开启'}</strong>
+              <span>
+                {schedulerRunning
+                  ? 'Hermes 后台正在监听定时任务，到时间会自动执行。'
+                  : '任务可以先保存，但不会按时间自动触发；需要启动 Hermes 后台后才会自动执行。'}
+              </span>
             </div>
-            <span className={cronState?.scheduler.running ? 'status-pill ok' : 'status-pill warn'}>
-              {cronState?.scheduler.running ? '运行中' : '需启动'}
+            <span className={schedulerRunning ? 'status-pill ok' : 'status-pill warn'}>
+              {schedulerRunning ? '正常' : '未开启'}
             </span>
           </div>
 
@@ -121,7 +106,7 @@ export function ScheduledTasksView({
               <div className="scheduled-empty">
                 <CalendarClock size={22} />
                 <strong>还没有 Hermes 定时任务</strong>
-                <span>新建后会写入 Hermes cron 数据库，不是 Cowork 本地假任务。</span>
+                <span>新建后会保存到 Hermes 的定时任务里，之后可以自动运行。</span>
               </div>
             )}
             {jobs.map((job) => (
@@ -158,47 +143,24 @@ export function ScheduledTasksView({
             <div className="scheduled-detail-empty">
               <CalendarClock size={26} />
               <strong>选择或新建一个定时任务</strong>
-              <span>推荐从“每天下班复盘”“每周整理工作区文件”“定时生成 MCP 推荐”开始。</span>
+              <span>可以从“每天下班复盘”“每周整理工作区文件”“每周生成项目总结”开始。</span>
             </div>
           )}
         </main>
       </div>
 
-      <div className="scheduled-support-grid">
-        <article className="schedule-card">
-          <div className="schedule-card-head">
-            <div>
-              <strong>Cowork 后台保活</strong>
-              <span>后台服务只负责让 Cowork API 和 MCP 推荐日报常驻；Hermes Cron 是否执行，以 gateway 状态为准。</span>
-            </div>
-            <Toggle checked={backgroundEnabled} disabled={backgroundUpdating} onChange={onToggleBackground} />
-          </div>
-          <div className="schedule-status-list">
-            <div>
-              <span>API 后台</span>
-              <em>{backgroundStatus?.api.loaded ? '运行中' : backgroundStatus?.api.installed ? '已安装未运行' : '未安装'}</em>
-            </div>
-            <div>
-              <span>每日推荐</span>
-              <em>{backgroundStatus?.dailyMcp.loaded ? '运行中' : backgroundStatus?.dailyMcp.installed ? '已安装未运行' : '未安装'}</em>
-            </div>
-          </div>
+      <div className="scheduled-guidance-grid">
+        <article className="scheduled-guidance-card">
+          <strong>下一步</strong>
+          <span>
+            {jobs.length
+              ? '选择左侧任务查看执行计划、最近输出和操作入口。'
+              : '先点击“新建定时任务”，把重复工作保存成 Hermes 可以按时执行的任务。'}
+          </span>
         </article>
-
-        <article className="schedule-card">
-          <div className="schedule-card-head">
-            <div>
-              <strong>每日 MCP 推荐日报</strong>
-              <span>根据最近任务和卡点生成推荐，结果进入 MCP 市场。</span>
-            </div>
-            <button className="ghost-button" onClick={onGenerateReport} disabled={recommendationsLoading}>
-              {recommendationsLoading ? <Loader2 size={16} className="spin" /> : <RefreshCw size={16} />}
-              生成
-            </button>
-          </div>
-          <p className="scheduled-muted-copy">
-            {recommendations?.generatedAt ? `最近生成：${formatDate(recommendations.generatedAt)}` : '暂无日报。'}
-          </p>
+        <article className="scheduled-guidance-card">
+          <strong>页面边界</strong>
+          <span>这里仅管理定时任务。MCP 推荐日报在 MCP 设置和市场里查看，Cowork 后台服务放在系统设置里处理。</span>
         </article>
       </div>
 

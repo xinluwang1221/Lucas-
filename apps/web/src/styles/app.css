@@ -393,7 +393,7 @@
 
 .scheduled-health-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
@@ -405,6 +405,11 @@
 .scheduled-health-card div {
   display: grid;
   gap: 3px;
+  min-width: 0;
+}
+
+.scheduled-health-card .status-pill {
+  flex: 0 0 auto;
 }
 
 .scheduled-health-card strong {
@@ -643,10 +648,32 @@
   line-height: 1.55;
 }
 
-.scheduled-support-grid {
+.scheduled-guidance-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.scheduled-guidance-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.scheduled-guidance-card strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.scheduled-guidance-card span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .cron-modal {
@@ -3148,7 +3175,7 @@
   .dispatch-grid,
   .schedule-grid,
   .scheduled-shell,
-  .scheduled-support-grid {
+  .scheduled-guidance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3161,7 +3188,7 @@
   .dispatch-grid,
   .schedule-grid,
   .scheduled-shell,
-  .scheduled-support-grid,
+  .scheduled-guidance-grid,
   .cron-detail-grid,
   .cron-form-grid {
     grid-template-columns: 1fr;
@@ -3184,6 +3211,7 @@
 :root[data-theme-mode="dark"] .schedule-card,
 :root[data-theme-mode="dark"] .scheduled-list-panel,
 :root[data-theme-mode="dark"] .scheduled-detail-panel,
+:root[data-theme-mode="dark"] .scheduled-guidance-card,
 :root[data-theme-mode="dark"] .cron-modal,
 :root[data-theme-mode="dark"] .cron-output-card,
 :root[data-theme-mode="dark"] .dispatch-card,
