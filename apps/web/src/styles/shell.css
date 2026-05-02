@@ -3,7 +3,8 @@
   grid-template-columns: var(--sidebar-width, 286px) minmax(560px, 1fr) var(--inspector-width, 560px);
   width: 100%;
   min-width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
@@ -29,11 +30,11 @@
 }
 
 .app-shell.file-preview-mode {
-  grid-template-columns: var(--sidebar-width, 286px) minmax(520px, 1fr) var(--inspector-width, 560px);
+  grid-template-columns: var(--sidebar-width, 286px) minmax(0, 1fr) var(--inspector-width, 560px);
 }
 
 .app-shell.file-preview-mode.left-sidebar-collapsed {
-  grid-template-columns: 0 minmax(620px, 1fr) var(--inspector-width, 560px);
+  grid-template-columns: 0 minmax(0, 1fr) var(--inspector-width, 560px);
 }
 
 .app-shell.file-preview-mode.right-sidebar-collapsed {

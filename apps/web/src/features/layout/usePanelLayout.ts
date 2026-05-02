@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -108,6 +109,19 @@ export function usePanelLayout() {
     window.addEventListener('pointercancel', stopResize)
   }
 
+  const ensureRightPanelWidth = useCallback(
+    (minWidth: number) => {
+      setPanelLayout((current) => {
+        const next = clampPanelLayout(
+          { ...current, right: Math.max(current.right, minWidth) },
+          { leftCollapsed: leftSidebarCollapsed }
+        )
+        return next.left === current.left && next.right === current.right ? current : next
+      })
+    },
+    [leftSidebarCollapsed]
+  )
+
   const panelLayoutStyle = useMemo(
     () =>
       ({
@@ -125,6 +139,7 @@ export function usePanelLayout() {
     panelLayout,
     draggingPane,
     startPaneResize,
+    ensureRightPanelWidth,
     panelLayoutStyle
   }
 }

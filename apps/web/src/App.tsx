@@ -205,6 +205,11 @@ function mergeComposerAttachments(current: MessageAttachment[], incoming: Messag
   return Array.from(merged.values()).slice(0, 12)
 }
 
+function preferredPreviewPanelWidth() {
+  if (typeof window === 'undefined') return 680
+  return Math.min(820, Math.max(660, Math.round(window.innerWidth * 0.36)))
+}
+
 type ConversationFileReference = MarkdownFileReference & {
   source: 'artifact' | 'workspace'
   workspaceId?: string
@@ -273,6 +278,7 @@ function App() {
     panelLayout,
     draggingPane,
     startPaneResize,
+    ensureRightPanelWidth,
     panelLayoutStyle
   } = usePanelLayout()
   const [prompt, setPrompt] = useState('')
@@ -471,6 +477,7 @@ function App() {
     selectedWorkspaceId,
     onOpen: () => {
       setRightSidebarCollapsed(false)
+      ensureRightPanelWidth(preferredPreviewPanelWidth())
       setFilePreviewFullscreen(false)
     },
     onError: setError

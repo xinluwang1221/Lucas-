@@ -8,7 +8,9 @@
 .file-preview-panel {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   color: var(--ink);
   background: var(--surface-subtle);
 }
@@ -17,6 +19,7 @@
   position: fixed;
   inset: 12px;
   z-index: 45;
+  height: auto;
   min-height: 0;
   overflow: hidden;
   background: var(--surface-subtle);
@@ -157,6 +160,8 @@
   overflow: auto;
   padding: 18px;
   background: var(--surface-subtle);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .file-preview-panel.fullscreen .file-preview-surface {
