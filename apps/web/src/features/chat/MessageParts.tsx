@@ -1,6 +1,7 @@
 import { FileArchive, FileText } from 'lucide-react'
-import type { Artifact, Message, MessageAttachment } from '../../lib/api'
+import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
+import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
 
 export type MessagePart =
   | {
@@ -31,6 +32,12 @@ export type MessagePart =
     type: 'file_cards'
     variant: 'artifacts'
     artifacts: Artifact[]
+  }
+  | {
+    id: string
+    type: 'approval_card'
+    task: Task
+    busy: boolean
   }
 
 export function buildMessageParts({
@@ -69,13 +76,17 @@ export function MessagePartList({
   fileReferences,
   onOpenAttachment,
   onOpenArtifact,
-  onOpenFileReference
+  onOpenFileReference,
+  formatTime,
+  onRespondApproval
 }: {
   parts: MessagePart[]
   fileReferences?: MarkdownFileReference[]
   onOpenAttachment?: (attachment: MessageAttachment) => void
   onOpenArtifact?: (artifact: Artifact) => void
   onOpenFileReference?: (reference: MarkdownFileReference) => void
+  formatTime?: (value: string) => string
+  onRespondApproval?: (task: Task, choice: ApprovalChoice) => void
 }) {
   return (
     <>
@@ -98,6 +109,17 @@ export function MessagePartList({
             </div>
           )
         }
+        if (part.type === 'approval_card') {
+          return (
+            <ApprovalRequestCard
+              task={part.task}
+              busy={part.busy}
+              formatTime={formatTime ?? ((value) => value)}
+              onRespond={(task, choice) => onRespondApproval?.(task, choice)}
+              key={part.id}
+            />
+          )
+        }
         return (
           <MessageFileCards
             key={part.id}
@@ -110,6 +132,11 @@ export function MessagePartList({
       })}
     </>
   )
+}
+
+export function buildApprovalMessageParts(task: Task | undefined, busy = false): MessagePart[] {
+  if (!task || !latestPendingApprovalRequest(task)) return []
+  return [{ id: 'approval-request', type: 'approval_card', task, busy }]
 }
 
 function MessageFileCards({

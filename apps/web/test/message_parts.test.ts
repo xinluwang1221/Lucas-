@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { buildMessageParts } from '../src/features/chat/MessageParts'
+import { buildApprovalMessageParts, buildMessageParts } from '../src/features/chat/MessageParts'
+import type { Task } from '../src/lib/api'
 
 const fileListReply = [
   '能看到，你发来了 3 个文件：',
@@ -55,5 +56,43 @@ const dataText = dataParts[0]
 assert.equal(dataText.type, 'assistant_text')
 assert.match(dataText.source, /指标/)
 assert.match(dataText.source, /转化率/)
+
+const now = new Date().toISOString()
+const approvalTask: Task = {
+  id: 'task-approval',
+  workspaceId: 'workspace',
+  title: '审批测试',
+  status: 'running',
+  prompt: '运行命令',
+  createdAt: now,
+  updatedAt: now,
+  messages: [],
+  artifacts: [],
+  events: [
+    {
+      id: 'approval-1',
+      type: 'approval.request',
+      createdAt: now,
+      command: 'curl https://example.com',
+      description: '请求访问外部地址'
+    }
+  ]
+}
+
+const approvalParts = buildApprovalMessageParts(approvalTask, true)
+assert.equal(approvalParts.length, 1)
+const approvalPart = approvalParts[0]
+assert.equal(approvalPart.type, 'approval_card')
+if (approvalPart.type !== 'approval_card') throw new Error('Expected approval card part')
+assert.equal(approvalPart.busy, true)
+
+const resolvedApprovalParts = buildApprovalMessageParts({
+  ...approvalTask,
+  events: [
+    ...approvalTask.events!,
+    { id: 'approval-resolved', type: 'approval.resolved', createdAt: now, choice: 'once' }
+  ]
+})
+assert.equal(resolvedApprovalParts.length, 0)
 
 console.log('Message parts test passed')
