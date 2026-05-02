@@ -46,6 +46,7 @@ export type MessageAnnotation = {
   }
   page?: number
   selectedText?: string
+  contextExcerpt?: string
   note?: string
   createdAt: string
 }

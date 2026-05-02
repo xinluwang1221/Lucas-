@@ -1904,6 +1904,7 @@ function normalizeTaskAnnotations(value: unknown, workspace: Workspace, createdA
   if (!Array.isArray(value)) return []
   const annotations: MessageAnnotation[] = []
   const seen = new Set<string>()
+  const contextExcerptCache = new Map<string, string | undefined>()
 
   for (const item of value.slice(0, 12)) {
     if (!item || typeof item !== 'object') continue
@@ -1919,6 +1920,8 @@ function normalizeTaskAnnotations(value: unknown, workspace: Workspace, createdA
       const key = `${relativePath}:${rect.x}:${rect.y}:${rect.width}:${rect.height}`
       if (seen.has(key)) continue
       seen.add(key)
+      const selectedText = sanitizeOptionalAnnotationText(record.selectedText, 2000)
+      const contextExcerpt = selectedText ? undefined : readAnnotationContextExcerpt(targetPath, contextExcerptCache)
       annotations.push({
         id: crypto.randomUUID(),
         workspaceId: workspace.id,
@@ -1931,7 +1934,8 @@ function normalizeTaskAnnotations(value: unknown, workspace: Workspace, createdA
         previewKind: sanitizeAnnotationText(record.previewKind, 'file'),
         rect,
         page: numberInRange(record.page, 1, 100000),
-        selectedText: sanitizeOptionalAnnotationText(record.selectedText, 2000),
+        selectedText,
+        contextExcerpt,
         note: sanitizeOptionalAnnotationText(record.note, 1000),
         createdAt
       })
@@ -1941,6 +1945,28 @@ function normalizeTaskAnnotations(value: unknown, workspace: Workspace, createdA
   }
 
   return annotations
+}
+
+function readAnnotationContextExcerpt(filePath: string, cache: Map<string, string | undefined>) {
+  if (cache.has(filePath)) return cache.get(filePath)
+  let excerpt: string | undefined
+  try {
+    excerpt = clipAnnotationContext(readPreviewBody(filePath), 1800)
+  } catch {
+    excerpt = undefined
+  }
+  cache.set(filePath, excerpt)
+  return excerpt
+}
+
+function clipAnnotationContext(value: string, maxLength: number) {
+  const normalized = value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  if (!normalized) return undefined
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized
 }
 
 function normalizeAnnotationRect(value: unknown): MessageAnnotation['rect'] | null {
@@ -1991,6 +2017,8 @@ function promptWithContext(prompt: string, attachments: MessageAttachment[], ann
     const detail = `工作区相对路径：${annotation.relativePath}；预览类型：${annotation.previewKind}；区域：x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%`
     return annotation.selectedText
       ? `- ${annotation.label}: ${annotation.path} (${detail})\n  选区识别文本：${annotation.selectedText}`
+      : annotation.contextExcerpt
+        ? `- ${annotation.label}: ${annotation.path} (${detail})\n  文件正文摘录（用于辅助定位，框选区域以坐标为准）：${annotation.contextExcerpt}`
       : `- ${annotation.label}: ${annotation.path} (${detail})`
   })
   return [
@@ -2045,6 +2073,7 @@ function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: s
           const rect = annotation.rect
           lines.push(`- ${annotation.label}：\`${annotation.relativePath}\` (${annotation.previewKind}；x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%)`)
           if (annotation.selectedText) lines.push(`  - 选区识别文本：${annotation.selectedText}`)
+          if (annotation.contextExcerpt) lines.push(`  - 文件正文摘录：${annotation.contextExcerpt}`)
         }
         lines.push('')
       }

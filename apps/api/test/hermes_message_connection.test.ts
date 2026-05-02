@@ -24,7 +24,13 @@ type Task = {
   messages?: Array<{
     role: string
     content: string
-    annotations?: Array<{ label: string; relativePath: string; rect: { x: number; y: number; width: number; height: number } }>
+    annotations?: Array<{
+      label: string
+      relativePath: string
+      selectedText?: string
+      contextExcerpt?: string
+      rect: { x: number; y: number; width: number; height: number }
+    }>
   }>
 }
 
@@ -38,6 +44,7 @@ async function main() {
   const workspaceDir = path.join(testDir, 'workspace')
   fs.mkdirSync(workspaceDir, { recursive: true })
   fs.writeFileSync(path.join(workspaceDir, 'annotated.md'), '# 批注测试文件\n', 'utf8')
+  fs.writeFileSync(path.join(workspaceDir, 'fallback.md'), '# 兜底正文\n\n这是没有前端选区文本时的文件正文摘录。', 'utf8')
   writeFakeGateway(fakeAgentDir)
 
   const port = 19000 + Math.floor(Math.random() * 2000)
@@ -76,6 +83,12 @@ async function main() {
             previewKind: 'markdown',
             selectedText: '这是前端自动识别到的选区文本',
             rect: { x: 10.123, y: 20.456, width: 30.789, height: 40.111 }
+          },
+          {
+            label: '批注 2',
+            relativePath: 'fallback.md',
+            previewKind: 'quicklook',
+            rect: { x: 12, y: 18, width: 24, height: 16 }
           }
         ]
       }
@@ -84,6 +97,8 @@ async function main() {
     assert.equal(created.messages?.[0]?.annotations?.[0]?.label, '批注 1')
     assert.equal(created.messages?.[0]?.annotations?.[0]?.relativePath, 'annotated.md')
     assert.equal(created.messages?.[0]?.annotations?.[0]?.rect.x, 10.12)
+    assert.equal(created.messages?.[0]?.annotations?.[1]?.label, '批注 2')
+    assert.match(created.messages?.[0]?.annotations?.[1]?.contextExcerpt ?? '', /没有前端选区文本/)
 
     const clarifyPending = await waitForTaskFromStream(baseUrl, created.id, (task) =>
       Boolean(task.events?.some((event) => event.type === 'clarify.request'))
@@ -214,6 +229,9 @@ def run_turn():
         or "annotated.md" not in prompt
         or "x=10.12%" not in prompt
         or "这是前端自动识别到的选区文本" not in prompt
+        or "批注 2" not in prompt
+        or "文件正文摘录" not in prompt
+        or "没有前端选区文本时的文件正文摘录" not in prompt
     ):
         event("message.complete", {"text": "批注上下文缺失", "status": "error"})
         return
