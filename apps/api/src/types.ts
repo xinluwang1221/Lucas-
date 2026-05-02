@@ -14,6 +14,7 @@ export type Message = {
   content: string
   createdAt: string
   attachments?: MessageAttachment[]
+  annotations?: MessageAnnotation[]
 }
 
 export type MessageAttachment = {
@@ -24,6 +25,28 @@ export type MessageAttachment = {
   path: string
   type: string
   size: number
+  createdAt: string
+}
+
+export type MessageAnnotation = {
+  id: string
+  workspaceId: string
+  source: 'workspace' | 'artifact'
+  label: string
+  fileName: string
+  relativePath: string
+  path: string
+  type: string
+  previewKind: string
+  rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  page?: number
+  selectedText?: string
+  note?: string
   createdAt: string
 }
 

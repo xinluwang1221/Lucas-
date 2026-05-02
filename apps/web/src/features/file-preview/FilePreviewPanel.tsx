@@ -1,5 +1,4 @@
 import {
-  Check,
   Download,
   ExternalLink,
   FileText,
@@ -14,9 +13,10 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type PointerEvent } from 'react'
 import { artifactDownloadUrl } from './artifactApi'
 import { MarkdownContent } from '../markdown/MarkdownContent'
+import type { MessageAnnotation } from '../../lib/api'
 
 export type Preview = {
   title: string
@@ -44,13 +44,13 @@ export type FilePreviewState = Preview & {
   error?: string
 }
 
-type PreviewAnnotation = {
-  id: string
-  fileKey: string
-  x: number
-  y: number
-  text: string
-  createdAt: string
+type PreviewAnnotation = MessageAnnotation
+
+type SelectionDraft = {
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
 }
 
 export function FilePreviewPanel({
@@ -62,7 +62,9 @@ export function FilePreviewPanel({
   onOpenNative,
   onReveal,
   onTogglePin,
-  onToggleFullscreen
+  onToggleFullscreen,
+  onCreateAnnotation,
+  onRemoveAnnotation
 }: {
   preview: FilePreviewState
   compact?: boolean
@@ -73,52 +75,90 @@ export function FilePreviewPanel({
   onReveal: (target: FilePreviewTarget) => void
   onTogglePin: () => void
   onToggleFullscreen: () => void
+  onCreateAnnotation?: (annotation: MessageAnnotation) => void
+  onRemoveAnnotation?: (annotationId: string) => void
 }) {
   const target = preview.target
   const fileKey = previewAnnotationKey(target)
   const [annotationMode, setAnnotationMode] = useState(false)
-  const [draftAnnotation, setDraftAnnotation] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null)
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
   const [annotations, setAnnotations] = useState<Record<string, PreviewAnnotation[]>>(() => readStoredAnnotations())
   const currentAnnotations = useMemo(() => annotations[fileKey] ?? [], [annotations, fileKey])
   const activeAnnotation = currentAnnotations.find((annotation) => annotation.id === activeAnnotationId) ?? null
+  const currentSelectionRect = selectionDraft ? selectionRect(selectionDraft) : null
 
   useEffect(() => {
     writeStoredAnnotations(annotations)
   }, [annotations])
 
   useEffect(() => {
-    setDraftAnnotation(null)
+    setSelectionDraft(null)
     setActiveAnnotationId(null)
   }, [fileKey])
 
-  function handlePreviewSurfaceClick(event: MouseEvent<HTMLDivElement>) {
+  function handlePreviewPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!annotationMode || preview.status !== 'ready') return
     if ((event.target as HTMLElement).closest('[data-preview-annotation-ui="true"]')) return
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = clampPercent(((event.clientX - rect.left) / rect.width) * 100)
-    const y = clampPercent(((event.clientY - rect.top) / rect.height) * 100)
-    setDraftAnnotation({ x, y, text: '' })
+    event.preventDefault()
+    const point = previewPointFromPointer(event)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setSelectionDraft({
+      startX: point.x,
+      startY: point.y,
+      currentX: point.x,
+      currentY: point.y
+    })
     setActiveAnnotationId(null)
   }
 
-  function saveDraftAnnotation() {
-    const text = draftAnnotation?.text.trim()
-    if (!draftAnnotation || !text) return
+  function handlePreviewPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!selectionDraft) return
+    event.preventDefault()
+    const point = previewPointFromPointer(event)
+    setSelectionDraft((current) => current ? {
+      ...current,
+      currentX: point.x,
+      currentY: point.y
+    } : current)
+  }
+
+  function handlePreviewPointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (!selectionDraft) return
+    event.preventDefault()
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    } catch {
+      // Pointer capture may already be released if the browser cancelled the gesture.
+    }
+    const rect = selectionRect(selectionDraft)
+    setSelectionDraft(null)
+    if (rect.width < 2 || rect.height < 2) return
+
+    const label = `批注 ${currentAnnotations.length + 1}`
     const annotation: PreviewAnnotation = {
       id: `note-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      fileKey,
-      x: draftAnnotation.x,
-      y: draftAnnotation.y,
-      text,
+      workspaceId: target.workspaceId ?? '',
+      source: target.source,
+      label,
+      fileName: target.name,
+      relativePath: target.relativePath,
+      path: target.path ?? target.relativePath,
+      type: target.type || 'file',
+      previewKind: preview.kind,
+      rect,
       createdAt: new Date().toISOString()
     }
     setAnnotations((current) => ({
       ...current,
       [fileKey]: [...(current[fileKey] ?? []), annotation]
     }))
-    setDraftAnnotation(null)
     setActiveAnnotationId(annotation.id)
+    onCreateAnnotation?.(annotation)
+  }
+
+  function handlePreviewPointerCancel() {
+    setSelectionDraft(null)
   }
 
   function removeAnnotation(annotationId: string) {
@@ -127,6 +167,7 @@ export function FilePreviewPanel({
       [fileKey]: (current[fileKey] ?? []).filter((annotation) => annotation.id !== annotationId)
     }))
     setActiveAnnotationId(null)
+    onRemoveAnnotation?.(annotationId)
   }
 
   return (
@@ -152,7 +193,7 @@ export function FilePreviewPanel({
             aria-pressed={annotationMode}
             onClick={() => {
               setAnnotationMode((current) => !current)
-              setDraftAnnotation(null)
+              setSelectionDraft(null)
               setActiveAnnotationId(null)
             }}
           >
@@ -207,7 +248,10 @@ export function FilePreviewPanel({
 
       <div
         className={annotationMode ? 'file-preview-surface annotating' : 'file-preview-surface'}
-        onClick={handlePreviewSurfaceClick}
+        onPointerDown={handlePreviewPointerDown}
+        onPointerMove={handlePreviewPointerMove}
+        onPointerUp={handlePreviewPointerUp}
+        onPointerCancel={handlePreviewPointerCancel}
       >
         {preview.status === 'loading' ? (
           <div className="file-preview-state">
@@ -227,56 +271,51 @@ export function FilePreviewPanel({
 
         {annotationMode && preview.status === 'ready' && <div className="file-annotation-hit-layer" />}
 
+        {currentSelectionRect && (
+          <div
+            data-preview-annotation-ui="true"
+            className="file-annotation-selection"
+            style={{
+              left: `${currentSelectionRect.x}%`,
+              top: `${currentSelectionRect.y}%`,
+              width: `${currentSelectionRect.width}%`,
+              height: `${currentSelectionRect.height}%`
+            }}
+          />
+        )}
+
         {preview.status === 'ready' && currentAnnotations.map((annotation, index) => (
           <button
             type="button"
             key={annotation.id}
             data-preview-annotation-ui="true"
-            className={activeAnnotationId === annotation.id ? 'file-annotation-marker active' : 'file-annotation-marker'}
-            style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
-            title={annotation.text}
+            className={activeAnnotationId === annotation.id ? 'file-annotation-region active' : 'file-annotation-region'}
+            style={{
+              left: `${annotation.rect.x}%`,
+              top: `${annotation.rect.y}%`,
+              width: `${annotation.rect.width}%`,
+              height: `${annotation.rect.height}%`
+            }}
+            title={annotation.label}
             onClick={(event) => {
               event.stopPropagation()
-              setDraftAnnotation(null)
+              setSelectionDraft(null)
               setActiveAnnotationId(activeAnnotationId === annotation.id ? null : annotation.id)
             }}
           >
-            {index + 1}
+            <span>{index + 1}</span>
           </button>
         ))}
-
-        {draftAnnotation && (
-          <div
-            data-preview-annotation-ui="true"
-            className="file-annotation-editor"
-            style={{ left: `${draftAnnotation.x}%`, top: `${draftAnnotation.y}%` }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <textarea
-              autoFocus
-              value={draftAnnotation.text}
-              onChange={(event) => setDraftAnnotation((current) => current ? { ...current, text: event.target.value } : current)}
-              placeholder="写下这处需要 Hermes 关注的问题"
-            />
-            <div>
-              <button type="button" className="ghost-button" onClick={() => setDraftAnnotation(null)}>取消</button>
-              <button type="button" className="send-button" onClick={saveDraftAnnotation}>
-                <Check size={14} />
-                保存
-              </button>
-            </div>
-          </div>
-        )}
 
         {activeAnnotation && (
           <div
             data-preview-annotation-ui="true"
             className="file-annotation-card"
-            style={{ left: `${activeAnnotation.x}%`, top: `${activeAnnotation.y}%` }}
+            style={{ left: `${activeAnnotation.rect.x}%`, top: `${activeAnnotation.rect.y}%` }}
             onClick={(event) => event.stopPropagation()}
           >
-            <strong>批注</strong>
-            <p>{activeAnnotation.text}</p>
+            <strong>{activeAnnotation.label}</strong>
+            <p>已加入输入框上下文，发送后 Hermes 会按编号读取这个区域。</p>
             <div>
               <span>{formatTime(activeAnnotation.createdAt)}</span>
               <button type="button" title="删除批注" onClick={() => removeAnnotation(activeAnnotation.id)}>
@@ -497,15 +536,88 @@ function previewAnnotationKey(target: FilePreviewTarget) {
   return target.path || target.relativePath || `${target.source}:${target.name}`
 }
 
+function previewPointFromPointer(event: PointerEvent<HTMLDivElement>) {
+  const rect = event.currentTarget.getBoundingClientRect()
+  return {
+    x: clampPercent(((event.clientX - rect.left) / rect.width) * 100),
+    y: clampPercent(((event.clientY - rect.top) / rect.height) * 100)
+  }
+}
+
+function selectionRect(draft: SelectionDraft) {
+  const left = Math.min(draft.startX, draft.currentX)
+  const top = Math.min(draft.startY, draft.currentY)
+  const right = Math.max(draft.startX, draft.currentX)
+  const bottom = Math.max(draft.startY, draft.currentY)
+  return {
+    x: roundRectValue(left),
+    y: roundRectValue(top),
+    width: roundRectValue(right - left),
+    height: roundRectValue(bottom - top)
+  }
+}
+
+function roundRectValue(value: number) {
+  return Math.round(value * 100) / 100
+}
+
 function readStoredAnnotations(): Record<string, PreviewAnnotation[]> {
   try {
     const raw = window.localStorage.getItem(PREVIEW_ANNOTATIONS_KEY)
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, PreviewAnnotation[]>
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object') return {}
+    const next: Record<string, PreviewAnnotation[]> = {}
+    for (const [fileKey, value] of Object.entries(parsed)) {
+      if (!Array.isArray(value)) continue
+      next[fileKey] = value
+        .map((item, index) => normalizeStoredAnnotation(item, fileKey, index))
+        .filter((item): item is PreviewAnnotation => Boolean(item))
+    }
+    return next
   } catch {
     return {}
   }
+}
+
+function normalizeStoredAnnotation(item: unknown, fileKey: string, index: number): PreviewAnnotation | null {
+  if (!item || typeof item !== 'object') return null
+  const record = item as Record<string, unknown>
+  const rectRecord = record.rect && typeof record.rect === 'object' ? record.rect as Record<string, unknown> : null
+  const rect = rectRecord ? {
+    x: numberOrFallback(rectRecord.x, 10),
+    y: numberOrFallback(rectRecord.y, 10),
+    width: numberOrFallback(rectRecord.width, 12),
+    height: numberOrFallback(rectRecord.height, 8)
+  } : {
+    x: numberOrFallback(record.x, 10),
+    y: numberOrFallback(record.y, 10),
+    width: 12,
+    height: 8
+  }
+  return {
+    id: stringOrFallback(record.id, `stored-${fileKey}-${index}`),
+    workspaceId: stringOrFallback(record.workspaceId, ''),
+    source: record.source === 'artifact' ? 'artifact' : 'workspace',
+    label: stringOrFallback(record.label, `批注 ${index + 1}`),
+    fileName: stringOrFallback(record.fileName, stringOrFallback(record.name, fileKey)),
+    relativePath: stringOrFallback(record.relativePath, fileKey),
+    path: stringOrFallback(record.path, fileKey),
+    type: stringOrFallback(record.type, 'file'),
+    previewKind: stringOrFallback(record.previewKind, 'file'),
+    rect,
+    selectedText: typeof record.selectedText === 'string' ? record.selectedText : undefined,
+    note: typeof record.note === 'string' ? record.note : typeof record.text === 'string' ? record.text : undefined,
+    createdAt: stringOrFallback(record.createdAt, new Date().toISOString())
+  }
+}
+
+function stringOrFallback(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.trim() ? value : fallback
+}
+
+function numberOrFallback(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
 function writeStoredAnnotations(annotations: Record<string, PreviewAnnotation[]>) {

@@ -35,7 +35,7 @@ import {
 } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, MessageAnnotation, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -1205,12 +1205,13 @@ app.get('/api/tasks/:taskId/export.md', (req, res) => {
 })
 
 app.post('/api/tasks', (req, res) => {
-  const { prompt, workspaceId, modelId, skillNames, attachments } = req.body as {
+  const { prompt, workspaceId, modelId, skillNames, attachments, annotations } = req.body as {
     prompt?: string
     workspaceId?: string
     modelId?: string
     skillNames?: unknown
     attachments?: unknown
+    annotations?: unknown
   }
   if (!workspaceId) {
     res.status(400).json({ error: 'workspaceId is required' })
@@ -1226,7 +1227,8 @@ app.post('/api/tasks', (req, res) => {
 
   const now = new Date().toISOString()
   const normalizedAttachments = normalizeTaskAttachments(attachments, workspace, now)
-  const userPrompt = prompt?.trim() || (normalizedAttachments.length ? '请查看这些附件。' : '')
+  const normalizedAnnotations = normalizeTaskAnnotations(annotations, workspace, now)
+  const userPrompt = prompt?.trim() || (normalizedAttachments.length || normalizedAnnotations.length ? '请查看这些附件和批注。' : '')
   if (!userPrompt) {
     res.status(400).json({ error: 'prompt or attachments are required' })
     return
@@ -1257,18 +1259,19 @@ app.post('/api/tasks', (req, res) => {
       role: 'user',
       content: userPrompt,
       createdAt: now,
-      attachments: normalizedAttachments
+      attachments: normalizedAttachments,
+      annotations: normalizedAnnotations
     })
   })
 
-  void executeTask(task.id, workspace.path, promptWithAttachments(userPrompt, normalizedAttachments), undefined, model, normalizedSkillNames)
+  void executeTask(task.id, workspace.path, promptWithContext(userPrompt, normalizedAttachments, normalizedAnnotations), undefined, model, normalizedSkillNames)
   const createdState = store.snapshot
   const createdTask = createdState.tasks.find((item) => item.id === task.id)
   res.status(201).json(createdTask ? enrichTask(createdState, createdTask) : task)
 })
 
 app.post('/api/tasks/:taskId/messages', (req, res) => {
-  const { prompt, modelId, skillNames, attachments } = req.body as { prompt?: string; modelId?: string; skillNames?: unknown; attachments?: unknown }
+  const { prompt, modelId, skillNames, attachments, annotations } = req.body as { prompt?: string; modelId?: string; skillNames?: unknown; attachments?: unknown; annotations?: unknown }
 
   const state = store.snapshot
   const task = state.tasks.find((item) => item.id === req.params.taskId)
@@ -1289,7 +1292,8 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
 
   const now = new Date().toISOString()
   const normalizedAttachments = normalizeTaskAttachments(attachments, workspace, now)
-  const userPrompt = prompt?.trim() || (normalizedAttachments.length ? '请查看这些附件。' : '')
+  const normalizedAnnotations = normalizeTaskAnnotations(annotations, workspace, now)
+  const userPrompt = prompt?.trim() || (normalizedAttachments.length || normalizedAnnotations.length ? '请查看这些附件和批注。' : '')
   if (!userPrompt) {
     res.status(400).json({ error: 'prompt or attachments are required' })
     return
@@ -1323,12 +1327,13 @@ app.post('/api/tasks/:taskId/messages', (req, res) => {
       role: 'user',
       content: userPrompt,
       createdAt: now,
-      attachments: normalizedAttachments
+      attachments: normalizedAttachments,
+      annotations: normalizedAnnotations
     })
   })
   broadcastTaskUpdate(task.id, true)
 
-  void executeTask(task.id, workspace.path, promptWithAttachments(userPrompt, normalizedAttachments), resumeSessionId, model, normalizedSkillNames)
+  void executeTask(task.id, workspace.path, promptWithContext(userPrompt, normalizedAttachments, normalizedAnnotations), resumeSessionId, model, normalizedSkillNames)
   const updatedState = store.snapshot
   const updatedTask = updatedState.tasks.find((item) => item.id === task.id)
   if (!updatedTask) {
@@ -1895,17 +1900,102 @@ function attachmentReference(item: unknown) {
   return String(record.relativePath ?? record.path ?? '').trim()
 }
 
-function promptWithAttachments(prompt: string, attachments: MessageAttachment[]) {
-  const cleanPrompt = prompt.trim() || '请查看这些附件。'
-  if (!attachments.length) return cleanPrompt
+function normalizeTaskAnnotations(value: unknown, workspace: Workspace, createdAt: string): MessageAnnotation[] {
+  if (!Array.isArray(value)) return []
+  const annotations: MessageAnnotation[] = []
+  const seen = new Set<string>()
+
+  for (const item of value.slice(0, 12)) {
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    const targetPath = resolveAttachmentPath(record, workspace.path)
+    if (!targetPath) continue
+    try {
+      if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) continue
+      const relativePath = normalizeRelativePath(path.relative(workspace.path, targetPath))
+      if (!relativePath) continue
+      const rect = normalizeAnnotationRect(record.rect)
+      if (!rect) continue
+      const key = `${relativePath}:${rect.x}:${rect.y}:${rect.width}:${rect.height}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      annotations.push({
+        id: crypto.randomUUID(),
+        workspaceId: workspace.id,
+        source: record.source === 'artifact' ? 'artifact' : 'workspace',
+        label: sanitizeAnnotationText(record.label, `批注 ${annotations.length + 1}`),
+        fileName: path.basename(targetPath),
+        relativePath,
+        path: targetPath,
+        type: path.extname(targetPath).replace('.', '') || sanitizeAnnotationText(record.type, 'file'),
+        previewKind: sanitizeAnnotationText(record.previewKind, 'file'),
+        rect,
+        page: numberInRange(record.page, 1, 100000),
+        selectedText: sanitizeOptionalAnnotationText(record.selectedText, 2000),
+        note: sanitizeOptionalAnnotationText(record.note, 1000),
+        createdAt
+      })
+    } catch {
+      // Ignore stale annotations. They must point to files inside the authorized workspace.
+    }
+  }
+
+  return annotations
+}
+
+function normalizeAnnotationRect(value: unknown): MessageAnnotation['rect'] | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  const x = numberInRange(record.x, 0, 100)
+  const y = numberInRange(record.y, 0, 100)
+  const width = numberInRange(record.width, 0.1, 100)
+  const height = numberInRange(record.height, 0.1, 100)
+  if (x === undefined || y === undefined || width === undefined || height === undefined) return null
+  return {
+    x: roundAnnotationNumber(x),
+    y: roundAnnotationNumber(y),
+    width: roundAnnotationNumber(Math.min(width, 100 - x)),
+    height: roundAnnotationNumber(Math.min(height, 100 - y))
+  }
+}
+
+function numberInRange(value: unknown, min: number, max: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(max, Math.max(min, value))
+}
+
+function roundAnnotationNumber(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+function sanitizeAnnotationText(value: unknown, fallback: string) {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, 160) : fallback
+}
+
+function sanitizeOptionalAnnotationText(value: unknown, maxLength: number) {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, maxLength) : undefined
+}
+
+function promptWithContext(prompt: string, attachments: MessageAttachment[], annotations: MessageAnnotation[]) {
+  const cleanPrompt = prompt.trim() || '请查看这些附件和批注。'
+  if (!attachments.length && !annotations.length) return cleanPrompt
   const attachmentLines = attachments.map((attachment) =>
     `- ${attachment.name}: ${attachment.path} (工作区相对路径：${attachment.relativePath})`
   )
+  const annotationLines = annotations.map((annotation) => {
+    const rect = annotation.rect
+    return `- ${annotation.label}: ${annotation.path} (工作区相对路径：${annotation.relativePath}；预览类型：${annotation.previewKind}；区域：x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%)`
+  })
   return [
     cleanPrompt,
-    '',
-    'Hermes Cowork 已将以下附件放入当前授权工作区。请在需要时读取这些文件作为上下文：',
-    ...attachmentLines
+    attachments.length ? '\nHermes Cowork 已将以下附件放入当前授权工作区。请在需要时读取这些文件作为上下文：' : '',
+    ...attachmentLines,
+    annotations.length ? '\nHermes Cowork 已将以下文件区域批注加入上下文。请按批注编号理解用户指向的文件区域：' : '',
+    ...annotationLines
   ].join('\n')
 }
 
@@ -1943,6 +2033,14 @@ function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: s
         lines.push('附件：', '')
         for (const attachment of message.attachments) {
           lines.push(`- ${attachment.name}：\`${attachment.relativePath}\` (${formatBytesForExport(attachment.size)})`)
+        }
+        lines.push('')
+      }
+      if (message.annotations?.length) {
+        lines.push('批注：', '')
+        for (const annotation of message.annotations) {
+          const rect = annotation.rect
+          lines.push(`- ${annotation.label}：\`${annotation.relativePath}\` (${annotation.previewKind}；x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%)`)
         }
         lines.push('')
       }

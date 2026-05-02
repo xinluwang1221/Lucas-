@@ -1,17 +1,18 @@
 import { apiUrl, jsonHeaders, request } from '../../lib/http'
-import type { ApprovalChoice, MessageAttachment, Task } from '../../lib/api'
+import type { ApprovalChoice, MessageAnnotation, MessageAttachment, Task } from '../../lib/api'
 
 export async function createTask(
   workspaceId: string,
   prompt: string,
   modelId?: string,
   skillNames: string[] = [],
-  attachments: MessageAttachment[] = []
+  attachments: MessageAttachment[] = [],
+  annotations: MessageAnnotation[] = []
 ): Promise<Task> {
   return request('/api/tasks', {
     method: 'POST',
     headers: jsonHeaders,
-    body: JSON.stringify({ workspaceId, prompt, modelId, skillNames, attachments })
+    body: JSON.stringify({ workspaceId, prompt, modelId, skillNames, attachments, annotations })
   })
 }
 
@@ -25,12 +26,13 @@ export async function sendTaskMessage(
   prompt: string,
   modelId?: string,
   skillNames: string[] = [],
-  attachments: MessageAttachment[] = []
+  attachments: MessageAttachment[] = [],
+  annotations: MessageAnnotation[] = []
 ): Promise<SendTaskMessageResponse> {
   return request<SendTaskMessageResponse>(`/api/tasks/${taskId}/messages`, {
     method: 'POST',
     headers: jsonHeaders,
-    body: JSON.stringify({ prompt, modelId, skillNames, attachments })
+    body: JSON.stringify({ prompt, modelId, skillNames, attachments, annotations })
   })
 }
 

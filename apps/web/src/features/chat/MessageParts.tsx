@@ -1,6 +1,6 @@
-import { ExternalLink, FileArchive, FileText, FolderOpen, GitCompareArrows, Plus } from 'lucide-react'
+import { ExternalLink, FileArchive, FileText, FolderOpen, GitCompareArrows, MessageSquare, Plus } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
+import type { ApprovalChoice, Artifact, Message, MessageAnnotation, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
 import { ClarifyRequestCard, latestPendingClarifyRequest } from './ClarifyRequestCard'
@@ -40,6 +40,11 @@ export type MessagePart =
     type: 'file_cards'
     variant: 'attachments'
     attachments: MessageAttachment[]
+  }
+  | {
+    id: string
+    type: 'annotation_cards'
+    annotations: MessageAnnotation[]
   }
   | {
     id: string
@@ -104,6 +109,7 @@ export function buildMessageParts({
   content,
   live = false,
   attachments = [],
+  annotations = [],
   artifactCards = [],
   fileReferences = []
 }: {
@@ -111,12 +117,14 @@ export function buildMessageParts({
   content: string
   live?: boolean
   attachments?: MessageAttachment[]
+  annotations?: MessageAnnotation[]
   artifactCards?: Artifact[]
   fileReferences?: MarkdownFileReference[]
 }): MessagePart[] {
   if (role !== 'assistant') {
     return [
       { id: 'user-text', type: 'user_text', content },
+      ...annotationPart(annotations),
       ...attachmentPart(attachments)
     ]
   }
@@ -139,6 +147,7 @@ export function MessagePartList({
   onOpenAttachmentNative,
   onRevealAttachment,
   onUseAttachment,
+  onOpenAnnotation,
   onOpenArtifact,
   onOpenArtifactNative,
   onRevealArtifact,
@@ -157,6 +166,7 @@ export function MessagePartList({
   onOpenAttachmentNative?: (attachment: MessageAttachment) => void
   onRevealAttachment?: (attachment: MessageAttachment) => void
   onUseAttachment?: (attachment: MessageAttachment) => void
+  onOpenAnnotation?: (annotation: MessageAnnotation) => void
   onOpenArtifact?: (artifact: Artifact) => void
   onOpenArtifactNative?: (artifact: Artifact) => void
   onRevealArtifact?: (artifact: Artifact) => void
@@ -244,6 +254,9 @@ export function MessagePartList({
         if (part.type === 'diff_card') {
           return <MessageDiffCard part={part} key={part.id} />
         }
+        if (part.type === 'annotation_cards') {
+          return <MessageAnnotationCards annotations={part.annotations} onOpenAnnotation={onOpenAnnotation} key={part.id} />
+        }
         return (
           <MessageFileCards
             key={part.id}
@@ -264,6 +277,32 @@ export function MessagePartList({
         )
       })}
     </>
+  )
+}
+
+function MessageAnnotationCards({
+  annotations,
+  onOpenAnnotation
+}: {
+  annotations: MessageAnnotation[]
+  onOpenAnnotation?: (annotation: MessageAnnotation) => void
+}) {
+  return (
+    <div className="message-annotation-list" aria-label="用户批注区域">
+      {annotations.map((annotation) => (
+        <button
+          type="button"
+          key={annotation.id}
+          className="message-annotation-card"
+          title={`打开 ${annotation.label}：${annotation.relativePath}`}
+          onClick={() => onOpenAnnotation?.(annotation)}
+        >
+          <MessageSquare size={14} />
+          <strong>{annotation.label}</strong>
+          <span>{annotation.fileName}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -526,6 +565,11 @@ function MessageFileCard({
 function attachmentPart(attachments: MessageAttachment[]): MessagePart[] {
   if (!attachments.length) return []
   return [{ id: 'attachments', type: 'file_cards', variant: 'attachments', attachments }]
+}
+
+function annotationPart(annotations: MessageAnnotation[]): MessagePart[] {
+  if (!annotations.length) return []
+  return [{ id: 'annotations', type: 'annotation_cards', annotations }]
 }
 
 function artifactPart(artifacts: Artifact[]): MessagePart[] {

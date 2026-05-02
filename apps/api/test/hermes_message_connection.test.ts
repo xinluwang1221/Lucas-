@@ -21,7 +21,11 @@ type Task = {
   liveResponse?: string
   executionView?: { response?: string }
   events?: ExecutionEvent[]
-  messages?: Array<{ role: string; content: string }>
+  messages?: Array<{
+    role: string
+    content: string
+    annotations?: Array<{ label: string; relativePath: string; rect: { x: number; y: number; width: number; height: number } }>
+  }>
 }
 
 const rootDir = path.resolve(import.meta.dirname, '../../..')
@@ -33,6 +37,7 @@ async function main() {
   const dataDir = path.join(testDir, 'data')
   const workspaceDir = path.join(testDir, 'workspace')
   fs.mkdirSync(workspaceDir, { recursive: true })
+  fs.writeFileSync(path.join(workspaceDir, 'annotated.md'), '# 批注测试文件\n', 'utf8')
   writeFakeGateway(fakeAgentDir)
 
   const port = 19000 + Math.floor(Math.random() * 2000)
@@ -63,10 +68,21 @@ async function main() {
         workspaceId: 'default',
         prompt: '测试 Hermes 消息连接：请先反问澄清，再请求命令审批，最后返回结果。',
         modelId: 'auto',
-        skillNames: []
+        skillNames: [],
+        annotations: [
+          {
+            label: '批注 1',
+            relativePath: 'annotated.md',
+            previewKind: 'markdown',
+            rect: { x: 10.123, y: 20.456, width: 30.789, height: 40.111 }
+          }
+        ]
       }
     })
     assert.equal(created.status, 'running')
+    assert.equal(created.messages?.[0]?.annotations?.[0]?.label, '批注 1')
+    assert.equal(created.messages?.[0]?.annotations?.[0]?.relativePath, 'annotated.md')
+    assert.equal(created.messages?.[0]?.annotations?.[0]?.rect.x, 10.12)
 
     const clarifyPending = await waitForTaskFromStream(baseUrl, created.id, (task) =>
       Boolean(task.events?.some((event) => event.type === 'clarify.request'))
@@ -163,6 +179,7 @@ clarify_ready = threading.Event()
 clarify_answer = {"value": ""}
 approval_ready = threading.Event()
 approval_choice = {"value": ""}
+prompt_text = {"value": ""}
 
 def write(frame):
     sys.stdout.write(json.dumps(frame, ensure_ascii=False) + "\n")
@@ -189,6 +206,15 @@ def event(event_type, payload=None, session_id=SESSION_ID):
 
 def run_turn():
     time.sleep(0.08)
+    prompt = prompt_text["value"]
+    if (
+        "Hermes Cowork 已将以下文件区域批注加入上下文" not in prompt
+        or "批注 1" not in prompt
+        or "annotated.md" not in prompt
+        or "x=10.12%" not in prompt
+    ):
+        event("message.complete", {"text": "批注上下文缺失", "status": "error"})
+        return
     event("message.delta", {"text": "收到。"})
     time.sleep(0.04)
     event("clarify.request", {
@@ -257,6 +283,7 @@ for raw in sys.stdin:
     elif method == "config.set":
         response(req_id, {"ok": True})
     elif method == "prompt.submit":
+        prompt_text["value"] = params.get("text", "")
         clarify_ready.clear()
         clarify_answer["value"] = ""
         approval_ready.clear()

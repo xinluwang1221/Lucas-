@@ -1150,6 +1150,66 @@
   margin-top: 12px;
 }
 
+.message-annotation-list {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 620px);
+  margin-top: 12px;
+}
+
+.message-annotation-list::before {
+  color: var(--ink-soft);
+  content: "已框选批注";
+  font-size: var(--text-caption);
+  font-weight: 800;
+}
+
+.message-annotation-card {
+  display: grid;
+  grid-template-columns: 30px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 7px 12px;
+  color: var(--success);
+  background: var(--moss-soft);
+  border: 1px solid rgba(46, 143, 86, 0.34);
+  border-radius: 8px;
+  text-align: left;
+  box-shadow: var(--shadow-soft);
+}
+
+.message-annotation-card:hover {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.message-annotation-card > svg {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  color: var(--success);
+  background: var(--surface);
+  border-radius: 7px;
+}
+
+.message-annotation-card strong {
+  white-space: nowrap;
+  font-size: var(--text-body);
+  font-weight: 850;
+}
+
+.message-annotation-card span {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
 .message-file-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1858,6 +1918,68 @@ button.markdown-file-reference:hover {
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px 0;
+}
+
+.composer-annotation-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.composer-annotation-chip {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  max-width: min(360px, 100%);
+  min-height: 34px;
+  color: var(--success);
+  background: var(--moss-soft);
+  border: 1px solid rgba(46, 143, 86, 0.36);
+  border-radius: 999px;
+}
+
+.composer-annotation-open {
+  display: inline-grid;
+  grid-template-columns: 16px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  color: inherit;
+  text-align: left;
+}
+
+.composer-annotation-open strong {
+  font-size: var(--text-caption);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.composer-annotation-open span {
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.composer-annotation-remove {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  color: var(--ink-soft);
+  border-radius: 999px;
+}
+
+.composer-annotation-remove:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .composer-attachment-chip {

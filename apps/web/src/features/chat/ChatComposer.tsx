@@ -10,6 +10,7 @@ import {
   FileText,
   Folder,
   Loader2,
+  MessageSquare,
   Paperclip,
   Pause,
   Settings,
@@ -28,6 +29,7 @@ import type {
   HermesModelOverview,
   HermesReasoningConfigureRequest,
   HermesReasoningEffort,
+  MessageAnnotation,
   MessageAttachment,
   ModelOption,
   Task
@@ -43,6 +45,7 @@ export function ChatComposer({
   promptInputRef,
   composerSkillNames,
   composerAttachments,
+  composerAnnotations,
   attachmentUploading,
   selectedWorkspaceName,
   selectedModel,
@@ -64,6 +67,8 @@ export function ChatComposer({
   onAttachmentDrag,
   onRemoveAttachment,
   onPreviewAttachment,
+  onRemoveAnnotation,
+  onPreviewAnnotation,
   onOpenWorkspace,
   onModelMenuOpenChange,
   onConfigureReasoning,
@@ -76,6 +81,7 @@ export function ChatComposer({
   promptInputRef: RefObject<HTMLTextAreaElement | null>
   composerSkillNames: string[]
   composerAttachments: MessageAttachment[]
+  composerAnnotations: MessageAnnotation[]
   attachmentUploading: boolean
   selectedWorkspaceName?: string
   selectedModel: ModelOption
@@ -97,6 +103,8 @@ export function ChatComposer({
   onAttachmentDrag: () => void
   onRemoveAttachment: (attachmentId: string) => void
   onPreviewAttachment: (attachment: MessageAttachment) => void
+  onRemoveAnnotation: (annotationId: string) => void
+  onPreviewAnnotation: (annotation: MessageAnnotation) => void
   onOpenWorkspace: () => void
   onModelMenuOpenChange: (open: boolean | ((current: boolean) => boolean)) => void
   onConfigureReasoning: (request: HermesReasoningConfigureRequest, notice: string) => void
@@ -109,7 +117,7 @@ export function ChatComposer({
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
   const attachmentDragDepthRef = useRef(0)
   const [attachmentDragging, setAttachmentDragging] = useState(false)
-  const canSend = Boolean(prompt.trim() || composerAttachments.length)
+  const canSend = Boolean(prompt.trim() || composerAttachments.length || composerAnnotations.length)
 
   function handleAttachmentDragEnter(event: ReactDragEvent<HTMLFormElement>) {
     if (!hasDraggedFiles(event)) return
@@ -196,6 +204,32 @@ export function ChatComposer({
                 className="composer-attachment-remove"
                 aria-label={`移除附件 ${attachment.name}`}
                 onClick={() => onRemoveAttachment(attachment.id)}
+              >
+                <XCircle size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {composerAnnotations.length > 0 && (
+        <div className="composer-annotation-strip" aria-label="本轮批注">
+          {composerAnnotations.map((annotation) => (
+            <div className="composer-annotation-chip" key={annotation.id}>
+              <button
+                type="button"
+                className="composer-annotation-open"
+                title={`打开 ${annotation.label}：${annotation.relativePath}`}
+                onClick={() => onPreviewAnnotation(annotation)}
+              >
+                <MessageSquare size={14} />
+                <strong>{annotation.label}</strong>
+                <span>{annotation.fileName}</span>
+              </button>
+              <button
+                type="button"
+                className="composer-annotation-remove"
+                aria-label={`移除 ${annotation.label}`}
+                onClick={() => onRemoveAnnotation(annotation.id)}
               >
                 <XCircle size={13} />
               </button>

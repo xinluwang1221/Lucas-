@@ -1,4 +1,4 @@
-import type { Artifact, Message, MessageAttachment } from '../../lib/api'
+import type { Artifact, Message, MessageAnnotation, MessageAttachment } from '../../lib/api'
 import type { MarkdownFileReference } from '../markdown/MarkdownContent'
 import { buildMessageParts, MessagePartList } from './MessageParts'
 
@@ -7,12 +7,14 @@ export function MessageBody({
   content,
   live = false,
   attachments = [],
+  annotations = [],
   artifactCards = [],
   fileReferences = [],
   onOpenAttachment,
   onOpenAttachmentNative,
   onRevealAttachment,
   onUseAttachment,
+  onOpenAnnotation,
   onOpenArtifact,
   onOpenArtifactNative,
   onRevealArtifact,
@@ -26,12 +28,14 @@ export function MessageBody({
   content: string
   live?: boolean
   attachments?: MessageAttachment[]
+  annotations?: MessageAnnotation[]
   artifactCards?: Artifact[]
   fileReferences?: MarkdownFileReference[]
   onOpenAttachment?: (attachment: MessageAttachment) => void
   onOpenAttachmentNative?: (attachment: MessageAttachment) => void
   onRevealAttachment?: (attachment: MessageAttachment) => void
   onUseAttachment?: (attachment: MessageAttachment) => void
+  onOpenAnnotation?: (annotation: MessageAnnotation) => void
   onOpenArtifact?: (artifact: Artifact) => void
   onOpenArtifactNative?: (artifact: Artifact) => void
   onRevealArtifact?: (artifact: Artifact) => void
@@ -46,6 +50,7 @@ export function MessageBody({
     content,
     live,
     attachments,
+    annotations,
     artifactCards,
     fileReferences
   })
@@ -58,6 +63,7 @@ export function MessageBody({
       onOpenAttachmentNative={onOpenAttachmentNative}
       onRevealAttachment={onRevealAttachment}
       onUseAttachment={onUseAttachment}
+      onOpenAnnotation={onOpenAnnotation}
       onOpenArtifact={onOpenArtifact}
       onOpenArtifactNative={onOpenArtifactNative}
       onRevealArtifact={onRevealArtifact}

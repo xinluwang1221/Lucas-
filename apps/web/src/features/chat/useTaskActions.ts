@@ -10,7 +10,7 @@ import {
   setTaskTags,
   stopTask
 } from './chatApi'
-import type { ApprovalChoice, MessageAttachment, ModelOption, Task, Workspace } from '../../lib/api'
+import type { ApprovalChoice, MessageAnnotation, MessageAttachment, ModelOption, Task, Workspace } from '../../lib/api'
 import type { TaskScope } from './useTaskSelection'
 
 type UseTaskActionsParams = {
@@ -21,6 +21,7 @@ type UseTaskActionsParams = {
   selectedModel: ModelOption
   composerSkillNames: string[]
   composerAttachments: MessageAttachment[]
+  composerAnnotations: MessageAnnotation[]
   attachmentUploading: boolean
   selectedTaskId: string | null | undefined
   taskScope: TaskScope
@@ -30,6 +31,7 @@ type UseTaskActionsParams = {
   setPrompt: Dispatch<SetStateAction<string>>
   setComposerSkillNames: Dispatch<SetStateAction<string[]>>
   setComposerAttachments: Dispatch<SetStateAction<MessageAttachment[]>>
+  setComposerAnnotations: Dispatch<SetStateAction<MessageAnnotation[]>>
   setSelectedTaskId: Dispatch<SetStateAction<string | null | undefined>>
 }
 
@@ -41,6 +43,7 @@ export function useTaskActions({
   selectedModel,
   composerSkillNames,
   composerAttachments,
+  composerAnnotations,
   attachmentUploading,
   selectedTaskId,
   taskScope,
@@ -50,6 +53,7 @@ export function useTaskActions({
   setPrompt,
   setComposerSkillNames,
   setComposerAttachments,
+  setComposerAnnotations,
   setSelectedTaskId
 }: UseTaskActionsParams) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -58,8 +62,9 @@ export function useTaskActions({
   const [clarifyingTaskId, setClarifyingTaskId] = useState<string | null>(null)
 
   const submitPrompt = useCallback(async () => {
-    const nextPrompt = prompt.trim() || (composerAttachments.length ? '请查看这些附件。' : '')
-    if ((!nextPrompt && !composerAttachments.length) || !selectedWorkspace || isSubmitting || runningTask || attachmentUploading) return
+    const hasContext = Boolean(composerAttachments.length || composerAnnotations.length)
+    const nextPrompt = prompt.trim() || (hasContext ? '请查看这些附件和批注。' : '')
+    if ((!nextPrompt && !hasContext) || !selectedWorkspace || isSubmitting || runningTask || attachmentUploading) return
     setIsSubmitting(true)
     setError(null)
     try {
@@ -67,12 +72,14 @@ export function useTaskActions({
       const taskSkillNames = activeTask?.skillNames?.length ? activeTask.skillNames : composerSkillNames
       const modelSelectionKey = resolveModelSelectionKey(selectedModel)
       const taskAttachments = composerAttachments.filter((attachment) => attachment.workspaceId === selectedWorkspace.id)
+      const taskAnnotations = composerAnnotations.filter((annotation) => annotation.workspaceId === selectedWorkspace.id)
       const task = activeTask
-        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments)).task
-        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments)
+        ? (await sendTaskMessage(activeTask.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments, taskAnnotations)).task
+        : await createTask(selectedWorkspace.id, nextPrompt, modelSelectionKey, taskSkillNames, taskAttachments, taskAnnotations)
       setPrompt('')
       setComposerSkillNames([])
       setComposerAttachments([])
+      setComposerAnnotations([])
       setSelectedTaskId(task.id)
       await refresh()
     } catch (cause) {
@@ -82,6 +89,7 @@ export function useTaskActions({
     }
   }, [
     attachmentUploading,
+    composerAnnotations,
     composerAttachments,
     composerSkillNames,
     isSubmitting,
@@ -94,6 +102,7 @@ export function useTaskActions({
     selectedWorkspace,
     setComposerSkillNames,
     setComposerAttachments,
+    setComposerAnnotations,
     setError,
     setPrompt,
     setSelectedTaskId

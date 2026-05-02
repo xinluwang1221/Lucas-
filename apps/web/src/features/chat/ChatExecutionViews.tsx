@@ -1,7 +1,7 @@
 import { MessageBody } from './MessageBody'
 import type { MarkdownFileReference } from '../markdown/MarkdownContent'
 import { buildActivityGroupMessageParts, MessagePartList } from './MessageParts'
-import type { Artifact, Message, MessageAttachment, Task } from '../../lib/api'
+import type { Artifact, Message, MessageAnnotation, MessageAttachment, Task } from '../../lib/api'
 
 export function FragmentWithTrace({
   message,
@@ -14,6 +14,7 @@ export function FragmentWithTrace({
   onOpenAttachmentNative,
   onRevealAttachment,
   onUseAttachment,
+  onOpenAnnotation,
   onOpenArtifact,
   onOpenArtifactNative,
   onRevealArtifact,
@@ -33,6 +34,7 @@ export function FragmentWithTrace({
   onOpenAttachmentNative?: (attachment: MessageAttachment) => void
   onRevealAttachment?: (attachment: MessageAttachment) => void
   onUseAttachment?: (attachment: MessageAttachment) => void
+  onOpenAnnotation?: (annotation: MessageAnnotation) => void
   onOpenArtifact?: (artifact: Artifact) => void
   onOpenArtifactNative?: (artifact: Artifact) => void
   onRevealArtifact?: (artifact: Artifact) => void
@@ -53,12 +55,14 @@ export function FragmentWithTrace({
           role={message.role}
           content={message.content}
           attachments={message.attachments}
+          annotations={message.annotations}
           artifactCards={message.role === 'assistant' ? artifactCards : []}
           fileReferences={fileReferences}
           onOpenAttachment={onOpenAttachment}
           onOpenAttachmentNative={onOpenAttachmentNative}
           onRevealAttachment={onRevealAttachment}
           onUseAttachment={onUseAttachment}
+          onOpenAnnotation={onOpenAnnotation}
           onOpenArtifact={onOpenArtifact}
           onOpenArtifactNative={onOpenArtifactNative}
           onRevealArtifact={onRevealArtifact}

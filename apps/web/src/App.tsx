@@ -73,6 +73,7 @@ import { uploadFile, type WorkspaceFile } from './features/workspace/workspaceAp
 import {
   HermesMcpConfig,
   Artifact,
+  MessageAnnotation,
   MessageAttachment,
   ModelOption,
   Task,
@@ -196,6 +197,17 @@ function workspaceFileFromMessageAttachment(attachment: MessageAttachment): Work
     type: attachment.type,
     size: attachment.size,
     modifiedAt: attachment.createdAt
+  }
+}
+
+function workspaceFileFromMessageAnnotation(annotation: MessageAnnotation): WorkspaceFile {
+  return {
+    name: annotation.fileName,
+    relativePath: annotation.relativePath,
+    path: annotation.path,
+    type: annotation.type,
+    size: 0,
+    modifiedAt: annotation.createdAt
   }
 }
 
@@ -424,6 +436,7 @@ function App() {
   })
   const [composerSkillNames, setComposerSkillNames] = useState<string[]>([])
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([])
+  const [composerAnnotations, setComposerAnnotations] = useState<MessageAnnotation[]>([])
   const [composerAttachmentUploading, setComposerAttachmentUploading] = useState(false)
   const [filePreviewPinned, setFilePreviewPinned] = useState(false)
   const [filePreviewFullscreen, setFilePreviewFullscreen] = useState(false)
@@ -618,6 +631,7 @@ function App() {
     selectedModel,
     composerSkillNames,
     composerAttachments,
+    composerAnnotations,
     attachmentUploading: composerAttachmentUploading,
     selectedTaskId,
     taskScope,
@@ -627,6 +641,7 @@ function App() {
     setPrompt,
     setComposerSkillNames,
     setComposerAttachments,
+    setComposerAnnotations,
     setSelectedTaskId
   })
   const handleSubmit = useMemo(() => createSubmitHandler(submitPrompt), [createSubmitHandler, submitPrompt])
@@ -670,6 +685,9 @@ function App() {
     setComposerAttachments((current) =>
       current.filter((attachment) => attachment.workspaceId === selectedWorkspaceId)
     )
+    setComposerAnnotations((current) =>
+      current.filter((annotation) => annotation.workspaceId === selectedWorkspaceId)
+    )
   }, [selectedWorkspaceId])
 
   async function handleAttachComposerFiles(files: File[]) {
@@ -702,6 +720,23 @@ function App() {
 
   function handlePreviewMessageAttachment(attachment: MessageAttachment) {
     void openWorkspaceFilePreview(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
+  }
+
+  function handlePreviewMessageAnnotation(annotation: MessageAnnotation) {
+    void openWorkspaceFilePreview(workspaceFileFromMessageAnnotation(annotation), annotation.workspaceId)
+  }
+
+  function handleCreatePreviewAnnotation(annotation: MessageAnnotation) {
+    if (!annotation.workspaceId) {
+      setError('这个文件缺少工作区信息，暂时不能作为 Hermes 上下文发送。')
+      return
+    }
+    setError(null)
+    setComposerAnnotations((current) => [
+      ...current.filter((item) => item.id !== annotation.id),
+      annotation
+    ].slice(-12))
+    window.setTimeout(() => focusComposer(), 0)
   }
 
   function previewTargetFromAttachment(attachment: MessageAttachment) {
@@ -1136,11 +1171,13 @@ function App() {
                       role={message.role}
                       content={message.content}
                       attachments={message.attachments}
+                      annotations={message.annotations}
                       fileReferences={selectedTaskFileReferences}
                       onOpenAttachment={handlePreviewMessageAttachment}
                       onOpenAttachmentNative={handleOpenMessageAttachmentNative}
                       onRevealAttachment={handleRevealMessageAttachment}
                       onUseAttachment={handleUseMessageAttachment}
+                      onOpenAnnotation={handlePreviewMessageAnnotation}
                       onOpenFileReference={handleOpenMessageFileReference}
                       onOpenFileReferenceNative={handleOpenMessageFileReferenceNative}
                       onRevealFileReference={handleRevealMessageFileReference}
@@ -1165,6 +1202,7 @@ function App() {
               onOpenAttachmentNative={handleOpenMessageAttachmentNative}
               onRevealAttachment={handleRevealMessageAttachment}
               onUseAttachment={handleUseMessageAttachment}
+              onOpenAnnotation={handlePreviewMessageAnnotation}
               onOpenArtifact={(artifact) => void openArtifactPreview(artifact)}
               onOpenArtifactNative={handleOpenMessageArtifactNative}
               onRevealArtifact={(artifact) => void handleRevealArtifact(artifact)}
@@ -1232,6 +1270,7 @@ function App() {
           promptInputRef={promptInputRef}
           composerSkillNames={composerSkillNames}
           composerAttachments={composerAttachments}
+          composerAnnotations={composerAnnotations}
           attachmentUploading={composerAttachmentUploading}
           selectedWorkspaceName={selectedWorkspace?.name}
           selectedModel={selectedModel}
@@ -1253,6 +1292,8 @@ function App() {
           onAttachmentDrag={clearDropzone}
           onRemoveAttachment={(attachmentId) => setComposerAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
           onPreviewAttachment={handlePreviewMessageAttachment}
+          onRemoveAnnotation={(annotationId) => setComposerAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId))}
+          onPreviewAnnotation={handlePreviewMessageAnnotation}
           onOpenWorkspace={() => {
             if (selectedWorkspace) setViewMode('projects')
           }}
@@ -1279,6 +1320,8 @@ function App() {
             onReveal={(target) => void handleRevealPreviewTarget(target)}
             onTogglePin={() => setFilePreviewPinned((current) => !current)}
             onToggleFullscreen={() => setFilePreviewFullscreen((current) => !current)}
+            onCreateAnnotation={handleCreatePreviewAnnotation}
+            onRemoveAnnotation={(annotationId) => setComposerAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId))}
           />
         ) : (
           <>
