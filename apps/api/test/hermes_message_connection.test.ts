@@ -74,6 +74,7 @@ async function main() {
             label: '批注 1',
             relativePath: 'annotated.md',
             previewKind: 'markdown',
+            selectedText: '这是前端自动识别到的选区文本',
             rect: { x: 10.123, y: 20.456, width: 30.789, height: 40.111 }
           }
         ]
@@ -212,6 +213,7 @@ def run_turn():
         or "批注 1" not in prompt
         or "annotated.md" not in prompt
         or "x=10.12%" not in prompt
+        or "这是前端自动识别到的选区文本" not in prompt
     ):
         event("message.complete", {"text": "批注上下文缺失", "status": "error"})
         return

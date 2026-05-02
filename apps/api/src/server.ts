@@ -1988,7 +1988,10 @@ function promptWithContext(prompt: string, attachments: MessageAttachment[], ann
   )
   const annotationLines = annotations.map((annotation) => {
     const rect = annotation.rect
-    return `- ${annotation.label}: ${annotation.path} (工作区相对路径：${annotation.relativePath}；预览类型：${annotation.previewKind}；区域：x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%)`
+    const detail = `工作区相对路径：${annotation.relativePath}；预览类型：${annotation.previewKind}；区域：x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%`
+    return annotation.selectedText
+      ? `- ${annotation.label}: ${annotation.path} (${detail})\n  选区识别文本：${annotation.selectedText}`
+      : `- ${annotation.label}: ${annotation.path} (${detail})`
   })
   return [
     cleanPrompt,
@@ -2041,6 +2044,7 @@ function buildTaskMarkdown(task: ReturnType<typeof enrichTask>, workspaceName: s
         for (const annotation of message.annotations) {
           const rect = annotation.rect
           lines.push(`- ${annotation.label}：\`${annotation.relativePath}\` (${annotation.previewKind}；x=${rect.x}%, y=${rect.y}%, w=${rect.width}%, h=${rect.height}%)`)
+          if (annotation.selectedText) lines.push(`  - 选区识别文本：${annotation.selectedText}`)
         }
         lines.push('')
       }

@@ -244,7 +244,7 @@ flowchart TB
 | Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 已支持扫描、查看文件树、上传、启停、加入下一次任务；gateway 场景仍缺 Cowork skill 预载参数 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；真正执行时要确认 Hermes 是否读到了 skill |
 | Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
 | 工作区、附件、产物、文件预览 | 工作区页、输入框附件、消息文件卡片、右侧预览 | `/api/workspaces`、`/api/artifacts`、`file_preview.ts`、`workspaceApi.ts`、`FilePreviewPanel.tsx` | 已支持目录授权、附件上传、产物识别、文件卡片、右侧预览、本机打开和框选批注 | 拖入文件必须先进入对话框；Office 预览要尽量接近本机打开；预览不能造成布局抖动 |
-| 文件区域批注 | 右侧文件预览、输入框批注 chip、用户消息批注卡片 | `Message.annotations`、`FilePreviewPanel.tsx`、`ChatComposer.tsx`、`promptWithContext()` | 已支持预览区拖拽框选、生成批注编号、进入输入框、随任务发送，并写入 Hermes 实际 prompt | 当前只传文件路径和预览坐标，尚未生成截图裁片；PDF/HTML/Office 坐标仍是预览层百分比，后续要升级为 PDF 页码、HTML DOM 选区、Word 段落、Excel 单元格范围 |
+| 文件区域批注 | 右侧文件预览、输入框批注 chip、用户消息批注卡片 | `Message.annotations`、`FilePreviewPanel.tsx`、`ChatComposer.tsx`、`promptWithContext()` | 已支持预览区拖拽框选、生成批注编号、自动识别可读选区文本、进入输入框、随任务发送，并写入 Hermes 实际 prompt | 尚未生成截图裁片；PDF/Office 在浏览器或 Quick Look 无法暴露文本时仍只能传预览层坐标，后续要升级为 PDF 页码、HTML DOM 选区、Word 段落、Excel 单元格范围 |
 | Runtime 版本、升级、复测、回滚准备 | 设置 > 关于 > Hermes 后台更新 | `hermes_update.ts`、`HermesUpdatePanel.tsx`、`runtimeApi.ts` | 已有检测、复测、自动更新入口；仍未做完整 managed runtime 安装器 | 升级前后必须跑模型、MCP、session、流式事件 smoke；红色信息只能给可处理动作 |
 | 错误、认证失败、后端异常 | 对话失败卡、模型设置、右侧状态 | `hermes_python.ts`、`hermes_gateway.ts`、`TaskFocusPanel.tsx` | 已做部分错误脱敏和 401 识别 | 不能只显示 Failed to fetch；用户必须知道下一步是重填 Key、重试、还是等待后端 |
 | UI 主题、密度、层级、暗色模式 | 设置 > 外观、左下本机偏好菜单 | `tokens.css`、`useSettingsPreferences.ts`、`SettingsPages.tsx` | 已有亮色/暗色/系统、字体字号、强调色；暗色仍需继续统一 | 新样式必须使用 token；不要在组件里散写颜色和字号 |
@@ -818,8 +818,8 @@ HC_EVENT\t
 - 对话区显示规则：Cowork 不机械复刻 Hermes 的 Markdown 结构，而是按信息类型选择组件。文件清单、上传确认、产物列表必须展示为文件卡片；正文里的单个文件名展示为彩色文件引用；只有真正需要二维比较、指标矩阵或结构化数据分析时才保留 Markdown 表格。前端会识别“文件名/类型”这类文件清单表格并转成文件卡片，避免用户在对话里阅读无意义表格。
 - 对话文件卡片已升级为可操作对象：主区域点击打开右侧预览，右侧图标提供“本机应用打开”“Finder 定位”“作为下一轮上下文”。这套动作同时覆盖用户附件、Hermes 输出产物和正文中能匹配到的文件引用；不能匹配到真实文件的引用仍只展示为被动文件卡，不暴露无效操作。
 - 文件预览交互第一版已按“对话流卡片 -> 右侧预览区”收敛：点击附件、工作区文件或任务产物后，右侧任务上下文让位给预览区；预览顶部提供框选批注、本机默认应用打开、Finder 定位、固定预览、全屏预览和关闭。固定预览用于避免切换目录时自动收起，关闭预览会恢复右侧工作区。预览顶部不再放“作为上下文”“复制路径”等低频文字按钮。
-- 文件预览批注第二版已落地：点击顶部批注按钮后，在当前预览文件上拖拽框选区域，Cowork 自动生成“批注 1/2/3”编号和区域框；批注会进入输入框上方的批注 chip。发送任务时批注写入 `Message.annotations`，后端校验文件仍在授权工作区内，并把批注编号、文件路径、预览类型和区域坐标写入 Hermes 实际 prompt。当前版本不要求用户为每个批注重复输入文字。
-- 文件批注当前边界：PDF、HTML、Word、Excel/PPT 等都先走统一预览坐标框选；Word/Excel/PPT 通过 macOS Quick Look 预览时，坐标代表预览层区域，不等同于原文段落、单元格或幻灯片对象。后续要分类型升级：PDF 绑定页码和文字选区，HTML 绑定 DOM 选区，Word 绑定段落/页，Excel 绑定工作表和单元格范围，并补充区域截图裁片。
+- 文件预览批注第三版已落地：点击顶部批注按钮后，在当前预览文件上拖拽框选区域，Cowork 自动生成“批注 1/2/3”编号和区域框；批注会进入输入框上方的批注 chip。框选完成时前端会尝试从当前预览 DOM 和同源 iframe 中自动提取被框选文字，写入 `Message.annotations[].selectedText`。发送任务时后端校验文件仍在授权工作区内，并把批注编号、文件路径、预览类型、区域坐标和可读选区文本写入 Hermes 实际 prompt。用户不需要重复输入“这块区域是什么”。
+- 文件批注当前边界：PDF、Word、Excel/PPT 等仍先走统一预览坐标框选；如果浏览器 PDF viewer 或 macOS Quick Look 不暴露 DOM 文本，Cowork 只能传区域坐标，无法稳定知道该区域对应的原文段落、单元格或幻灯片对象。后续要分类型升级：PDF 绑定页码和文字选区，HTML 绑定 DOM 选区，Word 绑定段落/页，Excel 绑定工作表和单元格范围，并补充区域截图裁片。
 - 文件预览布局稳定性已修正：右侧预览打开时会自动保证预览列的最小可用宽度，`app-shell`、中间工作区、右侧 inspector 和预览面板统一锁定在视口高度内滚动，避免外层页面和预览内层同时滚动导致出界、底部抖动或宽度跳动。
 - 右侧任务上下文：默认顺序固定为任务拆解、任务产出物、上下文与资源。任务拆解不能写死固定五步，只能展示产品级计划：少量、面向用户目标、能表达“先做什么、再做什么、交付什么”的步骤。Hermes `todo` 如果只是运行清单（例如读取文件、调用工具、检索资料、整理结果，或超过 6 步的操作流），必须放到对话区过程流，不进入任务拆解。Hermes 未暴露产品级拆解时，任务拆解显示空态，不能再从 thinking/status/tool/artifact/complete 事件推导假步骤。工具调用、网页、文件、Skill 归入“上下文与资源”或过程记录，不污染任务拆解。Plan、ReAct、Reflection、Result 只作为每步后面的中文小标签（计划/行动/校验/结果），不能在顶部铺成静态模式条；表情化 thinking、后台心跳、`The user is`、`reasoning.available`、`Hermes 已返回最终结果` 等原始事件不能作为用户可见步骤或说明。
 - 左下角本机偏好菜单：点击 Lucas 弹出本机菜单，可切换语言展示项、循环切换主题、进入设置弹窗；点击菜单外空白区域会关闭。

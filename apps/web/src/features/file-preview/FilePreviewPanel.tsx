@@ -134,6 +134,7 @@ export function FilePreviewPanel({
     const rect = selectionRect(selectionDraft)
     setSelectionDraft(null)
     if (rect.width < 2 || rect.height < 2) return
+    const selectedText = extractSelectionText(event.currentTarget, rect)
 
     const label = `批注 ${currentAnnotations.length + 1}`
     const annotation: PreviewAnnotation = {
@@ -147,6 +148,7 @@ export function FilePreviewPanel({
       type: target.type || 'file',
       previewKind: preview.kind,
       rect,
+      selectedText,
       createdAt: new Date().toISOString()
     }
     setAnnotations((current) => ({
@@ -315,7 +317,11 @@ export function FilePreviewPanel({
             onClick={(event) => event.stopPropagation()}
           >
             <strong>{activeAnnotation.label}</strong>
-            <p>已加入输入框上下文，发送后 Hermes 会按编号读取这个区域。</p>
+            <p>
+              {activeAnnotation.selectedText
+                ? `已识别选区文本：${clipInlineText(activeAnnotation.selectedText, 64)}`
+                : '已加入输入框上下文，发送后 Hermes 会按编号读取这个区域。'}
+            </p>
             <div>
               <span>{formatTime(activeAnnotation.createdAt)}</span>
               <button type="button" title="删除批注" onClick={() => removeAnnotation(activeAnnotation.id)}>
@@ -555,6 +561,107 @@ function selectionRect(draft: SelectionDraft) {
     width: roundRectValue(right - left),
     height: roundRectValue(bottom - top)
   }
+}
+
+function extractSelectionText(surface: HTMLElement, rect: PreviewAnnotation['rect']) {
+  const viewportRect = selectionViewportRect(surface, rect)
+  const snippets = [
+    ...collectIntersectingText(surface, viewportRect),
+    ...collectIframeText(surface, viewportRect)
+  ]
+  const text = normalizeExtractedText(snippets.join('\n'))
+  return text ? text.slice(0, 2000) : undefined
+}
+
+function selectionViewportRect(surface: HTMLElement, rect: PreviewAnnotation['rect']) {
+  const bounds = surface.getBoundingClientRect()
+  const left = bounds.left + (bounds.width * rect.x) / 100
+  const top = bounds.top + (bounds.height * rect.y) / 100
+  const width = (bounds.width * rect.width) / 100
+  const height = (bounds.height * rect.height) / 100
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height
+  }
+}
+
+function collectIframeText(surface: HTMLElement, selection: ReturnType<typeof selectionViewportRect>) {
+  const snippets: string[] = []
+  for (const iframe of Array.from(surface.querySelectorAll('iframe'))) {
+    try {
+      const frameDocument = iframe.contentDocument
+      if (!frameDocument?.body) continue
+      const iframeRect = iframe.getBoundingClientRect()
+      snippets.push(...collectIntersectingText(frameDocument.body, selection, (rect) => ({
+        left: iframeRect.left + rect.left,
+        top: iframeRect.top + rect.top,
+        right: iframeRect.left + rect.right,
+        bottom: iframeRect.top + rect.bottom
+      })))
+    } catch {
+      // Some embedded viewers, especially the browser PDF viewer, do not expose DOM text.
+    }
+  }
+  return snippets
+}
+
+function collectIntersectingText(
+  root: HTMLElement,
+  selection: ReturnType<typeof selectionViewportRect>,
+  convertRect: (rect: DOMRect) => ReturnType<typeof selectionViewportRect> = (rect) => rect
+) {
+  const documentRef = root.ownerDocument
+  const walker = documentRef.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const text = node.textContent?.trim()
+      if (!text) return NodeFilter.FILTER_REJECT
+      const parent = node.parentElement
+      if (!parent || parent.closest('[data-preview-annotation-ui="true"], script, style, noscript')) {
+        return NodeFilter.FILTER_REJECT
+      }
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  const snippets: string[] = []
+  const seen = new Set<string>()
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode
+    const text = normalizeExtractedText(node.textContent ?? '')
+    if (!text || seen.has(text)) continue
+    const range = documentRef.createRange()
+    try {
+      range.selectNodeContents(node)
+      const intersects = Array.from(range.getClientRects()).some((rect) => rectIntersects(convertRect(rect), selection))
+      if (intersects) {
+        snippets.push(text)
+        seen.add(text)
+      }
+    } finally {
+      range.detach()
+    }
+  }
+
+  return snippets
+}
+
+function rectIntersects(a: ReturnType<typeof selectionViewportRect>, b: ReturnType<typeof selectionViewportRect>) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+function normalizeExtractedText(value: string) {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function clipInlineText(value: string, maxLength: number) {
+  const normalized = normalizeExtractedText(value).replace(/\s+/g, ' ')
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized
 }
 
 function roundRectValue(value: number) {
