@@ -7,7 +7,7 @@
 
 .file-preview-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -97,12 +97,16 @@
 }
 
 .file-preview-toolbar .icon-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   color: var(--ink-soft);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
+  text-decoration: none;
 }
 
 .file-preview-toolbar .icon-button:hover {
@@ -117,20 +121,22 @@
   border-color: color-mix(in srgb, var(--success) 36%, var(--line));
 }
 
-.file-preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-}
-
-.file-preview-actions .ghost-button {
-  min-height: 32px;
-  padding: 0 10px;
-  font-size: 12px;
-  text-decoration: none;
+.file-preview-toolbar .icon-button.with-count span {
+  position: absolute;
+  right: -3px;
+  top: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  color: #ffffff;
+  background: var(--success);
+  border: 1px solid var(--surface);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .file-preview-meta {
@@ -156,12 +162,24 @@
 }
 
 .file-preview-surface {
+  position: relative;
   min-height: 0;
   overflow: auto;
   padding: 18px;
   background: var(--surface-subtle);
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.file-preview-surface.annotating {
+  cursor: crosshair;
+}
+
+.file-annotation-hit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: transparent;
 }
 
 .file-preview-panel.fullscreen .file-preview-surface {
@@ -471,6 +489,111 @@ audio.media-preview-player {
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
+}
+
+.file-annotation-marker {
+  position: absolute;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #ffffff;
+  background: var(--success);
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(26, 115, 74, 0.28);
+  font-size: 12px;
+  font-weight: 800;
+  transform: translate(-50%, -50%);
+}
+
+.file-annotation-marker.active {
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 8px 22px rgba(26, 115, 74, 0.25);
+}
+
+.file-annotation-editor,
+.file-annotation-card {
+  position: absolute;
+  z-index: 8;
+  width: min(320px, calc(100% - 28px));
+  padding: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-strong);
+  transform: translate(14px, 14px);
+}
+
+.file-annotation-editor textarea {
+  width: 100%;
+  min-height: 86px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  resize: vertical;
+}
+
+.file-annotation-editor textarea:focus {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.file-annotation-editor > div,
+.file-annotation-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.file-annotation-editor .ghost-button,
+.file-annotation-editor .send-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.file-annotation-card strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.file-annotation-card p {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.file-annotation-card span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.file-annotation-card button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.file-annotation-card button:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
 }
 
 @media (max-width: 1180px) {

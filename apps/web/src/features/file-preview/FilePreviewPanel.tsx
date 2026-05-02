@@ -1,5 +1,5 @@
 import {
-  Copy,
+  Check,
   Download,
   ExternalLink,
   FileText,
@@ -7,12 +7,14 @@ import {
   Info,
   Loader2,
   Maximize2,
+  MessageSquare,
   Minimize2,
   Pin,
   PinOff,
-  Plus,
+  Trash2,
   X
 } from 'lucide-react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { artifactDownloadUrl } from './artifactApi'
 import { MarkdownContent } from '../markdown/MarkdownContent'
 
@@ -42,6 +44,15 @@ export type FilePreviewState = Preview & {
   error?: string
 }
 
+type PreviewAnnotation = {
+  id: string
+  fileKey: string
+  x: number
+  y: number
+  text: string
+  createdAt: string
+}
+
 export function FilePreviewPanel({
   preview,
   compact = false,
@@ -49,7 +60,6 @@ export function FilePreviewPanel({
   fullscreen = false,
   onClose,
   onOpenNative,
-  onUseContext,
   onReveal,
   onTogglePin,
   onToggleFullscreen
@@ -60,12 +70,65 @@ export function FilePreviewPanel({
   fullscreen?: boolean
   onClose: () => void
   onOpenNative: (target: FilePreviewTarget) => void
-  onUseContext: (target: FilePreviewTarget) => void
   onReveal: (target: FilePreviewTarget) => void
   onTogglePin: () => void
   onToggleFullscreen: () => void
 }) {
   const target = preview.target
+  const fileKey = previewAnnotationKey(target)
+  const [annotationMode, setAnnotationMode] = useState(false)
+  const [draftAnnotation, setDraftAnnotation] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null)
+  const [annotations, setAnnotations] = useState<Record<string, PreviewAnnotation[]>>(() => readStoredAnnotations())
+  const currentAnnotations = useMemo(() => annotations[fileKey] ?? [], [annotations, fileKey])
+  const activeAnnotation = currentAnnotations.find((annotation) => annotation.id === activeAnnotationId) ?? null
+
+  useEffect(() => {
+    writeStoredAnnotations(annotations)
+  }, [annotations])
+
+  useEffect(() => {
+    setDraftAnnotation(null)
+    setActiveAnnotationId(null)
+  }, [fileKey])
+
+  function handlePreviewSurfaceClick(event: MouseEvent<HTMLDivElement>) {
+    if (!annotationMode || preview.status !== 'ready') return
+    if ((event.target as HTMLElement).closest('[data-preview-annotation-ui="true"]')) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = clampPercent(((event.clientX - rect.left) / rect.width) * 100)
+    const y = clampPercent(((event.clientY - rect.top) / rect.height) * 100)
+    setDraftAnnotation({ x, y, text: '' })
+    setActiveAnnotationId(null)
+  }
+
+  function saveDraftAnnotation() {
+    const text = draftAnnotation?.text.trim()
+    if (!draftAnnotation || !text) return
+    const annotation: PreviewAnnotation = {
+      id: `note-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      fileKey,
+      x: draftAnnotation.x,
+      y: draftAnnotation.y,
+      text,
+      createdAt: new Date().toISOString()
+    }
+    setAnnotations((current) => ({
+      ...current,
+      [fileKey]: [...(current[fileKey] ?? []), annotation]
+    }))
+    setDraftAnnotation(null)
+    setActiveAnnotationId(annotation.id)
+  }
+
+  function removeAnnotation(annotationId: string) {
+    setAnnotations((current) => ({
+      ...current,
+      [fileKey]: (current[fileKey] ?? []).filter((annotation) => annotation.id !== annotationId)
+    }))
+    setActiveAnnotationId(null)
+  }
+
   return (
     <section className={[
       'file-preview-panel',
@@ -82,12 +145,31 @@ export function FilePreviewPanel({
           </div>
         </div>
         <div className="file-preview-toolbar" aria-label="文件预览操作">
+          <button
+            type="button"
+            className={annotationMode ? 'icon-button active with-count' : 'icon-button with-count'}
+            title={annotationMode ? '退出批注' : '批注文件'}
+            aria-pressed={annotationMode}
+            onClick={() => {
+              setAnnotationMode((current) => !current)
+              setDraftAnnotation(null)
+              setActiveAnnotationId(null)
+            }}
+          >
+            <MessageSquare size={16} />
+            {currentAnnotations.length > 0 && <span>{currentAnnotations.length}</span>}
+          </button>
           <button type="button" className="icon-button" title="在本机应用中打开" onClick={() => onOpenNative(target)}>
             <ExternalLink size={16} />
           </button>
           <button type="button" className="icon-button" title="在 Finder 中显示" onClick={() => onReveal(target)}>
             <FolderOpen size={16} />
           </button>
+          {target.source === 'artifact' && target.artifactId && (
+            <a className="icon-button" title="下载" href={artifactDownloadUrl(target.artifactId)}>
+              <Download size={16} />
+            </a>
+          )}
           {!compact && (
             <>
               <button
@@ -116,23 +198,6 @@ export function FilePreviewPanel({
         </div>
       </header>
 
-      <div className="file-preview-actions">
-        <button type="button" className="ghost-button" onClick={() => onUseContext(target)}>
-          <Plus size={14} />
-          作为上下文
-        </button>
-        {target.source === 'artifact' && target.artifactId && (
-          <a className="ghost-button" href={artifactDownloadUrl(target.artifactId)}>
-            <Download size={14} />
-            下载
-          </a>
-        )}
-        <button type="button" className="ghost-button" onClick={() => void copyToClipboard(target.relativePath || target.name)}>
-          <Copy size={14} />
-          复制路径
-        </button>
-      </div>
-
       <div className="file-preview-meta">
         <span>{target.source === 'artifact' ? '任务产物' : '工作区文件'}</span>
         <span>{target.type || 'file'}</span>
@@ -140,7 +205,10 @@ export function FilePreviewPanel({
         <span>{formatTime(target.timestamp)}</span>
       </div>
 
-      <div className="file-preview-surface">
+      <div
+        className={annotationMode ? 'file-preview-surface annotating' : 'file-preview-surface'}
+        onClick={handlePreviewSurfaceClick}
+      >
         {preview.status === 'loading' ? (
           <div className="file-preview-state">
             <Loader2 size={18} className="spin" />
@@ -154,6 +222,67 @@ export function FilePreviewPanel({
             <Info size={18} />
             <strong>{preview.status === 'unsupported' ? '暂不支持直接预览' : '预览失败'}</strong>
             <span>{preview.error ?? '可以交给 Hermes 作为上下文，或在 Finder 中打开。'}</span>
+          </div>
+        )}
+
+        {annotationMode && preview.status === 'ready' && <div className="file-annotation-hit-layer" />}
+
+        {preview.status === 'ready' && currentAnnotations.map((annotation, index) => (
+          <button
+            type="button"
+            key={annotation.id}
+            data-preview-annotation-ui="true"
+            className={activeAnnotationId === annotation.id ? 'file-annotation-marker active' : 'file-annotation-marker'}
+            style={{ left: `${annotation.x}%`, top: `${annotation.y}%` }}
+            title={annotation.text}
+            onClick={(event) => {
+              event.stopPropagation()
+              setDraftAnnotation(null)
+              setActiveAnnotationId(activeAnnotationId === annotation.id ? null : annotation.id)
+            }}
+          >
+            {index + 1}
+          </button>
+        ))}
+
+        {draftAnnotation && (
+          <div
+            data-preview-annotation-ui="true"
+            className="file-annotation-editor"
+            style={{ left: `${draftAnnotation.x}%`, top: `${draftAnnotation.y}%` }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <textarea
+              autoFocus
+              value={draftAnnotation.text}
+              onChange={(event) => setDraftAnnotation((current) => current ? { ...current, text: event.target.value } : current)}
+              placeholder="写下这处需要 Hermes 关注的问题"
+            />
+            <div>
+              <button type="button" className="ghost-button" onClick={() => setDraftAnnotation(null)}>取消</button>
+              <button type="button" className="send-button" onClick={saveDraftAnnotation}>
+                <Check size={14} />
+                保存
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeAnnotation && (
+          <div
+            data-preview-annotation-ui="true"
+            className="file-annotation-card"
+            style={{ left: `${activeAnnotation.x}%`, top: `${activeAnnotation.y}%` }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <strong>批注</strong>
+            <p>{activeAnnotation.text}</p>
+            <div>
+              <span>{formatTime(activeAnnotation.createdAt)}</span>
+              <button type="button" title="删除批注" onClick={() => removeAnnotation(activeAnnotation.id)}>
+                <Trash2 size={13} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -362,20 +491,33 @@ function parseDelimitedRows(input: string, delimiter: string) {
   return rows
 }
 
-async function copyToClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
+const PREVIEW_ANNOTATIONS_KEY = 'hermes-cowork-preview-annotations'
 
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
+function previewAnnotationKey(target: FilePreviewTarget) {
+  return target.path || target.relativePath || `${target.source}:${target.name}`
+}
+
+function readStoredAnnotations(): Record<string, PreviewAnnotation[]> {
+  try {
+    const raw = window.localStorage.getItem(PREVIEW_ANNOTATIONS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, PreviewAnnotation[]>
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeStoredAnnotations(annotations: Record<string, PreviewAnnotation[]>) {
+  try {
+    window.localStorage.setItem(PREVIEW_ANNOTATIONS_KEY, JSON.stringify(annotations))
+  } catch {
+    // Local annotation persistence is best-effort; preview still works without storage.
+  }
+}
+
+function clampPercent(value: number) {
+  return Math.max(2, Math.min(98, value))
 }
 
 function formatBytes(size: number) {

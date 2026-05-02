@@ -1007,7 +1007,6 @@ function App() {
             onWorkspaceQueryChange={setWorkspaceFileQuery}
             onCloseFilePreview={handleCloseFilePreview}
             onOpenPreviewTarget={(target) => void handleOpenPreviewTarget(target)}
-            onUsePreviewTarget={handleUsePreviewTarget}
             onRevealPreviewTarget={(target) => void handleRevealPreviewTarget(target)}
             onUploadClick={() => fileInputRef.current?.click()}
             onAdd={() => void handleAuthorizeWorkspace()}
@@ -1277,7 +1276,6 @@ function App() {
             fullscreen={filePreviewFullscreen}
             onClose={handleCloseFilePreview}
             onOpenNative={(target) => void handleOpenPreviewTarget(target)}
-            onUseContext={handleUsePreviewTarget}
             onReveal={(target) => void handleRevealPreviewTarget(target)}
             onTogglePin={() => setFilePreviewPinned((current) => !current)}
             onToggleFullscreen={() => setFilePreviewFullscreen((current) => !current)}
