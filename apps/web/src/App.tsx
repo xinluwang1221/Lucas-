@@ -29,6 +29,7 @@ import {
   taskStreamLabel
 } from './features/chat/ChatExecutionViews'
 import { MessageBody } from './features/chat/MessageBody'
+import type { MarkdownFileReference } from './features/markdown/MarkdownContent'
 import {
   ContextResourcesCard,
   TaskArtifactsCard,
@@ -54,7 +55,7 @@ import {
   McpMarketplaceModal as SettingsMcpMarketplaceModal
 } from './features/settings/mcp'
 import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
-import { latestUserMessageId } from './features/chat/messageUtils'
+import { latestAssistantMessageId, latestUserMessageId } from './features/chat/messageUtils'
 import { mergeStreamedTask } from './features/chat/taskState'
 import { taskExportUrl, tasksExportUrl } from './features/chat/chatApi'
 import { useConversationBehavior } from './features/chat/useConversationBehavior'
@@ -68,6 +69,7 @@ import { useWorkspaceDropzone } from './features/workspace/useWorkspaceDropzone'
 import { uploadFile, type WorkspaceFile } from './features/workspace/workspaceApi'
 import {
   HermesMcpConfig,
+  Artifact,
   MessageAttachment,
   ModelOption,
   Task,
@@ -200,6 +202,55 @@ function mergeComposerAttachments(current: MessageAttachment[], incoming: Messag
     merged.set(`${attachment.workspaceId}:${attachment.relativePath}`, attachment)
   }
   return Array.from(merged.values()).slice(0, 12)
+}
+
+type ConversationFileReference = MarkdownFileReference & {
+  source: 'artifact' | 'workspace'
+  workspaceId?: string
+  artifact?: Artifact
+  workspaceFile?: WorkspaceFile
+}
+
+function buildConversationFileReferences(task: Task | null | undefined, workspaceFiles: WorkspaceFile[]): ConversationFileReference[] {
+  const references = new Map<string, ConversationFileReference>()
+  for (const artifact of task?.artifacts ?? []) {
+    references.set(`artifact:${artifact.id}`, {
+      id: `artifact:${artifact.id}`,
+      source: 'artifact',
+      name: artifact.name,
+      relativePath: artifact.relativePath,
+      type: artifact.type,
+      workspaceId: artifact.workspaceId,
+      artifact
+    })
+  }
+
+  for (const message of task?.messages ?? []) {
+    for (const attachment of message.attachments ?? []) {
+      const workspaceFile = workspaceFileFromMessageAttachment(attachment)
+      references.set(`attachment:${attachment.workspaceId}:${attachment.relativePath}`, {
+        id: `attachment:${attachment.workspaceId}:${attachment.relativePath}`,
+        source: 'workspace',
+        name: attachment.name,
+        relativePath: attachment.relativePath,
+        type: attachment.type,
+        workspaceId: attachment.workspaceId,
+        workspaceFile
+      })
+    }
+  }
+
+  for (const file of workspaceFiles) {
+    references.set(`workspace:${file.relativePath}`, {
+      id: `workspace:${file.relativePath}`,
+      source: 'workspace',
+      name: file.name,
+      relativePath: file.relativePath,
+      type: file.type,
+      workspaceFile: file
+    })
+  }
+  return [...references.values()]
 }
 
 function App() {
@@ -444,6 +495,11 @@ function App() {
       if (!filePreviewPinned) handleCloseFilePreview()
     }
   })
+  const selectedTaskFileReferences = useMemo(
+    () => buildConversationFileReferences(selectedTask, workspaceFiles),
+    [selectedTask, workspaceFiles]
+  )
+  const selectedTaskLatestAssistantMessageId = latestAssistantMessageId(selectedTask)
   const {
     workspacePicking,
     workspaceUpdatingId,
@@ -621,6 +677,18 @@ function App() {
 
   function handlePreviewMessageAttachment(attachment: MessageAttachment) {
     void openWorkspaceFilePreview(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
+  }
+
+  function handleOpenMessageFileReference(reference: MarkdownFileReference) {
+    const matched = selectedTaskFileReferences.find((item) => item.id === reference.id)
+    if (!matched) return
+    if (matched.source === 'artifact' && matched.artifact) {
+      void openArtifactPreview(matched.artifact)
+      return
+    }
+    if (matched.source === 'workspace' && matched.workspaceFile) {
+      void openWorkspaceFilePreview(matched.workspaceFile, matched.workspaceId ?? selectedWorkspaceId)
+    }
   }
 
   function handleUseSkill(skill: Skill) {
@@ -987,7 +1055,9 @@ function App() {
                       role={message.role}
                       content={message.content}
                       attachments={message.attachments}
+                      fileReferences={selectedTaskFileReferences}
                       onOpenAttachment={handlePreviewMessageAttachment}
+                      onOpenFileReference={handleOpenMessageFileReference}
                     />
                   </article>
                 ))}
@@ -1002,7 +1072,11 @@ function App() {
               task={selectedTask}
               traceAfterMessageId={latestUserMessageId(selectedTask)}
               formatTime={formatTime}
+              artifactCards={message.id === selectedTaskLatestAssistantMessageId ? selectedTask?.artifacts ?? [] : []}
+              fileReferences={selectedTaskFileReferences}
               onOpenAttachment={handlePreviewMessageAttachment}
+              onOpenArtifact={(artifact) => void openArtifactPreview(artifact)}
+              onOpenFileReference={handleOpenMessageFileReference}
             />
           ))}
 
@@ -1033,7 +1107,13 @@ function App() {
                   {!selectedTask.liveResponse && <em>过程会先在上方实时更新</em>}
                 </div>
                 {selectedTask.liveResponse ? (
-                  <MessageBody role="assistant" content={selectedTask.liveResponse} live />
+                  <MessageBody
+                    role="assistant"
+                    content={selectedTask.liveResponse}
+                    live
+                    fileReferences={selectedTaskFileReferences}
+                    onOpenFileReference={handleOpenMessageFileReference}
+                  />
                 ) : (
                   <div className="running-inline-status">
                     <Loader2 size={16} className="spin" />

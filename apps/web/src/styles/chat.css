@@ -1135,6 +1135,25 @@
   font-style: normal;
 }
 
+.message-output-file-list {
+  margin-top: 14px;
+}
+
+.message-output-file-list::before {
+  color: var(--ink-soft);
+  content: "Hermes 输出文件";
+  font-size: var(--text-caption);
+  font-weight: 800;
+}
+
+.message-output-file-list button {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+
+.message-output-file-list svg {
+  color: var(--success);
+}
+
 .message-markdown {
   white-space: normal;
 }
@@ -1238,6 +1257,41 @@
   border-radius: 5px;
   font-family: "SF Mono", Menlo, monospace;
   font-size: 0.86em;
+}
+
+.message-markdown .markdown-file-reference {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(360px, 100%);
+  min-height: 22px;
+  padding: 2px 6px;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success-soft) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 24%, var(--line));
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.94em;
+  font-weight: 800;
+  line-height: 1.35;
+  text-decoration: none;
+  vertical-align: baseline;
+  overflow-wrap: anywhere;
+}
+
+button.markdown-file-reference {
+  cursor: pointer;
+}
+
+button.markdown-file-reference:hover {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--success-soft) 48%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.markdown-file-reference.passive {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info-soft) 70%, transparent);
+  border-color: color-mix(in srgb, var(--info) 22%, var(--line));
 }
 
 .message-markdown pre {

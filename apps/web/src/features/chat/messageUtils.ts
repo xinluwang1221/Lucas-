@@ -4,6 +4,10 @@ export function latestUserMessageId(task?: Task) {
   return task?.messages.slice().reverse().find((message) => message.role === 'user')?.id
 }
 
+export function latestAssistantMessageId(task?: Task) {
+  return task?.messages.slice().reverse().find((message) => message.role === 'assistant')?.id
+}
+
 export function visibleTaskMessages(task: Task) {
   if (task.status === 'running') return task.messages
   const latestUserMessage = task.messages.slice().reverse().find((message) => message.role === 'user')

@@ -1,26 +1,40 @@
-import { FileText } from 'lucide-react'
-import type { Message } from '../../lib/api'
-import { MarkdownContent } from '../markdown/MarkdownContent'
+import { FileArchive, FileText } from 'lucide-react'
+import type { Artifact, Message } from '../../lib/api'
+import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 
 export function MessageBody({
   role,
   content,
   live = false,
   attachments = [],
-  onOpenAttachment
+  artifactCards = [],
+  fileReferences = [],
+  onOpenAttachment,
+  onOpenArtifact,
+  onOpenFileReference
 }: {
   role: Message['role']
   content: string
   live?: boolean
   attachments?: NonNullable<Message['attachments']>
+  artifactCards?: Artifact[]
+  fileReferences?: MarkdownFileReference[]
   onOpenAttachment?: (attachment: NonNullable<Message['attachments']>[number]) => void
+  onOpenArtifact?: (artifact: Artifact) => void
+  onOpenFileReference?: (reference: MarkdownFileReference) => void
 }) {
   if (role === 'assistant') {
     return (
       <>
         <div className={live ? 'message-body message-markdown live-output' : 'message-body message-markdown'}>
-          <MarkdownContent source={content} emptyText={live ? 'Hermes 正在组织答案...' : ''} />
+          <MarkdownContent
+            source={content}
+            emptyText={live ? 'Hermes 正在组织答案...' : ''}
+            fileReferences={fileReferences}
+            onOpenFileReference={onOpenFileReference}
+          />
         </div>
+        <MessageArtifactList artifacts={artifactCards} onOpenArtifact={onOpenArtifact} />
         <MessageAttachmentList attachments={attachments} onOpenAttachment={onOpenAttachment} />
       </>
     )
@@ -53,6 +67,32 @@ export function MessageAttachmentList({
           <FileText size={14} />
           <span>{attachment.name}</span>
           <em>{formatBytes(attachment.size)}</em>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function MessageArtifactList({
+  artifacts,
+  onOpenArtifact
+}: {
+  artifacts?: Artifact[]
+  onOpenArtifact?: (artifact: Artifact) => void
+}) {
+  if (!artifacts?.length) return null
+  return (
+    <div className="message-attachment-list message-output-file-list" aria-label="Hermes 输出文件">
+      {artifacts.map((artifact) => (
+        <button
+          type="button"
+          key={artifact.id}
+          title={`打开输出文件：${artifact.relativePath}`}
+          onClick={() => onOpenArtifact?.(artifact)}
+        >
+          <FileArchive size={14} />
+          <span>{artifact.name}</span>
+          <em>{formatBytes(artifact.size)}</em>
         </button>
       ))}
     </div>
