@@ -648,34 +648,6 @@
   line-height: 1.55;
 }
 
-.scheduled-guidance-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.scheduled-guidance-card {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: var(--shadow-soft);
-}
-
-.scheduled-guidance-card strong {
-  color: var(--ink);
-  font-size: 14px;
-}
-
-.scheduled-guidance-card span {
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .cron-modal {
   display: grid;
   gap: 18px;
@@ -716,7 +688,8 @@
 }
 
 .cron-form-grid label,
-.cron-prompt-field {
+.cron-prompt-field,
+.cron-schedule-fields label {
   display: grid;
   gap: 7px;
   color: var(--ink-soft);
@@ -726,7 +699,10 @@
 
 .cron-form-grid input,
 .cron-form-grid select,
-.cron-prompt-field textarea {
+.cron-prompt-field textarea,
+.cron-schedule-fields input,
+.cron-schedule-fields select,
+.cron-skill-results > input {
   width: 100%;
   min-width: 0;
   color: var(--ink);
@@ -737,7 +713,10 @@
 }
 
 .cron-form-grid input,
-.cron-form-grid select {
+.cron-form-grid select,
+.cron-schedule-fields input,
+.cron-schedule-fields select,
+.cron-skill-results > input {
   min-height: 40px;
   padding: 0 10px;
 }
@@ -750,47 +729,196 @@
 
 .cron-form-grid input:focus,
 .cron-form-grid select:focus,
-.cron-prompt-field textarea:focus {
+.cron-prompt-field textarea:focus,
+.cron-schedule-fields input:focus,
+.cron-schedule-fields select:focus,
+.cron-skill-results > input:focus {
   border-color: var(--accent-strong);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.cron-skill-picker {
+.cron-schedule-builder {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 
-.cron-skill-picker > span {
+.cron-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cron-section-head strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.cron-section-head span {
   color: var(--ink-soft);
   font-size: 12px;
-  font-weight: 700;
+  line-height: 1.5;
+  text-align: right;
 }
 
-.cron-skill-picker > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  max-height: 160px;
-  overflow: auto;
-  padding: 10px;
-  background: var(--surface-muted);
+.cron-segmented-control {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
 }
 
-.cron-skill-picker button {
-  padding: 6px 9px;
+.cron-segmented-control button {
+  min-height: 34px;
   color: var(--ink-soft);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
   font-size: 12px;
+  font-weight: 700;
 }
 
-.cron-skill-picker button.active {
+.cron-segmented-control button.active {
+  color: var(--accent-strong);
+  background: var(--success-soft);
+  box-shadow: inset 0 0 0 1px var(--success-border);
+}
+
+.cron-schedule-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cron-custom-schedule {
+  grid-column: 1 / -1;
+}
+
+.cron-skill-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.cron-skill-selector {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 260px;
+  padding: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.cron-skill-categories,
+.cron-skill-results,
+.cron-skill-results > div {
+  min-width: 0;
+}
+
+.cron-skill-categories {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding-right: 10px;
+  border-right: 1px solid var(--line);
+}
+
+.cron-skill-categories button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cron-skill-categories button.active {
   color: var(--accent-strong);
   background: var(--success-soft);
   border-color: var(--success-border);
+}
+
+.cron-skill-categories em {
+  color: inherit;
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.cron-skill-results {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.cron-skill-results > div {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  overflow: auto;
+}
+
+.cron-skill-results button {
+  display: grid;
+  grid-template-columns: 24px minmax(120px, 0.38fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 10px;
+  color: var(--ink);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.cron-skill-results button.active {
+  color: var(--accent-strong);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+.cron-skill-results button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--accent-strong);
+  background: var(--success-soft);
+  border: 1px solid var(--success-border);
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.cron-skill-results strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cron-skill-results em {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dispatch-grid {
@@ -3174,8 +3302,7 @@
 
   .dispatch-grid,
   .schedule-grid,
-  .scheduled-shell,
-  .scheduled-guidance-grid {
+  .scheduled-shell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3188,10 +3315,20 @@
   .dispatch-grid,
   .schedule-grid,
   .scheduled-shell,
-  .scheduled-guidance-grid,
   .cron-detail-grid,
-  .cron-form-grid {
+  .cron-form-grid,
+  .cron-schedule-fields,
+  .cron-skill-selector {
     grid-template-columns: 1fr;
+  }
+
+  .cron-skill-categories {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow: auto;
+    padding: 0 0 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 
   .cron-detail-head,
@@ -3211,9 +3348,11 @@
 :root[data-theme-mode="dark"] .schedule-card,
 :root[data-theme-mode="dark"] .scheduled-list-panel,
 :root[data-theme-mode="dark"] .scheduled-detail-panel,
-:root[data-theme-mode="dark"] .scheduled-guidance-card,
 :root[data-theme-mode="dark"] .cron-modal,
 :root[data-theme-mode="dark"] .cron-output-card,
+:root[data-theme-mode="dark"] .cron-schedule-builder,
+:root[data-theme-mode="dark"] .cron-segmented-control,
+:root[data-theme-mode="dark"] .cron-skill-selector,
 :root[data-theme-mode="dark"] .dispatch-card,
 :root[data-theme-mode="dark"] .idea-grid button,
 :root[data-theme-mode="dark"] .utility-empty,
@@ -3262,7 +3401,7 @@
 :root[data-theme-mode="dark"] .schedule-status-list div,
 :root[data-theme-mode="dark"] .scheduled-health-card,
 :root[data-theme-mode="dark"] .cron-metric,
-:root[data-theme-mode="dark"] .cron-skill-picker > div,
+:root[data-theme-mode="dark"] .cron-skill-results button,
 :root[data-theme-mode="dark"] .dispatch-connector-strip,
 :root[data-theme-mode="dark"] .idea-grid button:hover,
 :root[data-theme-mode="dark"] .skill-file-tree,

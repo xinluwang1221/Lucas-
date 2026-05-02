@@ -21,6 +21,41 @@ import type {
   Workspace
 } from '../../lib/api'
 
+type ScheduleMode = 'daily' | 'weekly' | 'monthly' | 'interval' | 'custom'
+type IntervalUnit = 'm' | 'h' | 'd'
+type SkillCategoryId = 'all' | 'document' | 'data' | 'browser' | 'office' | 'dev' | 'automation' | 'business' | 'other'
+type ScheduleConfig = {
+  mode: ScheduleMode
+  time: string
+  weekday: string
+  monthDay: string
+  intervalValue: string
+  intervalUnit: IntervalUnit
+  custom: string
+}
+
+const WEEKDAYS = [
+  { value: '1', label: '周一' },
+  { value: '2', label: '周二' },
+  { value: '3', label: '周三' },
+  { value: '4', label: '周四' },
+  { value: '5', label: '周五' },
+  { value: '6', label: '周六' },
+  { value: '0', label: '周日' }
+]
+
+const SKILL_CATEGORIES: Array<{ id: SkillCategoryId; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'document', label: '文档文件' },
+  { id: 'data', label: '数据表格' },
+  { id: 'browser', label: '网页浏览' },
+  { id: 'office', label: '办公协作' },
+  { id: 'dev', label: '研发工具' },
+  { id: 'automation', label: '自动化' },
+  { id: 'business', label: '业务分析' },
+  { id: 'other', label: '其他' }
+]
+
 type ScheduledTasksViewProps = {
   cronState: HermesCronState | null
   cronLoading: boolean
@@ -65,7 +100,7 @@ export function ScheduledTasksView({
       <header className="product-page-head">
         <div>
           <h1>定时任务</h1>
-          <p>管理会按时间自动执行的 Hermes 任务。保存后由 Hermes 后台按计划运行。</p>
+          <p>把重复工作保存为任务，交给 Hermes 到点执行。</p>
         </div>
         <div className="scheduled-actions">
           <button className="ghost-button" onClick={onRefreshCron} disabled={cronLoading}>
@@ -89,11 +124,11 @@ export function ScheduledTasksView({
         <aside className="scheduled-list-panel">
           <div className="scheduled-health-card">
             <div>
-              <strong>{schedulerRunning ? '自动执行已开启' : '自动执行未开启'}</strong>
+              <strong>自动运行</strong>
               <span>
                 {schedulerRunning
-                  ? 'Hermes 后台正在监听定时任务，到时间会自动执行。'
-                  : '任务可以先保存，但不会按时间自动触发；需要启动 Hermes 后台后才会自动执行。'}
+                  ? 'Hermes 后台已运行，启用的定时任务会按周期自动执行。'
+                  : '当前只会保存任务，不会自动执行。启动 Hermes 后台后，启用的任务会按周期运行。'}
               </span>
             </div>
             <span className={schedulerRunning ? 'status-pill ok' : 'status-pill warn'}>
@@ -106,7 +141,7 @@ export function ScheduledTasksView({
               <div className="scheduled-empty">
                 <CalendarClock size={22} />
                 <strong>还没有 Hermes 定时任务</strong>
-                <span>新建后会保存到 Hermes 的定时任务里，之后可以自动运行。</span>
+                <span>这里会列出你创建的重复工作任务。</span>
               </div>
             )}
             {jobs.map((job) => (
@@ -143,25 +178,10 @@ export function ScheduledTasksView({
             <div className="scheduled-detail-empty">
               <CalendarClock size={26} />
               <strong>选择或新建一个定时任务</strong>
-              <span>可以从“每天下班复盘”“每周整理工作区文件”“每周生成项目总结”开始。</span>
+              <span>点击“新建定时任务”，创建第一个自动执行的重复任务。</span>
             </div>
           )}
         </main>
-      </div>
-
-      <div className="scheduled-guidance-grid">
-        <article className="scheduled-guidance-card">
-          <strong>下一步</strong>
-          <span>
-            {jobs.length
-              ? '选择左侧任务查看执行计划、最近输出和操作入口。'
-              : '先点击“新建定时任务”，把重复工作保存成 Hermes 可以按时执行的任务。'}
-          </span>
-        </article>
-        <article className="scheduled-guidance-card">
-          <strong>页面边界</strong>
-          <span>这里仅管理定时任务。MCP 推荐日报在 MCP 设置和市场里查看，Cowork 后台服务放在系统设置里处理。</span>
-        </article>
       </div>
 
       {(creating || editingJob) && (
@@ -268,12 +288,48 @@ function CronJobModal({
 }) {
   const [name, setName] = useState(job?.name ?? '')
   const [prompt, setPrompt] = useState(job?.prompt ?? '')
-  const [schedule, setSchedule] = useState(job ? editableSchedule(job) : 'every 1d')
+  const initialSchedule = useMemo(() => scheduleConfigFromJob(job), [job])
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>(initialSchedule.mode)
+  const [scheduleTime, setScheduleTime] = useState(initialSchedule.time)
+  const [scheduleWeekday, setScheduleWeekday] = useState(initialSchedule.weekday)
+  const [scheduleMonthDay, setScheduleMonthDay] = useState(initialSchedule.monthDay)
+  const [intervalValue, setIntervalValue] = useState(initialSchedule.intervalValue)
+  const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>(initialSchedule.intervalUnit)
+  const [customSchedule, setCustomSchedule] = useState(initialSchedule.custom)
   const [workdir, setWorkdir] = useState(job?.workdir ?? workspaces[0]?.path ?? '')
   const [deliver, setDeliver] = useState(job?.deliver ?? 'local')
   const [repeatText, setRepeatText] = useState(job?.repeat.times ? String(job.repeat.times) : '')
   const [selectedSkills, setSelectedSkills] = useState<string[]>(job?.skills ?? [])
-  const enabledSkills = skills.filter((skill) => skill.enabled).slice(0, 36)
+  const [skillCategory, setSkillCategory] = useState<SkillCategoryId>('all')
+  const [skillQuery, setSkillQuery] = useState('')
+  const enabledSkills = useMemo(() => skills.filter((skill) => skill.enabled), [skills])
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<SkillCategoryId, number>()
+    counts.set('all', enabledSkills.length)
+    for (const skill of enabledSkills) {
+      const category = inferSkillCategory(skill)
+      counts.set(category, (counts.get(category) ?? 0) + 1)
+    }
+    return counts
+  }, [enabledSkills])
+  const visibleSkillCategories = SKILL_CATEGORIES.filter((category) => category.id === 'all' || (categoryCounts.get(category.id) ?? 0) > 0)
+  const filteredSkills = useMemo(() => {
+    const query = skillQuery.trim().toLowerCase()
+    return enabledSkills.filter((skill) => {
+      const matchesCategory = skillCategory === 'all' || inferSkillCategory(skill) === skillCategory
+      const haystack = `${skill.name} ${skill.description}`.toLowerCase()
+      return matchesCategory && (!query || haystack.includes(query))
+    })
+  }, [enabledSkills, skillCategory, skillQuery])
+  const scheduleValue = buildScheduleValue({
+    mode: scheduleMode,
+    time: scheduleTime,
+    weekday: scheduleWeekday,
+    monthDay: scheduleMonthDay,
+    intervalValue,
+    intervalUnit,
+    custom: customSchedule
+  })
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -285,7 +341,7 @@ function CronJobModal({
           onSubmit({
             name,
             prompt,
-            schedule,
+            schedule: scheduleValue,
             workdir,
             deliver,
             repeat: repeatText.trim() ? Number(repeatText) : null,
@@ -309,8 +365,8 @@ function CronJobModal({
             <input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：每日工作复盘" />
           </label>
           <label>
-            <span>执行时间</span>
-            <input value={schedule} onChange={(event) => setSchedule(event.target.value)} placeholder="every 1d / 30m / 0 9 * * *" />
+            <span>执行次数</span>
+            <input value={repeatText} onChange={(event) => setRepeatText(event.target.value)} inputMode="numeric" placeholder="留空表示长期运行" />
           </label>
           <label>
             <span>授权工作区</span>
@@ -329,11 +385,106 @@ function CronJobModal({
               <option value="feishu">飞书默认渠道</option>
             </select>
           </label>
-          <label>
-            <span>执行次数</span>
-            <input value={repeatText} onChange={(event) => setRepeatText(event.target.value)} inputMode="numeric" placeholder="留空表示长期运行" />
-          </label>
         </div>
+
+        <section className="cron-schedule-builder">
+          <div className="cron-section-head">
+            <strong>执行周期</strong>
+            <span>{describeScheduleChoice(scheduleMode, scheduleTime, scheduleWeekday, scheduleMonthDay, intervalValue, intervalUnit, customSchedule)}</span>
+          </div>
+          <div className="cron-segmented-control" role="tablist" aria-label="选择执行周期">
+            {[
+              ['daily', '每天'],
+              ['weekly', '每周'],
+              ['monthly', '每月'],
+              ['interval', '每隔'],
+              ['custom', '高级']
+            ].map(([mode, label]) => (
+              <button
+                type="button"
+                key={mode}
+                className={scheduleMode === mode ? 'active' : ''}
+                onClick={() => setScheduleMode(mode as ScheduleMode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="cron-schedule-fields">
+            {scheduleMode === 'daily' && (
+              <label>
+                <span>每天时间</span>
+                <input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} />
+              </label>
+            )}
+            {scheduleMode === 'weekly' && (
+              <>
+                <label>
+                  <span>星期</span>
+                  <select value={scheduleWeekday} onChange={(event) => setScheduleWeekday(event.target.value)}>
+                    {WEEKDAYS.map((weekday) => (
+                      <option key={weekday.value} value={weekday.value}>{weekday.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>时间</span>
+                  <input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} />
+                </label>
+              </>
+            )}
+            {scheduleMode === 'monthly' && (
+              <>
+                <label>
+                  <span>每月日期</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={scheduleMonthDay}
+                    onChange={(event) => setScheduleMonthDay(clampNumberText(event.target.value, 1, 31))}
+                  />
+                </label>
+                <label>
+                  <span>时间</span>
+                  <input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} />
+                </label>
+              </>
+            )}
+            {scheduleMode === 'interval' && (
+              <>
+                <label>
+                  <span>间隔</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={intervalValue}
+                    onChange={(event) => setIntervalValue(clampNumberText(event.target.value, 1, 999))}
+                  />
+                </label>
+                <label>
+                  <span>单位</span>
+                  <select value={intervalUnit} onChange={(event) => setIntervalUnit(event.target.value as IntervalUnit)}>
+                    <option value="m">分钟</option>
+                    <option value="h">小时</option>
+                    <option value="d">天</option>
+                  </select>
+                </label>
+              </>
+            )}
+            {scheduleMode === 'custom' && (
+              <label className="cron-custom-schedule">
+                <span>高级表达式</span>
+                <input
+                  value={customSchedule}
+                  onChange={(event) => setCustomSchedule(event.target.value)}
+                  placeholder="例如：0 9 * * * 或 every 2h"
+                />
+              </label>
+            )}
+          </div>
+        </section>
 
         <label className="cron-prompt-field">
           <span>任务说明</span>
@@ -341,24 +492,54 @@ function CronJobModal({
         </label>
 
         <div className="cron-skill-picker">
-          <span>绑定 Skill</span>
-          <div>
-            {enabledSkills.length ? enabledSkills.map((skill) => (
-              <button
-                type="button"
-                key={skill.id}
-                className={selectedSkills.includes(skill.name) ? 'active' : ''}
-                onClick={() => {
-                  setSelectedSkills((current) =>
-                    current.includes(skill.name)
-                      ? current.filter((item) => item !== skill.name)
-                      : [...current, skill.name]
+          <div className="cron-section-head">
+            <strong>绑定 Skill</strong>
+            <span>{selectedSkills.length ? `已选择 ${selectedSkills.length} 个` : '可选。用于让任务复用固定工作方法。'}</span>
+          </div>
+          <div className="cron-skill-selector">
+            <div className="cron-skill-categories">
+              {visibleSkillCategories.map((category) => (
+                <button
+                  type="button"
+                  key={category.id}
+                  className={skillCategory === category.id ? 'active' : ''}
+                  onClick={() => setSkillCategory(category.id)}
+                >
+                  <span>{category.label}</span>
+                  <em>{categoryCounts.get(category.id) ?? 0}</em>
+                </button>
+              ))}
+            </div>
+            <div className="cron-skill-results">
+              <input
+                value={skillQuery}
+                onChange={(event) => setSkillQuery(event.target.value)}
+                placeholder="搜索 Skill"
+              />
+              <div>
+                {filteredSkills.length ? filteredSkills.map((skill) => {
+                  const selected = selectedSkills.includes(skill.name)
+                  return (
+                    <button
+                      type="button"
+                      key={skill.id}
+                      className={selected ? 'active' : ''}
+                      onClick={() => {
+                        setSelectedSkills((current) =>
+                          current.includes(skill.name)
+                            ? current.filter((item) => item !== skill.name)
+                            : [...current, skill.name]
+                        )
+                      }}
+                    >
+                      <span>{selected ? '✓' : '+'}</span>
+                      <strong>{skill.name}</strong>
+                      <em>{skill.description || skill.path}</em>
+                    </button>
                   )
-                }}
-              >
-                {skill.name}
-              </button>
-            )) : <p className="scheduled-muted-copy">暂无启用 Skill。</p>}
+                }) : <p className="scheduled-muted-copy">没有匹配的 Skill。</p>}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -390,11 +571,130 @@ function JobStatusIcon({ job }: { job: HermesCronJob }) {
   return <Clock3 size={16} />
 }
 
-function editableSchedule(job: HermesCronJob) {
-  if (job.schedule.kind === 'interval' && job.schedule.minutes) return `every ${job.schedule.minutes}m`
-  if (job.schedule.kind === 'cron' && job.schedule.expr) return job.schedule.expr
-  if (job.schedule.kind === 'once' && job.schedule.run_at) return job.schedule.run_at
-  return job.scheduleDisplay
+function scheduleConfigFromJob(job: HermesCronJob | null): ScheduleConfig {
+  const fallback = {
+    mode: 'daily' as ScheduleMode,
+    time: '18:00',
+    weekday: '1',
+    monthDay: '1',
+    intervalValue: '1',
+    intervalUnit: 'd' as IntervalUnit,
+    custom: '0 18 * * *'
+  }
+  if (!job) return fallback
+
+  if (job.schedule.kind === 'interval' && job.schedule.minutes) {
+    const interval = splitIntervalMinutes(job.schedule.minutes)
+    return {
+      ...fallback,
+      mode: 'interval' as ScheduleMode,
+      intervalValue: String(interval.value),
+      intervalUnit: interval.unit,
+      custom: `every ${interval.value}${interval.unit}`
+    }
+  }
+
+  if (job.schedule.kind === 'cron' && job.schedule.expr) {
+    const cron = parseCronExpression(job.schedule.expr)
+    if (cron) return { ...fallback, ...cron, custom: job.schedule.expr }
+    return { ...fallback, mode: 'custom' as ScheduleMode, custom: job.schedule.expr }
+  }
+
+  if (job.schedule.kind === 'once' && job.schedule.run_at) {
+    return { ...fallback, mode: 'custom' as ScheduleMode, custom: job.schedule.run_at }
+  }
+
+  return { ...fallback, mode: 'custom' as ScheduleMode, custom: job.scheduleDisplay }
+}
+
+function splitIntervalMinutes(minutes: number): { value: number; unit: IntervalUnit } {
+  if (minutes % 1440 === 0) return { value: minutes / 1440, unit: 'd' }
+  if (minutes % 60 === 0) return { value: minutes / 60, unit: 'h' }
+  return { value: minutes, unit: 'm' }
+}
+
+function parseCronExpression(expr: string): Partial<ScheduleConfig> | null {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length < 5) return null
+  const [minute, hour, day, month, weekday] = parts
+  if (!isPlainCronNumber(minute) || !isPlainCronNumber(hour)) return null
+  const time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+  if (day === '*' && month === '*' && weekday === '*') {
+    return { mode: 'daily', time }
+  }
+  if (day === '*' && month === '*' && isPlainCronNumber(weekday)) {
+    return { mode: 'weekly', time, weekday }
+  }
+  if (month === '*' && weekday === '*' && isPlainCronNumber(day)) {
+    return { mode: 'monthly', time, monthDay: day }
+  }
+  return null
+}
+
+function isPlainCronNumber(value: string) {
+  return /^\d+$/.test(value)
+}
+
+function buildScheduleValue(config: {
+  mode: ScheduleMode
+  time: string
+  weekday: string
+  monthDay: string
+  intervalValue: string
+  intervalUnit: IntervalUnit
+  custom: string
+}) {
+  const [hour = '18', minute = '00'] = config.time.split(':')
+  if (config.mode === 'daily') return `${Number(minute)} ${Number(hour)} * * *`
+  if (config.mode === 'weekly') return `${Number(minute)} ${Number(hour)} * * ${config.weekday}`
+  if (config.mode === 'monthly') return `${Number(minute)} ${Number(hour)} ${config.monthDay || '1'} * *`
+  if (config.mode === 'interval') return `every ${config.intervalValue || '1'}${config.intervalUnit}`
+  return config.custom.trim()
+}
+
+function describeScheduleChoice(
+  mode: ScheduleMode,
+  time: string,
+  weekday: string,
+  monthDay: string,
+  intervalValue: string,
+  intervalUnit: IntervalUnit,
+  custom: string
+) {
+  if (mode === 'daily') return `每天 ${time} 执行`
+  if (mode === 'weekly') return `每周${WEEKDAYS.find((item) => item.value === weekday)?.label.replace('周', '') ?? '一'} ${time} 执行`
+  if (mode === 'monthly') return `每月 ${monthDay || '1'} 日 ${time} 执行`
+  if (mode === 'interval') return `每隔 ${intervalValue || '1'} ${intervalUnitLabel(intervalUnit)}执行一次`
+  return custom.trim() ? `高级：${custom.trim()}` : '填写高级执行表达式'
+}
+
+function intervalUnitLabel(unit: IntervalUnit) {
+  if (unit === 'm') return '分钟'
+  if (unit === 'h') return '小时'
+  return '天'
+}
+
+function clampNumberText(value: string, min: number, max: number) {
+  if (!value.trim()) return ''
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return String(min)
+  return String(Math.max(min, Math.min(max, Math.round(numeric))))
+}
+
+function inferSkillCategory(skill: Skill): SkillCategoryId {
+  const text = `${skill.name} ${skill.description} ${skill.path}`.toLowerCase()
+  if (matchesAny(text, ['doc', 'document', 'pdf', 'ppt', 'presentation', 'word', 'markdown', 'file', 'documents'])) return 'document'
+  if (matchesAny(text, ['sheet', 'spreadsheet', 'excel', 'csv', 'xlsx', 'data', 'analysis', 'analytics'])) return 'data'
+  if (matchesAny(text, ['browser', 'web', 'search', 'crawler', '网页', '调研'])) return 'browser'
+  if (matchesAny(text, ['lark', 'feishu', 'gmail', 'calendar', 'mail', 'approval', '飞书', '审批', '日历'])) return 'office'
+  if (matchesAny(text, ['github', 'debug', 'build', 'run', 'swift', 'macos', 'code', 'plugin', '开发', '研发'])) return 'dev'
+  if (matchesAny(text, ['automation', 'automate', 'workflow', 'scheduled', '自动化'])) return 'automation'
+  if (matchesAny(text, ['business', 'growth', 'gmv', 'campaign', 'xhs', '小红书', '业务', '增长'])) return 'business'
+  return 'other'
+}
+
+function matchesAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword))
 }
 
 function formatDate(value?: string | null) {

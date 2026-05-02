@@ -361,6 +361,9 @@ flowchart TB
 - 定时任务页直接管理 Hermes Cron，而不是 Cowork 自己保存一套假任务。
 - 后端 Adapter 通过 Hermes 自己的 `cronjob` 工具函数执行 create/update/pause/resume/run/remove，列表和输出读取 `~/.hermes/cron/jobs.json` 与 `~/.hermes/cron/output/<job_id>/`。
 - 前端只展示对用户有决策意义的信息：是否自动执行、下次执行时间、绑定工作区、绑定 Skill、最近输出和可操作动作。
+- 定时任务页不展示“页面边界”“下一步”这类开发解释；必要说明合并到自动运行状态卡里。
+- 新建/编辑任务时，执行时间使用“每天 / 每周 / 每月 / 每隔 / 高级”的周期选择器，前端生成 Hermes 能识别的 schedule 字符串，不让普通用户直接填写 `every 1d` 或 cron 表达式。
+- 绑定 Skill 使用类目选择器、搜索和多选列表，不再把所有 skill 平铺成标签；类目由 skill 名称、描述和路径推断，用于支撑后续大量 skill 的管理。
 
 为什么这样做：
 
@@ -862,7 +865,7 @@ HC_EVENT\t
 `apps/web/src/features/scheduled/`
 
 - 负责 Hermes Cron 定时任务页、Cron API service 和定时任务状态 hook。
-- 后续调整定时任务列表、新建/编辑弹窗、Cron 输出展示、gateway 状态提示和每日 MCP 推荐迁移时，优先改这里。
+- 后续调整定时任务列表、新建/编辑弹窗、周期选择器、Skill 类目多选、Cron 输出展示、gateway 状态提示和每日 MCP 推荐迁移时，优先改这里。
 
 `apps/web/src/features/file-preview/FilePreviewPanel.tsx`
 
