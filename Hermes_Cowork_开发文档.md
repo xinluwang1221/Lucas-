@@ -107,69 +107,25 @@ Hermes Cowork 的产品边界必须按下面这张图理解：Cowork 是 Hermes 
 - Hermes MCP 文档说明 MCP 是外接工具服务器能力，Hermes 会在启动时发现并注册工具：`https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp`
 - Hermes 安全文档说明危险命令审批、人类确认、隔离和上下文文件扫描是后端安全模型的一部分：`https://hermes-agent.nousresearch.com/docs/user-guide/security`
 
-这张图的读法：
+下面不再使用一张“大而全”的图。那种图适合工程师追代码，但在 GitHub 上会被缩得很小，第一次看 AI Agent 架构时基本不可读。这里拆成三张小图，每张只回答一个问题。
 
-- 第一层：你通过 Cowork 提出任务、放文件、选择模型、确认风险命令、查看结果。
-- 第二层：Cowork 把这些操作翻译成 Hermes 能理解的任务、配置、文件路径、审批回复和状态查询。
-- 第三层：Hermes 真正执行 Agent 循环：理解任务、组装上下文、选择模型、调用工具、读写文件、保存会话、必要时请求人工审批。
-- 第四层：模型、MCP、Skill、文件系统、浏览器、终端、记忆和安全隔离都是 Hermes 的后端资源；Cowork 只负责把它们变成可管理界面。
+### 3.1.1 总览图：Cowork 和 Hermes 各自负责什么
 
 ```mermaid
 flowchart TB
-  User["你<br/>提出任务、拖入文件、选择模型、确认风险命令"]
+  U["你<br/>提出任务、放文件、确认风险操作"]
+  C["Hermes Cowork<br/>可视化工作台<br/>对话、文件、设置、审批、结果"]
+  A["Cowork 本机后端<br/>翻译任务、保存记录、连接 Hermes"]
+  H["Hermes Agent<br/>理解任务、规划、调用工具、保存记忆"]
+  R["外部资源<br/>模型、MCP、文件、网页、终端"]
 
-  subgraph Cowork["Hermes Cowork：本机可视化工作台"]
-    C1["对话区<br/>显示你的问题、Hermes 回复、运行过程"]
-    C2["输入框<br/>附件、模型、思考强度、发送和停止"]
-    C3["右侧工作区<br/>任务目标、产物、上下文资源、文件预览"]
-    C4["设置<br/>模型、MCP、Skill、更新、外观"]
-    C5["工作区<br/>授权本机文件夹、管理文件和会话"]
-  end
-
-  subgraph Adapter["Cowork 本机后端：翻译层和记录层"]
-    A1["任务翻译<br/>把一次对话变成 Hermes 任务"]
-    A2["状态记录<br/>保存 Cowork 任务、消息、附件、产物索引"]
-    A3["配置管理<br/>读写 Hermes 模型、MCP、更新和安全配置"]
-    A4["审批转发<br/>把你点的允许或拒绝发回 Hermes"]
-    A5["文件服务<br/>上传、预览、Finder 定位、本机打开"]
-  end
-
-  subgraph Hermes["Hermes Agent：真正干活的智能体"]
-    H1["入口层<br/>CLI、Gateway、API、批处理、多平台消息入口"]
-    H2["AIAgent<br/>核心任务循环：思考、行动、观察、继续"]
-    H3["上下文组装<br/>系统提示、你的问题、工作区文件、Skill、记忆"]
-    H4["模型选择<br/>Provider、模型、Fallback、Reasoning"]
-    H5["工具派发<br/>终端、文件、网页、浏览器、代码执行、MCP"]
-    H6["会话与记忆<br/>Session、SQLite、搜索、上下文压缩"]
-    H7["安全边界<br/>危险命令审批、沙箱、权限和注入检查"]
-  end
-
-  subgraph Resources["Hermes 可调用的外部资源"]
-    R1["大模型服务<br/>MiMo、DeepSeek、Qwen、Kimi 等"]
-    R2["MCP 外接工具<br/>GitHub、数据库、文件系统、内部 API"]
-    R3["本机工作区<br/>用户授权给 Hermes 读写的文件夹"]
-    R4["浏览器和网页<br/>搜索、打开网页、自动化操作"]
-    R5["终端和沙箱<br/>命令执行、隔离环境、后台进程"]
-  end
-
-  User --> Cowork
-  Cowork --> Adapter
-  Adapter --> H1
-  H1 --> H2
-  H2 --> H3
-  H2 --> H4
-  H2 --> H5
-  H2 --> H6
-  H2 --> H7
-  H4 --> R1
-  H5 --> R2
-  H5 --> R3
-  H5 --> R4
-  H5 --> R5
-  H7 --> A4
-  H6 --> A2
-  H5 --> A5
-  Adapter --> Cowork
+  U --> C
+  C --> A
+  A --> H
+  H --> R
+  R --> H
+  H --> A
+  A --> C
 ```
 
 用一句话理解：
@@ -178,7 +134,57 @@ flowchart TB
 你在 Cowork 里开车；Cowork 是方向盘、仪表盘和刹车；Hermes 是发动机和自动驾驶系统；模型、MCP、浏览器、文件和终端是 Hermes 可以调用的动力和工具。
 ```
 
-### 3.1.1 新手术语翻译表
+### 3.1.2 任务图：一次对话怎么跑完
+
+```mermaid
+flowchart TB
+  T1["1 你发送任务<br/>输入问题，附上文件，选择模型"]
+  T2["2 Cowork 立刻记录<br/>显示你的消息，创建任务，开始监听进度"]
+  T3["3 Hermes 组装上下文<br/>读取问题、工作区文件、Skill、记忆"]
+  T4["4 Hermes 选择模型<br/>Provider、Fallback、Reasoning 生效"]
+  T5["5 Hermes 执行动作<br/>调用 MCP、读写文件、查网页、跑命令"]
+  T6["6 需要确认时暂停<br/>危险命令进入 Cowork 审批卡"]
+  T7["7 Cowork 展示结果<br/>回答、产物文件、过程资源、文件预览"]
+
+  T1 --> T2 --> T3 --> T4 --> T5 --> T6 --> T7
+  T5 --> T7
+```
+
+这张图对应主界面：
+
+- 对话区显示 `T1`、`T2`、`T7`。
+- 对话过程流显示 `T3`、`T4`、`T5` 的可读摘要。
+- 审批卡显示 `T6`。
+- 右侧工作区显示产物、上下文资源和文件预览。
+
+### 3.1.3 配置图：模型、MCP、Skill、更新在哪里生效
+
+```mermaid
+flowchart TB
+  S["Cowork 设置页<br/>用户可理解的配置入口"]
+
+  M["模型<br/>Key、Base URL、Fallback、思考强度"]
+  P["MCP<br/>安装、测试、启停、工具级开关"]
+  K["Skill<br/>查看文件、启用、加入下一次任务"]
+  V["Hermes 更新<br/>检测、复测、升级、回滚准备"]
+
+  HC["Hermes 配置<br/>config.yaml、.env、mcp_servers"]
+  HA["Hermes Agent<br/>下一次任务按这些配置执行"]
+
+  S --> M --> HC
+  S --> P --> HC
+  S --> K --> HA
+  S --> V --> HA
+  HC --> HA
+```
+
+这张图对应设置页：
+
+- 模型、MCP、更新最终都要落到 Hermes 自己的配置或 runtime 状态。
+- Skill 更像“工作方法说明书”，会进入下一次任务的上下文。
+- Cowork 不应该维护另一套假的模型、MCP 或 Skill 状态。
+
+### 3.1.4 新手术语翻译表
 
 | 官网或代码里的词 | 用人话理解 | Cowork 里应该对应什么 |
 | --- | --- | --- |
@@ -195,7 +201,7 @@ flowchart TB
 | Approval | 安全刹车。危险命令执行前要求用户确认。 | 对话区审批卡，必须能允许一次、本会话允许、总是允许或拒绝。 |
 | Sandbox | 隔离房间。让命令和代码在受控环境中运行，降低误伤本机风险。 | 设置和任务过程里只展示用户能处理的安全状态，不展示大量原始日志。 |
 
-### 3.1.2 用户操作与 Hermes 后端能力的对应关系
+### 3.1.5 用户操作与 Hermes 后端能力的对应关系
 
 | 你在 Cowork 做什么 | Cowork 要做什么 | Hermes 背后发生什么 | 如果没做 UI 会怎样 |
 | --- | --- | --- | --- |
