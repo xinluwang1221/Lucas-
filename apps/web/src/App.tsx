@@ -22,13 +22,14 @@ import { usePanelLayout } from './features/layout/usePanelLayout'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
-import {
-  FragmentWithTrace,
-  LiveExecutionPanel,
-  taskStreamLabel
-} from './features/chat/ChatExecutionViews'
+import { FragmentWithTrace } from './features/chat/ChatExecutionViews'
 import { MessageBody } from './features/chat/MessageBody'
-import { buildApprovalMessageParts, MessagePartList } from './features/chat/MessageParts'
+import {
+  buildApprovalMessageParts,
+  buildToolCardMessageParts,
+  MessagePartList,
+  taskStreamLabel
+} from './features/chat/MessageParts'
 import type { MarkdownFileReference } from './features/markdown/MarkdownContent'
 import {
   ContextResourcesCard,
@@ -1094,10 +1095,8 @@ function App() {
                 formatTime={formatTime}
                 onRespondApproval={(task, choice) => void handleRespondApproval(task, choice)}
               />
-              <LiveExecutionPanel
-                task={selectedTask}
-                streamStatus={taskStreamStatus}
-                streamUpdatedAt={taskStreamUpdatedAt}
+              <MessagePartList
+                parts={buildToolCardMessageParts(selectedTask, taskStreamStatus, taskStreamUpdatedAt)}
                 formatTime={formatTime}
               />
               <div className="live-answer-block">

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
-import { buildApprovalMessageParts, buildMessageParts } from '../src/features/chat/MessageParts'
+import {
+  buildActivityGroupMessageParts,
+  buildApprovalMessageParts,
+  buildMessageParts,
+  buildToolCardMessageParts
+} from '../src/features/chat/MessageParts'
 import type { Task } from '../src/lib/api'
 
 const fileListReply = [
@@ -94,5 +99,66 @@ const resolvedApprovalParts = buildApprovalMessageParts({
   ]
 })
 assert.equal(resolvedApprovalParts.length, 0)
+
+const completedTask: Task = {
+  id: 'task-completed',
+  workspaceId: 'workspace',
+  title: '过程测试',
+  status: 'completed',
+  prompt: '读取文件并整理',
+  createdAt: now,
+  updatedAt: now,
+  startedAt: now,
+  completedAt: now,
+  messages: [],
+  artifacts: [],
+  events: [
+    {
+      id: 'tool-start',
+      type: 'tool.started',
+      createdAt: now,
+      name: 'read_file',
+      summary: '读取 brief.md'
+    },
+    {
+      id: 'tool-done',
+      type: 'tool.completed',
+      createdAt: now,
+      name: 'read_file',
+      summary: '读取完成',
+      result: 'brief.md'
+    },
+    {
+      id: 'task-done',
+      type: 'task.completed',
+      createdAt: now,
+      message: '完成'
+    }
+  ]
+}
+
+const activityParts = buildActivityGroupMessageParts(completedTask)
+assert.equal(activityParts.length, 1)
+const activityPart = activityParts[0]
+assert.equal(activityPart.type, 'activity_group')
+if (activityPart.type !== 'activity_group') throw new Error('Expected activity group part')
+assert.equal(activityPart.summaryLabel, '已处理')
+assert.ok(activityPart.groups.some((group) => group.kind === 'file' || group.kind === 'tool'))
+
+const runningTask: Task = {
+  ...completedTask,
+  id: 'task-running',
+  status: 'running',
+  completedAt: undefined,
+  events: completedTask.events?.filter((event) => event.type !== 'task.completed')
+}
+
+const toolParts = buildToolCardMessageParts(runningTask, 'live', now)
+assert.equal(toolParts.length, 1)
+const toolPart = toolParts[0]
+assert.equal(toolPart.type, 'tool_card')
+if (toolPart.type !== 'tool_card') throw new Error('Expected tool card part')
+assert.equal(toolPart.streamStatus, 'live')
+assert.match(toolPart.currentRow.title, /读取|持续运行|read_file/i)
 
 console.log('Message parts test passed')

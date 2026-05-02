@@ -2,6 +2,24 @@ import { FileArchive, FileText } from 'lucide-react'
 import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
+import {
+  InlineExecutionTracePanel,
+  LiveExecutionPanelView
+} from './ExecutionTracePanels'
+import {
+  compactTraceRows,
+  executionTraceRows,
+  fallbackLiveTraceRow,
+  groupTraceRows,
+  liveTraceRows,
+  taskElapsedLabel,
+  taskStepItems,
+  traceSummaryParts,
+  workModeLabel,
+  type TraceGroupView,
+  type TraceRowView
+} from './executionTraceModel'
+import type { TaskStreamStatus } from './useTaskStream'
 
 export type MessagePart =
   | {
@@ -38,6 +56,25 @@ export type MessagePart =
     type: 'approval_card'
     task: Task
     busy: boolean
+  }
+  | {
+    id: string
+    type: 'activity_group'
+    taskStatus: Task['status']
+    summaryLabel: string
+    elapsedLabel: string
+    summaryParts: string[]
+    currentRow?: TraceRowView
+    groups: TraceGroupView[]
+  }
+  | {
+    id: string
+    type: 'tool_card'
+    currentRow: TraceRowView
+    previousRows: TraceRowView[]
+    steps: ReturnType<typeof taskStepItems>
+    streamStatus: TaskStreamStatus
+    streamUpdatedAt: string | null
   }
 
 export function buildMessageParts({
@@ -120,6 +157,35 @@ export function MessagePartList({
             />
           )
         }
+        if (part.type === 'activity_group') {
+          return (
+            <InlineExecutionTracePanel
+              taskStatus={part.taskStatus}
+              summaryLabel={part.summaryLabel}
+              elapsedLabel={part.elapsedLabel}
+              summaryParts={part.summaryParts}
+              currentRow={part.currentRow}
+              groups={part.groups}
+              formatTime={formatTime ?? ((value) => value)}
+              key={part.id}
+            />
+          )
+        }
+        if (part.type === 'tool_card') {
+          return (
+            <LiveExecutionPanelView
+              currentRow={part.currentRow}
+              previousRows={part.previousRows}
+              steps={part.steps}
+              streamStatus={part.streamStatus}
+              streamLabel={taskStreamLabel(part.streamStatus)}
+              streamDescription={taskStreamDescription(part.streamStatus, part.streamUpdatedAt, formatTime ?? ((value) => value))}
+              formatTime={formatTime ?? ((value) => value)}
+              workModeLabel={workModeLabel}
+              key={part.id}
+            />
+          )
+        }
         return (
           <MessageFileCards
             key={part.id}
@@ -137,6 +203,65 @@ export function MessagePartList({
 export function buildApprovalMessageParts(task: Task | undefined, busy = false): MessagePart[] {
   if (!task || !latestPendingApprovalRequest(task)) return []
   return [{ id: 'approval-request', type: 'approval_card', task, busy }]
+}
+
+export function buildActivityGroupMessageParts(task: Task | undefined): MessagePart[] {
+  if (!task) return []
+  const rows = executionTraceRows(task)
+  if (!rows.length) return []
+
+  const visibleRows = compactTraceRows(task, rows)
+  const groups = groupTraceRows(visibleRows)
+  const lastRow = rows[rows.length - 1]
+  const showCurrentRow = task.status === 'running' && lastRow
+  return [{
+    id: 'activity-group',
+    type: 'activity_group',
+    taskStatus: task.status,
+    summaryLabel: task.status === 'running' ? '处理中' : '已处理',
+    elapsedLabel: taskElapsedLabel(task),
+    summaryParts: traceSummaryParts(task, rows),
+    currentRow: showCurrentRow ? lastRow : undefined,
+    groups
+  }]
+}
+
+export function buildToolCardMessageParts(
+  task: Task | undefined,
+  streamStatus: TaskStreamStatus,
+  streamUpdatedAt: string | null
+): MessagePart[] {
+  if (!task || task.status !== 'running') return []
+  const rows = liveTraceRows(task)
+  return [{
+    id: 'live-tool-card',
+    type: 'tool_card',
+    currentRow: rows.at(-1) ?? fallbackLiveTraceRow(task),
+    previousRows: rows.slice(-5, -1),
+    steps: taskStepItems(task).slice(-4),
+    streamStatus,
+    streamUpdatedAt
+  }]
+}
+
+export function taskStreamLabel(status: TaskStreamStatus) {
+  return {
+    idle: '未连接',
+    connecting: '连接中',
+    live: '实时同步',
+    fallback: '轮询兜底'
+  }[status]
+}
+
+function taskStreamDescription(
+  status: TaskStreamStatus,
+  updatedAt: string | null,
+  formatTime: (value: string) => string
+) {
+  if (status === 'live') return updatedAt ? `最近同步 ${formatTime(updatedAt)}` : '事件流已连接'
+  if (status === 'connecting') return '正在连接 Hermes 任务事件流'
+  if (status === 'fallback') return '事件流暂不可用，正在用轮询刷新'
+  return '任务运行时会自动连接事件流'
 }
 
 function MessageFileCards({
