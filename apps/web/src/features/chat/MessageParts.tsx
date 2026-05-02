@@ -1,0 +1,341 @@
+import { FileArchive, FileText } from 'lucide-react'
+import type { Artifact, Message, MessageAttachment } from '../../lib/api'
+import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
+
+export type MessagePart =
+  | {
+    id: string
+    type: 'user_text'
+    content: string
+  }
+  | {
+    id: string
+    type: 'assistant_text'
+    source: string
+    live: boolean
+  }
+  | {
+    id: string
+    type: 'file_cards'
+    variant: 'attachments'
+    attachments: MessageAttachment[]
+  }
+  | {
+    id: string
+    type: 'file_cards'
+    variant: 'references'
+    references: MarkdownFileReference[]
+  }
+  | {
+    id: string
+    type: 'file_cards'
+    variant: 'artifacts'
+    artifacts: Artifact[]
+  }
+
+export function buildMessageParts({
+  role,
+  content,
+  live = false,
+  attachments = [],
+  artifactCards = [],
+  fileReferences = []
+}: {
+  role: Message['role']
+  content: string
+  live?: boolean
+  attachments?: MessageAttachment[]
+  artifactCards?: Artifact[]
+  fileReferences?: MarkdownFileReference[]
+}): MessagePart[] {
+  if (role !== 'assistant') {
+    return [
+      { id: 'user-text', type: 'user_text', content },
+      ...attachmentPart(attachments)
+    ]
+  }
+
+  const fileOverview = extractFileOverviewTables(content, fileReferences)
+  return [
+    { id: 'assistant-text', type: 'assistant_text', source: fileOverview.source, live },
+    ...referencePart(fileOverview.references),
+    ...artifactPart(artifactCards),
+    ...attachmentPart(attachments)
+  ]
+}
+
+export function MessagePartList({
+  parts,
+  fileReferences,
+  onOpenAttachment,
+  onOpenArtifact,
+  onOpenFileReference
+}: {
+  parts: MessagePart[]
+  fileReferences?: MarkdownFileReference[]
+  onOpenAttachment?: (attachment: MessageAttachment) => void
+  onOpenArtifact?: (artifact: Artifact) => void
+  onOpenFileReference?: (reference: MarkdownFileReference) => void
+}) {
+  return (
+    <>
+      {parts.map((part) => {
+        if (part.type === 'user_text') {
+          return <div className="message-body" key={part.id}>{part.content}</div>
+        }
+        if (part.type === 'assistant_text') {
+          return (
+            <div
+              className={part.live ? 'message-body message-markdown live-output' : 'message-body message-markdown'}
+              key={part.id}
+            >
+              <MarkdownContent
+                source={part.source}
+                emptyText={part.live ? 'Hermes 正在组织答案...' : ''}
+                fileReferences={fileReferences}
+                onOpenFileReference={onOpenFileReference}
+              />
+            </div>
+          )
+        }
+        return (
+          <MessageFileCards
+            key={part.id}
+            part={part}
+            onOpenAttachment={onOpenAttachment}
+            onOpenArtifact={onOpenArtifact}
+            onOpenFileReference={onOpenFileReference}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+function MessageFileCards({
+  part,
+  onOpenAttachment,
+  onOpenArtifact,
+  onOpenFileReference
+}: {
+  part: Extract<MessagePart, { type: 'file_cards' }>
+  onOpenAttachment?: (attachment: MessageAttachment) => void
+  onOpenArtifact?: (artifact: Artifact) => void
+  onOpenFileReference?: (reference: MarkdownFileReference) => void
+}) {
+  if (part.variant === 'attachments') {
+    return (
+      <div className="message-attachment-list" aria-label="消息附件">
+        {part.attachments.map((attachment) => (
+          <button
+            type="button"
+            key={attachment.id}
+            title={`打开附件：${attachment.relativePath}`}
+            onClick={() => onOpenAttachment?.(attachment)}
+          >
+            <FileText size={14} />
+            <span>{attachment.name}</span>
+            <em>{formatBytes(attachment.size)}</em>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  if (part.variant === 'artifacts') {
+    return (
+      <div className="message-attachment-list message-output-file-list" aria-label="Hermes 输出文件">
+        {part.artifacts.map((artifact) => (
+          <button
+            type="button"
+            key={artifact.id}
+            title={`打开输出文件：${artifact.relativePath}`}
+            onClick={() => onOpenArtifact?.(artifact)}
+          >
+            <FileArchive size={14} />
+            <span>{artifact.name}</span>
+            <em>{formatBytes(artifact.size)}</em>
+          </button>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="message-attachment-list message-reference-file-list" aria-label="Hermes 提到的文件">
+      {part.references.map((reference) => {
+        const canOpen = !reference.id.startsWith('table:') && Boolean(onOpenFileReference)
+        const label = reference.relativePath ?? reference.type ?? '文件'
+        if (!canOpen) {
+          return (
+            <span className="message-reference-file-card passive" key={reference.id}>
+              <FileText size={14} />
+              <span>{reference.name}</span>
+              <em>{label}</em>
+            </span>
+          )
+        }
+        return (
+          <button
+            type="button"
+            key={reference.id}
+            title={`打开文件：${reference.relativePath ?? reference.name}`}
+            onClick={() => onOpenFileReference?.(reference)}
+          >
+            <FileText size={14} />
+            <span>{reference.name}</span>
+            <em>{label}</em>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function attachmentPart(attachments: MessageAttachment[]): MessagePart[] {
+  if (!attachments.length) return []
+  return [{ id: 'attachments', type: 'file_cards', variant: 'attachments', attachments }]
+}
+
+function artifactPart(artifacts: Artifact[]): MessagePart[] {
+  if (!artifacts.length) return []
+  return [{ id: 'artifacts', type: 'file_cards', variant: 'artifacts', artifacts }]
+}
+
+function referencePart(references: MarkdownFileReference[]): MessagePart[] {
+  if (!references.length) return []
+  return [{ id: 'file-references', type: 'file_cards', variant: 'references', references }]
+}
+
+function formatBytes(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+function extractFileOverviewTables(source: string, fileReferences: MarkdownFileReference[]) {
+  const lines = source.split(/\r?\n/)
+  const keep = lines.map(() => true)
+  const references: MarkdownFileReference[] = []
+  let index = 0
+
+  while (index < lines.length - 1) {
+    if (!isMarkdownTableStart(lines[index], lines[index + 1])) {
+      index += 1
+      continue
+    }
+
+    const start = index
+    let end = index + 2
+    while (end < lines.length && lines[end].trim() && lines[end].includes('|')) {
+      end += 1
+    }
+
+    const tableReferences = extractFileReferencesFromTable(lines.slice(start, end), fileReferences)
+    if (tableReferences.length) {
+      for (let lineIndex = start; lineIndex < end; lineIndex += 1) {
+        keep[lineIndex] = false
+      }
+      tableReferences.forEach((reference) => pushUniqueReference(references, reference))
+    }
+    index = end
+  }
+
+  return {
+    source: compactMarkdown(lines.filter((_, lineIndex) => keep[lineIndex]).join('\n')),
+    references
+  }
+}
+
+function isMarkdownTableStart(header: string, separator: string) {
+  if (!header.includes('|')) return false
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(separator)
+}
+
+function extractFileReferencesFromTable(tableLines: string[], fileReferences: MarkdownFileReference[]) {
+  const headerText = extractTableCells(tableLines[0]).join(' ')
+  const rowCells = tableLines.slice(2).flatMap(extractTableCells)
+  const fileCells = rowCells
+    .map(cleanTableCell)
+    .filter((cell) => isLikelyFileName(cell))
+
+  if (!fileCells.length) return []
+  const headerLooksLikeFileList = /文件名|文件|名称|name|filename|file/i.test(headerText)
+  if (!headerLooksLikeFileList && fileCells.length < 2) return []
+
+  const references: MarkdownFileReference[] = []
+  fileCells.forEach((cell) => {
+    const matched = findFileReference(cell, fileReferences)
+    pushUniqueReference(references, matched ?? {
+      id: `table:${cell}`,
+      name: cell,
+      type: fileTypeLabel(cell)
+    })
+  })
+  return references
+}
+
+function extractTableCells(row: string) {
+  const trimmed = row.trim().replace(/^\|/, '').replace(/\|$/, '')
+  return trimmed.split('|').map((cell) => cell.trim())
+}
+
+function cleanTableCell(cell: string) {
+  return cell
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/\[[^\]]+\]\(([^)]+)\)/g, '$1')
+    .replace(/[*_~]/g, '')
+    .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+    .trim()
+}
+
+function isLikelyFileName(value: string) {
+  return /\.(?:pptx?|ppsx|docx?|rtf|xlsx?|xlsm|csv|tsv|pdf|png|jpe?g|gif|webp|svg|md|txt|json|html?)$/i.test(value.trim())
+}
+
+function findFileReference(value: string, references: MarkdownFileReference[]) {
+  const normalizedValue = normalizeFileReference(value)
+  if (!normalizedValue) return undefined
+  return references.find((reference) => {
+    const name = normalizeFileReference(reference.name)
+    const relativePath = normalizeFileReference(reference.relativePath ?? '')
+    return normalizedValue === name || normalizedValue === relativePath || normalizedValue === basename(relativePath)
+  })
+}
+
+function pushUniqueReference(references: MarkdownFileReference[], reference: MarkdownFileReference) {
+  const key = normalizeFileReference(reference.relativePath ?? reference.name)
+  if (references.some((item) => normalizeFileReference(item.relativePath ?? item.name) === key)) return
+  references.push(reference)
+}
+
+function normalizeFileReference(value: string) {
+  return value
+    .trim()
+    .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+    .replace(/^\.\//, '')
+    .toLowerCase()
+}
+
+function basename(value: string) {
+  return value.split(/[\\/]/).filter(Boolean).pop() ?? value
+}
+
+function fileTypeLabel(value: string) {
+  const extension = value.split('.').pop()?.toLowerCase()
+  if (!extension) return '文件'
+  if (['ppt', 'pptx', 'ppsx'].includes(extension)) return '演示文稿'
+  if (['doc', 'docx', 'rtf'].includes(extension)) return '文档'
+  if (['xls', 'xlsx', 'xlsm', 'csv', 'tsv'].includes(extension)) return '表格'
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) return '图片'
+  if (extension === 'pdf') return 'PDF'
+  if (['md', 'txt', 'json', 'html'].includes(extension)) return '文本'
+  return extension.toUpperCase()
+}
+
+function compactMarkdown(value: string) {
+  return value
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\s+|\s+$/g, '')
+}

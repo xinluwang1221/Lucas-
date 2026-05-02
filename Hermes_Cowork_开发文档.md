@@ -659,8 +659,14 @@ HC_EVENT\t
 `apps/web/src/features/chat/MessageBody.tsx`
 
 - 对话消息正文渲染模块，已从 `App.tsx` 抽离。
-- Assistant 回复统一走 `MarkdownContent`，用户消息保持普通文本展示。
+- 现在是轻量 wrapper：只负责接收 message props、调用 `buildMessageParts()`，再交给 `MessagePartList` 渲染。
 - 后续优化流式输出样式、消息分段、引用块和代码块时，先从这里进入。
+
+`apps/web/src/features/chat/MessageParts.tsx`
+
+- 对话区 message parts 渲染层，负责把一条消息归类为 `user_text`、`assistant_text`、`file_cards` 等结构化 part。
+- Assistant 回复不再直接等同于 Markdown。`buildMessageParts()` 会先识别文件清单表格，把它转成 `file_cards`，真正的数据表格继续留在 `assistant_text` 中由 `MarkdownContent` 渲染。
+- 后续新增 `diff_card`、`approval_card`、`tool_card`、`activity_group` 时，都应优先扩展这里的 part 类型和 renderer，不要在 `App.tsx` 或多个组件里分散判断。
 
 `apps/web/src/features/chat/ChatComposer.tsx`
 
@@ -1491,11 +1497,12 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts`、`useSettingsPreferences.ts`、`useHermesRuntimeState.ts` 和 `runtimeApi.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态、设置偏好状态和 runtime API service 都不再留在 `App.tsx`；后续如继续深化，再把设置持久化迁移从总逻辑里拆出。
 8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。外观设置页已升级为“层级预览 + 主题色/字体/界面选项”的主题后台，主题变量会写入 CSS token；Skills 页已按管理台结构重排；工作区文件页已按“左侧文件列表 + 右侧大预览”重调比例。颜色体系已从单一绿色/旧米色推进为语义 token：`accent`、`success`、`warning`、`danger`、`info`、`violet`、`surface-hover`、`surface-selected`，后续状态、图标、按钮和选中态都应优先使用这些 token。暗色主题已从偏绿黑调整为蓝黑层级，并修正右侧上下文资源、Markdown 表格、实时执行面板、文件预览、文档预览等高频区域的浅色残留。第二轮暗色修复增加了 legacy 组件兼容层，把设置、MCP、模型、市场、技能详情、Hermes 更新面板、调度/空状态等还未完全拆细的旧样式统一映射回 semantic token；同时在 `base.css` 做 button reset，避免浏览器默认灰色按钮破坏主题。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。
-10. UI 体系当前缺口：还缺少完整组件规范表，包括按钮尺寸、列表行高度、卡片密度、表格样式、弹窗宽度、输入区状态、文件预览工具条、任务进度事件展示等；还需要继续清理 `app.css`、`chat.css` 和 `settings.css` 中未进入主路径的历史硬编码颜色。后续新增 UI 不应再直接写 `#fffdf7`、`#fff1eb`、`#e3b8aa` 这类历史色值，应先判断它属于 surface / status / semantic icon / border 哪一层；如果必须临时兼容旧组件，只能放进暗色兼容层并标明后续拆模块计划。
-11. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。
-12. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts`、`apps/web/src/features/app/useAppState.ts` 和 `apps/web/src/features/app/useAppBootstrap.ts`，`App.tsx` 不再直接调用 `/api/state`，启动初始化也不再堆在主组件里，`lib/api.ts` 只保留共享协议类型。
-13. 工程稳定阶段可以收尾：`App.tsx` 当前主要职责是页面组合、全局入口互联和少量 modal 开关；继续拆分收益已经低于进入文件预览与编辑阶段。下一阶段新增文件编辑、主题化、客户端化能力时，必须先落到对应 feature 模块，再让 `App.tsx` 只做组合。
-14. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
+10. 对话区 `MessagePart` 第一刀完成：已新增 `apps/web/src/features/chat/MessageParts.tsx`，把正文、附件、文件引用和产物统一成 message parts；`MessageBody.tsx` 退回轻量 wrapper；新增 `apps/web/test/message_parts.test.ts` 验证“文件清单表格转文件卡片、真实数据表格保留 Markdown 表格”。
+11. UI 体系当前缺口：还缺少完整组件规范表，包括按钮尺寸、列表行高度、卡片密度、表格样式、弹窗宽度、输入区状态、文件预览工具条、任务进度事件展示等；还需要继续清理 `app.css`、`chat.css` 和 `settings.css` 中未进入主路径的历史硬编码颜色。后续新增 UI 不应再直接写 `#fffdf7`、`#fff1eb`、`#e3b8aa` 这类历史色值，应先判断它属于 surface / status / semantic icon / border 哪一层；如果必须临时兼容旧组件，只能放进暗色兼容层并标明后续拆模块计划。
+12. 死代码清理持续进行：已移除 `App.tsx` 中无入口的旧 `RuntimePanel`、`WorkspaceContextGroup`、`TaskRow`、`StatusIcon` 和对应 runtime CSS，避免后续误以为这些是仍在使用的产品入口。
+13. App state 第一刀完成：已拆 `apps/web/src/features/app/appStateApi.ts`、`apps/web/src/features/app/useAppState.ts` 和 `apps/web/src/features/app/useAppBootstrap.ts`，`App.tsx` 不再直接调用 `/api/state`，启动初始化也不再堆在主组件里，`lib/api.ts` 只保留共享协议类型。
+14. 工程稳定阶段可以收尾：`App.tsx` 当前主要职责是页面组合、全局入口互联和少量 modal 开关；继续拆分收益已经低于进入文件预览与编辑阶段。下一阶段新增文件编辑、主题化、客户端化能力时，必须先落到对应 feature 模块，再让 `App.tsx` 只做组合。
+15. 每一刀都必须先跑 `npm run -s typecheck`，涉及前端渲染的再跑 `npm run -s build` 和浏览器验证。
 
 优先级 1：
 
