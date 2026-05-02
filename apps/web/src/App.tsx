@@ -25,8 +25,9 @@ import { ChatComposer } from './features/chat/ChatComposer'
 import { FragmentWithTrace } from './features/chat/ChatExecutionViews'
 import { MessageBody } from './features/chat/MessageBody'
 import {
-  buildApprovalMessageParts,
-  buildToolCardMessageParts,
+	  buildApprovalMessageParts,
+	  buildClarifyMessageParts,
+	  buildToolCardMessageParts,
   MessagePartList,
   taskStreamLabel
 } from './features/chat/MessageParts'
@@ -588,9 +589,11 @@ function App() {
     isSubmitting,
     stoppingTaskId,
     approvingTaskId,
+    clarifyingTaskId,
     submitPrompt,
     handleStop,
     handleRespondApproval,
+    handleRespondClarify,
     handleDeleteTask,
     handlePinTask,
     handleArchiveTask,
@@ -1166,6 +1169,11 @@ function App() {
                   <span className={`stream-pill ${taskStreamStatus}`}>{taskStreamLabel(taskStreamStatus)}</span>
                 </div>
               </div>
+              <MessagePartList
+                parts={buildClarifyMessageParts(selectedTask, clarifyingTaskId === selectedTask.id)}
+                formatTime={formatTime}
+                onRespondClarify={(task, answer) => void handleRespondClarify(task, answer)}
+              />
               <MessagePartList
                 parts={buildApprovalMessageParts(selectedTask, approvingTaskId === selectedTask.id)}
                 formatTime={formatTime}

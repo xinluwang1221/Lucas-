@@ -1346,6 +1346,42 @@ app.post('/api/tasks/:taskId/approval', async (req, res) => {
   }
 })
 
+app.post('/api/tasks/:taskId/clarify', async (req, res) => {
+  const taskId = req.params.taskId
+  const answer = String((req.body as { answer?: unknown }).answer ?? '').trim()
+  if (!answer) {
+    res.status(400).json({ error: 'clarify answer is required' })
+    return
+  }
+  if (answer.length > 4000) {
+    res.status(400).json({ error: 'clarify answer must be 4000 characters or fewer' })
+    return
+  }
+
+  const task = store.snapshot.tasks.find((item) => item.id === taskId)
+  if (!task) {
+    res.status(404).json({ error: 'task not found' })
+    return
+  }
+  if (task.status !== 'running') {
+    res.status(409).json({ error: 'task is not running' })
+    return
+  }
+
+  const handle = runningTasks.get(taskId)
+  if (!handle?.clarify) {
+    res.status(409).json({ error: '当前 Hermes runtime 不支持 Cowork 内澄清反问，请重新运行普通任务或切换到 gateway runtime。' })
+    return
+  }
+
+  try {
+    await handle.clarify(answer)
+    res.json({ ok: true })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
 app.post('/api/tasks/:taskId/pin', (req, res) => {
   const { pinned } = req.body as { pinned?: boolean }
   let updated: Task | undefined
@@ -2063,23 +2099,25 @@ function recoverInterruptedRunningTasks() {
     for (const task of state.tasks) {
       if (task.status !== 'running') continue
       const events = compactExecutionEvents(task.events ?? [])
-      const approvalEvent = [...events].reverse().find((event) => event.type === 'approval.request')
-      const terminalMessage = approvalEvent
-        ? approvalRequestMessage(approvalEvent)
+      const pendingInputEvent = latestPendingBlockingInputEvent(events)
+      const terminalMessage = pendingInputEvent
+        ? pendingInputEvent.type === 'clarify.request'
+          ? clarifyRequestMessage(pendingInputEvent)
+          : approvalRequestMessage(pendingInputEvent)
         : 'Cowork 服务已重新启动，旧的运行进程无法继续追踪。本轮已停止，请重新运行或继续追问。'
-      const terminalType = approvalEvent ? 'task.failed' : 'task.stopped'
+      const terminalType = pendingInputEvent ? 'task.failed' : 'task.stopped'
       const terminalEvent = enrichExecutionEvent({
         id: crypto.randomUUID(),
         type: terminalType,
         createdAt: recoveredAt,
-        error: approvalEvent ? terminalMessage : undefined,
-        reason: approvalEvent ? 'approval_required' : 'runtime_recovered',
+        error: pendingInputEvent ? terminalMessage : undefined,
+        reason: pendingInputEvent?.type === 'clarify.request' ? 'clarify_required' : pendingInputEvent ? 'approval_required' : 'runtime_recovered',
         summary: terminalMessage,
-        category: approvalEvent ? 'error' : 'result',
+        category: pendingInputEvent ? 'error' : 'result',
         synthetic: true
       })
-      task.status = approvalEvent ? 'failed' : 'stopped'
-      task.error = approvalEvent ? terminalMessage : undefined
+      task.status = pendingInputEvent ? 'failed' : 'stopped'
+      task.error = pendingInputEvent ? terminalMessage : undefined
       task.completedAt = recoveredAt
       task.updatedAt = recoveredAt
       task.events = compactExecutionEvents([...events, terminalEvent])
@@ -2098,8 +2136,11 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
   const event = normalizeBridgeEvent(bridgeEvent)
   let changed = false
   const now = new Date().toISOString()
-  const approvalRequiresFallbackStop = event.type === 'approval.request' && !runningTasks.get(taskId)?.approve
-  if (approvalRequiresFallbackStop) {
+  const handle = runningTasks.get(taskId)
+  const approvalRequiresFallbackStop = event.type === 'approval.request' && !handle?.approve
+  const clarifyRequiresFallbackStop = event.type === 'clarify.request' && !handle?.clarify
+  const userInputRequiresFallbackStop = approvalRequiresFallbackStop || clarifyRequiresFallbackStop
+  if (userInputRequiresFallbackStop) {
     stopRunningTask(taskId)
   }
 
@@ -2112,8 +2153,10 @@ function updateRunningEvent(taskId: string, bridgeEvent: HermesBridgeEvent) {
       changed = true
     }
 
-    if (approvalRequiresFallbackStop) {
-      const message = `${approvalRequestMessage(event)} 当前运行通道不能继续审批，本轮已停止；请重新运行普通任务以使用 gateway 审批。`
+    if (userInputRequiresFallbackStop) {
+      const requestMessage = clarifyRequiresFallbackStop ? clarifyRequestMessage(event) : approvalRequestMessage(event)
+      const actionLabel = clarifyRequiresFallbackStop ? '澄清反问' : '审批'
+      const message = `${requestMessage} 当前运行通道不能继续${actionLabel}，本轮已停止；请重新运行普通任务以使用 gateway ${actionLabel}。`
       const failedEvent = enrichExecutionEvent({
         id: crypto.randomUUID(),
         type: 'task.failed',
@@ -2171,6 +2214,29 @@ function approvalRequestMessage(event: ExecutionEvent) {
   const command = String(event.command ?? '').replace(/\s+/g, ' ').trim()
   const shortCommand = command ? ` 请求命令：${sanitizeHermesRuntimeMessage(command).slice(0, 120)}` : ''
   return `Hermes 请求执行需要人工审批的命令。${shortCommand}`
+}
+
+function clarifyRequestMessage(event: ExecutionEvent) {
+  const question = String(event.question ?? event.summary ?? event.message ?? '').replace(/\s+/g, ' ').trim()
+  const shortQuestion = question ? ` 问题：${sanitizeHermesRuntimeMessage(question).slice(0, 160)}` : ''
+  return `Hermes 需要你补充信息后才能继续。${shortQuestion}`
+}
+
+function latestPendingBlockingInputEvent(events: ExecutionEvent[]) {
+  let pending: ExecutionEvent | null = null
+  for (const event of events) {
+    if (event.type === 'approval.request' || event.type === 'clarify.request') pending = event
+    if (
+      event.type === 'approval.resolved' ||
+      event.type === 'clarify.resolved' ||
+      event.type === 'task.completed' ||
+      event.type === 'task.failed' ||
+      event.type === 'task.stopped'
+    ) {
+      pending = null
+    }
+  }
+  return pending
 }
 
 async function readTaskContextSnapshot(task: Task, workspacePath?: string): Promise<HermesContextSnapshot> {
@@ -2409,6 +2475,22 @@ function enrichExecutionEvent(event: ExecutionEvent): ExecutionEvent {
       ...event,
       category: 'approval',
       summary: eventPrimaryText(event) || '命令审批已处理'
+    }
+  }
+
+  if (event.type === 'clarify.request') {
+    return {
+      ...event,
+      category: 'approval',
+      summary: eventPrimaryText(event) || 'Hermes 需要你补充信息'
+    }
+  }
+
+  if (event.type === 'clarify.resolved') {
+    return {
+      ...event,
+      category: 'approval',
+      summary: eventPrimaryText(event) || '澄清问题已回复'
     }
   }
 
@@ -2796,7 +2878,7 @@ function buildExecutionActivity(task: Task): ExecutionActivity[] {
   const events = taskRunEvents(task)
     .filter(shouldStoreExecutionEvent)
     .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'clarify.request', 'clarify.resolved', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
       )
     )
@@ -2961,6 +3043,26 @@ function eventToActivity(event: ExecutionEvent): ExecutionActivity | null {
       kind: 'status',
       title: '需要人工确认',
       detail: approvalRequestMessage(event),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'clarify.request') {
+    return {
+      id: event.id,
+      kind: 'status',
+      title: '需要补充信息',
+      detail: clarifyRequestMessage(event),
+      createdAt: event.createdAt,
+      source: event.synthetic ? 'synthetic' : 'hermes'
+    }
+  }
+  if (event.type === 'clarify.resolved') {
+    return {
+      id: event.id,
+      kind: 'status',
+      title: '已回复澄清',
+      detail: eventPrimaryText(event) || 'Hermes 将继续执行',
       createdAt: event.createdAt,
       source: event.synthetic ? 'synthetic' : 'hermes'
     }

@@ -46,6 +46,14 @@ export async function respondTaskApproval(taskId: string, choice: ApprovalChoice
   })
 }
 
+export async function respondTaskClarify(taskId: string, answer: string) {
+  return request(`/api/tasks/${taskId}/clarify`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ answer })
+  })
+}
+
 export async function deleteTask(taskId: string) {
   return request(`/api/tasks/${taskId}`, { method: 'DELETE' })
 }

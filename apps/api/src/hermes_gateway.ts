@@ -46,7 +46,12 @@ export type HermesGatewayTaskParams = {
   onEvent?: (event: HermesBridgeEvent) => void
   onStdout?: (chunk: string, accumulated: string) => void
   onStderr?: (chunk: string, accumulated: string) => void
-  onHandle?: (handle: { kind: string; stop: () => void; approve?: (choice: 'once' | 'session' | 'always' | 'deny') => Promise<void> }) => void
+  onHandle?: (handle: {
+    kind: string
+    stop: () => void
+    approve?: (choice: 'once' | 'session' | 'always' | 'deny') => Promise<void>
+    clarify?: (answer: string) => Promise<void>
+  }) => void
 }
 
 class HermesGatewayClient extends EventEmitter {
@@ -289,6 +294,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
   let reasoningNoticeIndex = 0
   let lastReasoningNoticeAt = 0
   let approvalPending = false
+  let clarifyPending = false
   const events: HermesBridgeEvent[] = []
   let removeListener: (() => void) | undefined
 
@@ -331,6 +337,18 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
           type: 'approval.resolved',
           choice,
           summary: approvalChoiceSummary(choice),
+          sessionId: hermesSessionId,
+          gatewaySessionId
+        })
+      },
+      clarify: async (answer) => {
+        await gateway.call('clarify.respond', { session_id: gatewaySessionId, answer }, 15000)
+        clarifyPending = false
+        lastEventAt = Date.now()
+        emit({
+          type: 'clarify.resolved',
+          answer,
+          summary: '已回复 Hermes 的澄清问题，Hermes 将继续执行。',
           sessionId: hermesSessionId,
           gatewaySessionId
         })
@@ -385,6 +403,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
 
       if (event.type === 'message.complete') {
         approvalPending = false
+        clarifyPending = false
         finalResponse = typeof event.text === 'string' ? event.text : stdout.trim()
         stdout = finalResponse || stdout
         const usageEvent = contextEventFromUsage(event.usage, hermesSessionId)
@@ -402,6 +421,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
 
       if (event.type === 'error') {
         approvalPending = false
+        clarifyPending = false
         bridgeError = String(event.message ?? event.summary ?? 'Hermes gateway 执行失败')
         emit({ type: 'task.failed', error: bridgeError, sessionId: hermesSessionId })
         settled = true
@@ -410,6 +430,9 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
 
       if (event.type === 'approval.request') {
         approvalPending = true
+      }
+      if (event.type === 'clarify.request') {
+        clarifyPending = true
       }
 
       emit(event)
@@ -436,7 +459,7 @@ export async function runHermesGatewayTask(params: HermesGatewayTaskParams): Pro
       getError: () => bridgeError,
       getStderr: gateway.lastStderr.bind(gateway),
       getLastEventAt: () => lastEventAt,
-      isWaitingForApproval: () => approvalPending,
+      isWaitingForUserInput: () => approvalPending || clarifyPending,
       onIdleNotice: (idleMs) => {
         emit({
           type: 'status',
@@ -489,7 +512,7 @@ function waitForGatewayTurn(options: {
   getError: () => string
   getStderr: () => string
   getLastEventAt: () => number
-  isWaitingForApproval?: () => boolean
+  isWaitingForUserInput?: () => boolean
   onIdleNotice?: (idleMs: number) => void
 }): Promise<{ stderr: string; timedOut: boolean; timeoutMessage?: string }> {
   return new Promise((resolve) => {
@@ -516,7 +539,7 @@ function waitForGatewayTurn(options: {
         })
         return
       }
-      if (options.isWaitingForApproval?.()) {
+      if (options.isWaitingForUserInput?.()) {
         return
       }
       const now = Date.now()

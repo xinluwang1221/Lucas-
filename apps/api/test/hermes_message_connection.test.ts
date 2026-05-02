@@ -8,6 +8,9 @@ type ExecutionEvent = {
   type: string
   choice?: string
   command?: string
+  question?: string
+  answer?: string
+  choices?: string[]
   name?: string
   todos?: Array<{ id: string; content: string; status: string }>
 }
@@ -58,18 +61,39 @@ async function main() {
       method: 'POST',
       body: {
         workspaceId: 'default',
-        prompt: '测试 Hermes 消息连接：请先请求命令审批，再继续返回结果。',
+        prompt: '测试 Hermes 消息连接：请先反问澄清，再请求命令审批，最后返回结果。',
         modelId: 'auto',
         skillNames: []
       }
     })
     assert.equal(created.status, 'running')
 
+    const clarifyPending = await waitForTaskFromStream(baseUrl, created.id, (task) =>
+      Boolean(task.events?.some((event) => event.type === 'clarify.request'))
+    )
+    assert.equal(clarifyPending.status, 'running')
+    assert.match(clarifyPending.liveResponse ?? clarifyPending.executionView?.response ?? '', /收到/)
+    const clarify = clarifyPending.events?.find((event) => event.type === 'clarify.request')
+    assert.match(String(clarify?.question ?? ''), /按项目/)
+    assert.deepEqual(clarify?.choices, ['按项目', '按文件类型'])
+
+    const invalidClarify = await fetch(`${baseUrl}/api/tasks/${created.id}/clarify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: '' })
+    })
+    assert.equal(invalidClarify.status, 400)
+
+    await requestJson(baseUrl, `/api/tasks/${created.id}/clarify`, {
+      method: 'POST',
+      body: { answer: '按项目整理' }
+    })
+
     const pending = await waitForTaskFromStream(baseUrl, created.id, (task) =>
       Boolean(task.events?.some((event) => event.type === 'approval.request'))
     )
     assert.equal(pending.status, 'running')
-    assert.match(pending.liveResponse ?? pending.executionView?.response ?? '', /收到/)
+    assert.match(pending.liveResponse ?? pending.executionView?.response ?? '', /按项目整理/)
     const approval = pending.events?.find((event) => event.type === 'approval.request')
     assert.match(String(approval?.command ?? ''), /curl -s/)
 
@@ -87,6 +111,7 @@ async function main() {
 
     const completed = await waitForTaskFromStream(baseUrl, created.id, (task) => task.status === 'completed')
     assert.equal(completed.status, 'completed')
+    assert.ok(completed.events?.some((event) => event.type === 'clarify.resolved' && event.answer === '按项目整理'))
     assert.ok(completed.events?.some((event) => event.type === 'approval.resolved' && event.choice === 'once'))
     const todoEvent = completed.events?.find((event) => event.type === 'tool.completed' && event.name === 'todo')
     assert.equal(todoEvent?.todos?.length, 3)
@@ -100,6 +125,13 @@ async function main() {
       body: JSON.stringify({ choice: 'once' })
     })
     assert.equal(lateApproval.status, 409)
+
+    const lateClarify = await fetch(`${baseUrl}/api/tasks/${created.id}/clarify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: '继续' })
+    })
+    assert.equal(lateClarify.status, 409)
 
     console.log('Hermes message connection test passed')
   } finally {
@@ -127,6 +159,8 @@ import time
 
 SESSION_ID = "gw-test-session"
 SESSION_KEY = "fake-hermes-session"
+clarify_ready = threading.Event()
+clarify_answer = {"value": ""}
 approval_ready = threading.Event()
 approval_choice = {"value": ""}
 
@@ -156,6 +190,15 @@ def event(event_type, payload=None, session_id=SESSION_ID):
 def run_turn():
     time.sleep(0.08)
     event("message.delta", {"text": "收到。"})
+    time.sleep(0.04)
+    event("clarify.request", {
+        "question": "你希望按项目整理，还是按文件类型整理？",
+        "choices": ["按项目", "按文件类型"],
+    })
+    if not clarify_ready.wait(5):
+        event("error", {"message": "clarify timeout"})
+        return
+    event("message.delta", {"text": "澄清：" + clarify_answer["value"] + "。"})
     time.sleep(0.04)
     todos = [
         {"id": "1", "content": "确认审批命令的安全范围", "status": "completed"},
@@ -214,10 +257,16 @@ for raw in sys.stdin:
     elif method == "config.set":
         response(req_id, {"ok": True})
     elif method == "prompt.submit":
+        clarify_ready.clear()
+        clarify_answer["value"] = ""
         approval_ready.clear()
         approval_choice["value"] = ""
         response(req_id, {"ok": True})
         threading.Thread(target=run_turn, daemon=True).start()
+    elif method == "clarify.respond":
+        clarify_answer["value"] = params.get("answer", "")
+        response(req_id, {"resolved": True})
+        threading.Timer(0.05, clarify_ready.set).start()
     elif method == "approval.respond":
         approval_choice["value"] = params.get("choice", "")
         response(req_id, {"resolved": True})

@@ -5,6 +5,7 @@ import {
   deleteTask,
   pinTask,
   respondTaskApproval,
+  respondTaskClarify,
   sendTaskMessage,
   setTaskTags,
   stopTask
@@ -54,6 +55,7 @@ export function useTaskActions({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [stoppingTaskId, setStoppingTaskId] = useState<string | null>(null)
   const [approvingTaskId, setApprovingTaskId] = useState<string | null>(null)
+  const [clarifyingTaskId, setClarifyingTaskId] = useState<string | null>(null)
 
   const submitPrompt = useCallback(async () => {
     const nextPrompt = prompt.trim() || (composerAttachments.length ? '请查看这些附件。' : '')
@@ -130,6 +132,23 @@ export function useTaskActions({
     [approvingTaskId, refresh, setError]
   )
 
+  const handleRespondClarify = useCallback(
+    async (task: Task, answer: string) => {
+      if (clarifyingTaskId) return
+      try {
+        setClarifyingTaskId(task.id)
+        setError(null)
+        await respondTaskClarify(task.id, answer)
+        await refresh()
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      } finally {
+        setClarifyingTaskId(null)
+      }
+    },
+    [clarifyingTaskId, refresh, setError]
+  )
+
   const handleDeleteTask = useCallback(
     async (task: Task) => {
       const confirmed = window.confirm('只删除 Hermes Cowork 中的任务记录，不删除工作区文件。确定删除吗？')
@@ -196,9 +215,11 @@ export function useTaskActions({
     isSubmitting,
     stoppingTaskId,
     approvingTaskId,
+    clarifyingTaskId,
     submitPrompt,
     handleStop,
     handleRespondApproval,
+    handleRespondClarify,
     handleDeleteTask,
     handlePinTask,
     handleArchiveTask,

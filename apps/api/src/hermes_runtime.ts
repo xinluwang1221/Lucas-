@@ -5,6 +5,7 @@ export type HermesRuntimeHandle = {
   kind: 'python-bridge' | 'tui-gateway'
   stop: () => void
   approve?: (choice: 'once' | 'session' | 'always' | 'deny') => Promise<void>
+  clarify?: (answer: string) => Promise<void>
 }
 
 export type HermesRuntimeTaskParams = Omit<HermesGatewayTaskParams, 'onHandle'> & {
@@ -19,7 +20,7 @@ export async function runHermesRuntimeTask(params: HermesRuntimeTaskParams): Pro
     try {
       return await runHermesGatewayTask({
         ...params,
-        onHandle: (handle) => params.onHandle?.({ kind: 'tui-gateway', stop: handle.stop, approve: handle.approve })
+        onHandle: (handle) => params.onHandle?.({ kind: 'tui-gateway', stop: handle.stop, approve: handle.approve, clarify: handle.clarify })
       })
     } catch (error) {
       if (requestedMode === 'gateway') throw error

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   buildActivityGroupMessageParts,
   buildApprovalMessageParts,
+  buildClarifyMessageParts,
   buildMessageParts,
   buildToolCardMessageParts
 } from '../src/features/chat/MessageParts'
@@ -133,6 +134,43 @@ const resolvedApprovalParts = buildApprovalMessageParts({
   ]
 })
 assert.equal(resolvedApprovalParts.length, 0)
+
+const clarifyTask: Task = {
+  id: 'task-clarify',
+  workspaceId: 'workspace',
+  title: '澄清测试',
+  status: 'running',
+  prompt: '帮我整理这些文件',
+  createdAt: now,
+  updatedAt: now,
+  messages: [],
+  artifacts: [],
+  events: [
+    {
+      id: 'clarify-1',
+      type: 'clarify.request',
+      createdAt: now,
+      question: '你希望按项目还是按文件类型整理？',
+      choices: ['按项目', '按文件类型']
+    }
+  ]
+}
+
+const clarifyParts = buildClarifyMessageParts(clarifyTask, true)
+assert.equal(clarifyParts.length, 1)
+const clarifyPart = clarifyParts[0]
+assert.equal(clarifyPart.type, 'clarify_card')
+if (clarifyPart.type !== 'clarify_card') throw new Error('Expected clarify card part')
+assert.equal(clarifyPart.busy, true)
+
+const resolvedClarifyParts = buildClarifyMessageParts({
+  ...clarifyTask,
+  events: [
+    ...clarifyTask.events!,
+    { id: 'clarify-resolved', type: 'clarify.resolved', createdAt: now, answer: '按项目' }
+  ]
+})
+assert.equal(resolvedClarifyParts.length, 0)
 
 const completedTask: Task = {
   id: 'task-completed',

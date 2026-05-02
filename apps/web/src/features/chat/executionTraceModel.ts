@@ -145,7 +145,7 @@ export function executionTraceRows(task: Task): TraceRow[] {
 
   const rows = taskRunEvents(task)
     .filter((event) =>
-      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
+      ['bridge.started', 'step', 'thinking', 'status', 'tool.started', 'tool.completed', 'tool.progress', 'artifact.created', 'clarify.request', 'clarify.resolved', 'approval.request', 'approval.resolved', 'task.completed', 'task.stopped', 'task.failed'].includes(
         event.type
       )
     )
@@ -229,6 +229,24 @@ export function executionTraceRows(task: Task): TraceRow[] {
           kind: 'status',
           title: '需要人工确认',
           detail: approvalRequestMessage(event),
+          createdAt: event.createdAt
+        }
+      }
+      if (event.type === 'clarify.request') {
+        return {
+          id: event.id,
+          kind: 'status',
+          title: '需要补充信息',
+          detail: clarifyRequestMessage(event),
+          createdAt: event.createdAt
+        }
+      }
+      if (event.type === 'clarify.resolved') {
+        return {
+          id: event.id,
+          kind: 'status',
+          title: '已回复澄清',
+          detail: eventSummary(event) || 'Hermes 将继续执行',
           createdAt: event.createdAt
         }
       }
@@ -706,6 +724,13 @@ function approvalRequestMessage(event: ExecutionEvent) {
     : 'Hermes 请求执行需要人工确认的命令。'
 }
 
+function clarifyRequestMessage(event: ExecutionEvent) {
+  const question = String(event.question ?? event.summary ?? event.message ?? '').replace(/\s+/g, ' ').trim()
+  return question
+    ? `Hermes 需要你补充信息后才能继续。${question.slice(0, 160)}`
+    : 'Hermes 需要你补充信息后才能继续。'
+}
+
 function taskRunEvents(task: Task) {
   const runStartedAt = new Date(task.startedAt ?? task.createdAt).getTime()
   if (!Number.isFinite(runStartedAt)) return (task.events ?? []).filter(isUserVisibleExecutionEvent)
@@ -896,6 +921,10 @@ function eventTitle(event: ExecutionEvent) {
   if (event.type === 'tool.started') return `开始工具：${event.name ?? 'tool'}`
   if (event.type === 'tool.completed') return `完成工具：${event.name ?? 'tool'}`
   if (event.type === 'artifact.created') return `生成产物：${event.name ?? '文件'}`
+  if (event.type === 'clarify.request') return '等待补充信息'
+  if (event.type === 'clarify.resolved') return '已回复澄清'
+  if (event.type === 'approval.request') return '等待命令确认'
+  if (event.type === 'approval.resolved') return event.choice === 'deny' ? '已拒绝命令' : '已确认命令'
   if (event.type === 'task.completed') return '任务完成'
   if (event.type === 'task.stopped') return '任务已停止'
   if (event.type === 'task.failed') return '任务失败'
@@ -910,6 +939,10 @@ function eventSummary(event: ExecutionEvent) {
   if (event.type === 'tool.started') return stringifyPreview(event.args, 120)
   if (event.type === 'tool.completed') return event.isError ? '工具返回错误' : String(event.result ?? '工具执行完成').slice(0, 140)
   if (event.type === 'artifact.created') return String(event.summary ?? event.relativePath ?? '文件已加入产物区')
+  if (event.type === 'clarify.request') return String(event.question ?? event.summary ?? 'Hermes 需要你补充信息')
+  if (event.type === 'clarify.resolved') return String(event.summary ?? '澄清问题已回复')
+  if (event.type === 'approval.request') return String(event.command ?? event.summary ?? 'Hermes 请求执行命令')
+  if (event.type === 'approval.resolved') return String(event.summary ?? '命令审批已处理')
   if (event.type === 'task.completed') return 'Hermes 已返回最终结果'
   if (event.type === 'task.stopped') return String(event.summary ?? '用户已停止当前 Hermes 任务')
   if (event.type === 'task.failed') return String(event.error ?? 'Hermes 执行失败')

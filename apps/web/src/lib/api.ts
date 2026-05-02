@@ -90,6 +90,9 @@ export type ExecutionEvent = {
   command?: string
   description?: string
   choice?: ApprovalChoice
+  question?: string
+  choices?: string[]
+  answer?: string
   message?: string
   kind?: string
   iteration?: number

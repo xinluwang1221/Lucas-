@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { ApprovalChoice, Artifact, Message, MessageAttachment, Task } from '../../lib/api'
 import { MarkdownContent, type MarkdownFileReference } from '../markdown/MarkdownContent'
 import { ApprovalRequestCard, latestPendingApprovalRequest } from './ApprovalRequestCard'
+import { ClarifyRequestCard, latestPendingClarifyRequest } from './ClarifyRequestCard'
 import {
   InlineExecutionTracePanel,
   LiveExecutionPanelView
@@ -55,6 +56,12 @@ export type MessagePart =
   | {
     id: string
     type: 'approval_card'
+    task: Task
+    busy: boolean
+  }
+  | {
+    id: string
+    type: 'clarify_card'
     task: Task
     busy: boolean
   }
@@ -141,7 +148,8 @@ export function MessagePartList({
   onRevealFileReference,
   onUseFileReference,
   formatTime,
-  onRespondApproval
+  onRespondApproval,
+  onRespondClarify
 }: {
   parts: MessagePart[]
   fileReferences?: MarkdownFileReference[]
@@ -159,6 +167,7 @@ export function MessagePartList({
   onUseFileReference?: (reference: MarkdownFileReference) => void
   formatTime?: (value: string) => string
   onRespondApproval?: (task: Task, choice: ApprovalChoice) => void
+  onRespondClarify?: (task: Task, answer: string) => void
 }) {
   return (
     <>
@@ -188,6 +197,17 @@ export function MessagePartList({
               busy={part.busy}
               formatTime={formatTime ?? ((value) => value)}
               onRespond={(task, choice) => onRespondApproval?.(task, choice)}
+              key={part.id}
+            />
+          )
+        }
+        if (part.type === 'clarify_card') {
+          return (
+            <ClarifyRequestCard
+              task={part.task}
+              busy={part.busy}
+              formatTime={formatTime ?? ((value) => value)}
+              onRespond={(task, answer) => onRespondClarify?.(task, answer)}
               key={part.id}
             />
           )
@@ -274,6 +294,11 @@ function MessageDiffCard({ part }: { part: Extract<MessagePart, { type: 'diff_ca
 export function buildApprovalMessageParts(task: Task | undefined, busy = false): MessagePart[] {
   if (!task || !latestPendingApprovalRequest(task)) return []
   return [{ id: 'approval-request', type: 'approval_card', task, busy }]
+}
+
+export function buildClarifyMessageParts(task: Task | undefined, busy = false): MessagePart[] {
+  if (!task || !latestPendingClarifyRequest(task)) return []
+  return [{ id: 'clarify-request', type: 'clarify_card', task, busy }]
 }
 
 export function buildActivityGroupMessageParts(task: Task | undefined): MessagePart[] {

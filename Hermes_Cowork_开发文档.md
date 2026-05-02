@@ -143,18 +143,22 @@ flowchart TB
   T3["3 Hermes 组装上下文<br/>读取问题、工作区文件、Skill、记忆"]
   T4["4 Hermes 选择模型<br/>Provider、Fallback、Reasoning 生效"]
   T5["5 Hermes 执行动作<br/>调用 MCP、读写文件、查网页、跑命令"]
-  T6["6 需要确认时暂停<br/>危险命令进入 Cowork 审批卡"]
-  T7["7 Cowork 展示结果<br/>回答、产物文件、过程资源、文件预览"]
+  T6["6 信息不够时反问<br/>clarify 进入 Cowork 澄清卡"]
+  T7["7 高风险动作时暂停<br/>危险命令进入 Cowork 审批卡"]
+  T8["8 Cowork 展示结果<br/>回答、产物文件、过程资源、文件预览"]
 
-  T1 --> T2 --> T3 --> T4 --> T5 --> T6 --> T7
-  T5 --> T7
+  T1 --> T2 --> T3 --> T4 --> T5
+  T5 --> T6 --> T5
+  T5 --> T7 --> T5
+  T5 --> T8
 ```
 
 这张图对应主界面：
 
-- 对话区显示 `T1`、`T2`、`T7`。
+- 对话区显示 `T1`、`T2`、`T8`。
 - 对话过程流显示 `T3`、`T4`、`T5` 的可读摘要。
-- 审批卡显示 `T6`。
+- 澄清卡显示 `T6`：当用户目标缺少关键输入、多个方案需要用户选择时，Hermes 暂停并等待 Cowork 回答。
+- 审批卡显示 `T7`：当 Hermes 准备执行危险命令或需要人工批准的动作时，Cowork 必须给出明确允许/拒绝入口。
 - 右侧工作区显示产物、上下文资源和文件预览。
 
 ### 3.1.3 配置图：模型、MCP、Skill、更新在哪里生效
@@ -198,6 +202,7 @@ flowchart TB
 | Session Storage | 工作记忆和历史记录。保存对话、任务状态、检索索引和上下文。 | 左侧会话、继续对话、上下文用量、手动压缩。 |
 | Context Compression | 长对话压缩。对话太长时，把历史压缩成可继续使用的摘要。 | 右侧上下文资源里的用量、压缩建议和手动压缩按钮。 |
 | Skills | 工作方法说明书。告诉 Hermes 某类任务应该怎么做。 | 技能页、Skill 文件预览、加入下一次任务。 |
+| Clarify | 反问机制。Hermes 认为任务信息不足或需要用户选择方案时，先问清楚再继续。 | 对话区澄清卡，可选项按钮和自由输入，回答后回到同一轮 Hermes 任务。 |
 | Approval | 安全刹车。危险命令执行前要求用户确认。 | 对话区审批卡，必须能允许一次、本会话允许、总是允许或拒绝。 |
 | Sandbox | 隔离房间。让命令和代码在受控环境中运行，降低误伤本机风险。 | 设置和任务过程里只展示用户能处理的安全状态，不展示大量原始日志。 |
 
@@ -211,6 +216,7 @@ flowchart TB
 | 添加 MCP | 写入 `mcp_servers`，测试连接，显示工具列表 | Hermes 启动时发现 MCP 工具并注册到工具派发器 | 用户不知道这个 MCP 能干什么，也不知道是否可用 |
 | 打开 Skill | 展示 `SKILL.md` 和子文件，可加入下一次任务 | Skill 内容进入 Prompt Builder 或 Hermes skill 系统 | 用户不知道 Skill 具体做什么，也无法确认是否被用到 |
 | 查看任务过程 | 把工具、网页、文件、审批、产物分成可读过程 | AIAgent 按“思考、行动、观察、继续”循环执行 | 原始日志会刷屏，用户看不到 Agent 当前在做哪一步 |
+| 回答反问 | 弹出澄清卡，把选择或文字答案发回 Hermes | Hermes 的 `clarify` 工具解除阻塞，继续同一轮任务 | 任务会一直等待或超时，用户不知道 AI 在等自己补充什么 |
 | 确认风险命令 | 弹出审批卡，把结果发回 Hermes | Hermes 的 Approval 层决定继续、拒绝或超时失败 | 任务会卡住或失败，用户不知道需要自己确认 |
 | 继续追问 | 找到同一个 Hermes session 或按规则新开 session | Session Storage 继续同一上下文，或用新模型开新会话 | 上下文会错位，旧模型和新模型会混用 |
 | 查看/打开产物 | 显示文件卡片、右侧预览、本机打开、Finder 定位 | 文件工具或 MCP 在工作区生成真实文件 | 结果只是一段文字，用户找不到生成物 |
@@ -230,6 +236,7 @@ flowchart TB
 | Hermes 后端能力 | Cowork 用户入口 | Cowork Adapter / 代码边界 | 当前覆盖状态 | 漏开发风险检查点 |
 | --- | --- | --- | --- | --- |
 | 任务执行、继续对话、停止、流式事件 | 对话区、输入框、左侧会话、右侧工作区 | `/api/tasks`、`/api/tasks/:id/stream`、`hermes_runtime.ts`、`hermes_gateway.ts`、`useTaskStream.ts` | 已接入 gateway 优先、bridge 回退、SSE 同步和轮询兜底 | 用户气泡是否立即出现；运行中是否实时更新；停止是否回写 Hermes；继续对话是否使用同一 session |
+| Clarify / 澄清反问 | 对话区澄清卡、可选项按钮、自由输入框 | `/api/tasks/:id/clarify`、`ClarifyRequestCard.tsx`、`useTaskActions.ts`、`hermes_gateway.ts` | 已接入 gateway 事件、前端卡片和 fake gateway 链路测试；bridge fallback 无法继续澄清 | Hermes 返回 `clarify.request` 时必须弹卡片；回答后必须调用 `clarify.respond` 并继续原任务；不能降级成普通文字 |
 | 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
 | MCP Server、工具列表、市场、工具级开关 | 设置 > MCP、技能页 Connectors、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
@@ -1497,6 +1504,7 @@ Node Adapter -> hermes_runtime.ts -> hermes_bridge.py -> HermesCLI -> AIAgent
 Cowork 不能把“所有 Hermes 后端能力”都理解成 CLI 命令。当前边界如下：
 
 - 任务执行、流式输出、停止、普通 session resume：优先走 `tui_gateway`。
+- Hermes 澄清反问：只在 `tui_gateway` 路径内支持。后端运行时 handle 暴露 `clarify(answer)`，Cowork API `/api/tasks/:taskId/clarify` 转发到 Hermes gateway 的 `clarify.respond`；bridge fallback 不具备可继续澄清能力。
 - Hermes 命令人工审批：只在 `tui_gateway` 路径内支持。后端运行时 handle 暴露 `approve(choice)`，Cowork API `/api/tasks/:taskId/approval` 转发到 Hermes gateway 的 `approval.respond`；bridge fallback 不具备可继续审批能力。
 - 模型、MCP、更新、doctor、配置迁移：仍可走 Hermes CLI 或配置文件 API，因为这些是管理动作，不需要常驻对话进程。
 - Cowork 手动预载 skill：暂时走 `hermes_bridge.py`，直到 Hermes gateway 暴露等价参数。
@@ -1570,6 +1578,7 @@ Message part 类型固定为：
 - `activity_group`：过程证据组，例如“已探索 2 个文件”“已运行 1 条命令”“上下文已自动压缩”。默认显示一行摘要，展开后才看文件名、命令名、链接域名；不显示完整 stdout/stderr。
 - `file_card`：用户上传、Hermes 引用、Hermes 生成的文件对象。显示文件名、类型、大小或来源，以及“打开/预览/定位/作为上下文”等动作；文件清单表格必须转成文件卡片。
 - `diff_card`：代码或文档变更对象。显示“X 个文件已更改 +A -D”，列表只露文件路径和增删数；行内可展开，支持查看更改、撤销、审核。diff 不是 Markdown 表格。
+- `clarify_card`：阻塞式任务澄清。显示 Hermes 的问题、候选选项和自由输入框；回答后调用 `clarify.respond`，继续原任务；不能退化成普通正文或错误文本。
 - `approval_card`：阻塞式人工审批。显示动作、风险、命令摘要和允许/拒绝入口；审批请求不能退化成普通错误文本。
 - `tool_card`：正在运行的终端、浏览器、MCP、飞书等工具对象。运行中可显示当前工具名和状态，完成后收敛成 activity_group；只有失败或需要用户处理时才提升为可见卡片。
 - `artifact_card`：任务产物对象。出现在最终回答附近和右侧“任务产出物”，可点击预览；不要把产物只写成正文里的文件名。
@@ -1592,6 +1601,7 @@ Message part 类型固定为：
 - `thinking.delta` / `reasoning.delta` 是 token 级内部流，只能作为短暂状态或被聚合，不写入持久 `task.events`，不生成一行一词的 UI。用户可见层只显示“正在思考 / 正在检索 / 正在调用工具 / 正在整理结果”等阶段摘要。
 - `message.delta` 只负责累积最终回答，gateway 不再同时通过 stdout 和 event 双通道推送同一段 token，避免每个 token 触发两次渲染。
 - `task.events` 是用户可理解的运行证据，不是完整后端日志。事件必须经过去重、降噪和上限裁剪；完整 payload、原始命令、调试输出只能进入后台诊断。
+- `clarify.request` 是阻塞交互对象，不是任务拆解，也不是错误。gateway 任务收到后保持当前任务 `running`，主对话区渲染独立澄清卡；用户回答后后端调用 `clarify.respond`，并写入 `clarify.resolved` 事件。只有 bridge fallback 或服务重启后无法继续澄清时，才降级成失败/需要重新运行。
 - `approval.request` 是阻塞交互对象，不是普通错误文本。gateway 任务收到后保持当前任务 `running`，主对话区渲染独立审批卡，用户选择“允许本次 / 本会话允许 / 总是允许 / 拒绝”后由后端调用 `approval.respond`，并写入 `approval.resolved` 事件；只有 bridge fallback 或服务重启后无法继续审批时，才降级成失败/需要重新运行。
 - 前端多入口必须共享 `executionTraceRows`、`groupTraceRows`、`traceSummaryParts` 这组函数，避免对话区、右侧工作区和调试区各自解释一遍事件。
 - `rawOutput`、`rawLog`、完整工具 payload 只能在调试页或右侧详情里出现，不进入主对话默认视图。
@@ -1688,7 +1698,7 @@ Hermes 消息连接测试：
 npm run test:hermes-connection
 ```
 
-这个测试会启动隔离的 Cowork API 进程和 fake Hermes TUI gateway，验证 `/api/tasks`、`/api/tasks/:taskId/stream`、`approval.request`、`/api/tasks/:taskId/approval`、`approval.respond`、`approval.resolved` 和最终 `message.complete` 的完整链路。测试使用临时 `HERMES_COWORK_DATA_DIR` 和 `HERMES_COWORK_WORKSPACE_DIR`，不会写入用户真实任务记录。
+这个测试会启动隔离的 Cowork API 进程和 fake Hermes TUI gateway，验证 `/api/tasks`、`/api/tasks/:taskId/stream`、`clarify.request`、`/api/tasks/:taskId/clarify`、`clarify.respond`、`clarify.resolved`、`approval.request`、`/api/tasks/:taskId/approval`、`approval.respond`、`approval.resolved` 和最终 `message.complete` 的完整链路。测试使用临时 `HERMES_COWORK_DATA_DIR` 和 `HERMES_COWORK_WORKSPACE_DIR`，不会写入用户真实任务记录。
 
 任务拆解展示测试：
 
