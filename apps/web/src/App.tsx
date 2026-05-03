@@ -739,6 +739,13 @@ function App() {
     window.setTimeout(() => focusComposer(), 0)
   }
 
+  function handleUpdatePreviewAnnotation(annotation: MessageAnnotation) {
+    if (!annotation.workspaceId) return
+    setComposerAnnotations((current) => current.map((item) => (
+      item.id === annotation.id ? annotation : item
+    )))
+  }
+
   function previewTargetFromAttachment(attachment: MessageAttachment) {
     return workspacePreviewTarget(workspaceFileFromMessageAttachment(attachment), attachment.workspaceId)
   }
@@ -1321,6 +1328,7 @@ function App() {
             onTogglePin={() => setFilePreviewPinned((current) => !current)}
             onToggleFullscreen={() => setFilePreviewFullscreen((current) => !current)}
             onCreateAnnotation={handleCreatePreviewAnnotation}
+            onUpdateAnnotation={handleUpdatePreviewAnnotation}
             onRemoveAnnotation={(annotationId) => setComposerAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId))}
           />
         ) : (

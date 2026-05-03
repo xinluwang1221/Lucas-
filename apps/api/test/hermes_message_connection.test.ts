@@ -29,6 +29,7 @@ type Task = {
       relativePath: string
       selectedText?: string
       contextExcerpt?: string
+      note?: string
       rect: { x: number; y: number; width: number; height: number }
     }>
   }>
@@ -81,6 +82,7 @@ async function main() {
             label: '批注 1',
             relativePath: 'annotated.md',
             previewKind: 'markdown',
+            note: '请重点检查这块区域',
             selectedText: '这是前端自动识别到的选区文本',
             rect: { x: 10.123, y: 20.456, width: 30.789, height: 40.111 }
           },
@@ -97,6 +99,7 @@ async function main() {
     assert.equal(created.messages?.[0]?.annotations?.[0]?.label, '批注 1')
     assert.equal(created.messages?.[0]?.annotations?.[0]?.relativePath, 'annotated.md')
     assert.equal(created.messages?.[0]?.annotations?.[0]?.rect.x, 10.12)
+    assert.equal(created.messages?.[0]?.annotations?.[0]?.note, '请重点检查这块区域')
     assert.equal(created.messages?.[0]?.annotations?.[1]?.label, '批注 2')
     assert.match(created.messages?.[0]?.annotations?.[1]?.contextExcerpt ?? '', /没有前端选区文本/)
 
@@ -228,6 +231,7 @@ def run_turn():
         or "批注 1" not in prompt
         or "annotated.md" not in prompt
         or "x=10.12%" not in prompt
+        or "用户批注说明：请重点检查这块区域" not in prompt
         or "这是前端自动识别到的选区文本" not in prompt
         or "批注 2" not in prompt
         or "文件正文摘录" not in prompt

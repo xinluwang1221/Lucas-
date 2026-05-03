@@ -64,6 +64,7 @@ export function FilePreviewPanel({
   onTogglePin,
   onToggleFullscreen,
   onCreateAnnotation,
+  onUpdateAnnotation,
   onRemoveAnnotation
 }: {
   preview: FilePreviewState
@@ -76,6 +77,7 @@ export function FilePreviewPanel({
   onTogglePin: () => void
   onToggleFullscreen: () => void
   onCreateAnnotation?: (annotation: MessageAnnotation) => void
+  onUpdateAnnotation?: (annotation: MessageAnnotation) => void
   onRemoveAnnotation?: (annotationId: string) => void
 }) {
   const target = preview.target
@@ -170,6 +172,23 @@ export function FilePreviewPanel({
     }))
     setActiveAnnotationId(null)
     onRemoveAnnotation?.(annotationId)
+  }
+
+  function updateAnnotationNote(annotationId: string, note: string) {
+    const nextNote = note.trim() ? note : undefined
+    const annotation = currentAnnotations.find((item) => item.id === annotationId)
+    if (!annotation) return
+    const updatedAnnotation: PreviewAnnotation = { ...annotation, note: nextNote }
+    setAnnotations((current) => {
+      const nextAnnotations = (current[fileKey] ?? []).map((annotation) => {
+        return annotation.id === annotationId ? updatedAnnotation : annotation
+      })
+      return {
+        ...current,
+        [fileKey]: nextAnnotations
+      }
+    })
+    onUpdateAnnotation?.(updatedAnnotation)
   }
 
   return (
@@ -322,6 +341,16 @@ export function FilePreviewPanel({
                 ? `已识别选区文本：${clipInlineText(activeAnnotation.selectedText, 64)}`
                 : '已加入输入框上下文，发送后 Hermes 会按编号读取这个区域。'}
             </p>
+            <textarea
+              aria-label={`${activeAnnotation.label} 的补充说明`}
+              value={activeAnnotation.note ?? ''}
+              maxLength={500}
+              rows={3}
+              placeholder="补充说明，比如：重点看这块、帮我改这里、这里信息不对。"
+              onChange={(event) => updateAnnotationNote(activeAnnotation.id, event.target.value)}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            />
             <div>
               <span>{formatTime(activeAnnotation.createdAt)}</span>
               <button type="button" title="删除批注" onClick={() => removeAnnotation(activeAnnotation.id)}>

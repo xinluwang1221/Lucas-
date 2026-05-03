@@ -298,7 +298,10 @@ function MessageAnnotationCards({
           onClick={() => onOpenAnnotation?.(annotation)}
         >
           <MessageSquare size={14} />
-          <strong>{annotation.label}</strong>
+          <span>
+            <strong>{annotation.label}</strong>
+            {annotation.note && <em>{annotation.note}</em>}
+          </span>
           <span>{annotation.fileName}</span>
         </button>
       ))}

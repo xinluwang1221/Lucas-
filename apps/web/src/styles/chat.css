@@ -1195,13 +1195,30 @@
   border-radius: 7px;
 }
 
+.message-annotation-card > span:first-of-type {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .message-annotation-card strong {
   white-space: nowrap;
   font-size: var(--text-body);
   font-weight: 850;
 }
 
-.message-annotation-card span {
+.message-annotation-card em {
+  overflow: hidden;
+  max-width: 220px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.message-annotation-card > span:last-of-type {
   overflow: hidden;
   color: var(--ink-soft);
   text-overflow: ellipsis;

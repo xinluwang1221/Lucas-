@@ -579,6 +579,27 @@ audio.media-preview-player {
   white-space: pre-wrap;
 }
 
+.file-annotation-card textarea {
+  width: 100%;
+  min-height: 72px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 88%, var(--paper-deep));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  resize: vertical;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.file-annotation-card textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .file-annotation-card span {
   color: var(--ink-soft);
   font-size: 11px;
