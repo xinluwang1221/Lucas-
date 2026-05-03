@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { readHermesOfficialApiStatus } from './hermes_official_api.js'
-import { deleteHermesSession, normalizeHermesSessionId, readHermesSessionDetail, readHermesSessions, renameHermesSession, type HermesSessionDetail, type HermesSessionMessage } from './hermes_sessions.js'
+import { deleteHermesSession, normalizeHermesSessionId, readHermesSessionDetailWithOfficial, readHermesSessionsWithOfficial, renameHermesSession, type HermesSessionDetail, type HermesSessionMessage } from './hermes_sessions.js'
 import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -210,10 +210,10 @@ app.post('/api/hermes/update', async (_req, res) => {
   }
 })
 
-app.get('/api/hermes/sessions', (req, res) => {
+app.get('/api/hermes/sessions', async (req, res) => {
   try {
     const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined
-    res.json(readHermesSessions(store.snapshot, {
+    res.json(await readHermesSessionsWithOfficial(store.snapshot, {
       query: typeof req.query.q === 'string' ? req.query.q : undefined,
       limit: Number.isFinite(limit) ? limit : undefined
     }))
@@ -222,9 +222,9 @@ app.get('/api/hermes/sessions', (req, res) => {
   }
 })
 
-app.get('/api/hermes/sessions/:sessionId', (req, res) => {
+app.get('/api/hermes/sessions/:sessionId', async (req, res) => {
   try {
-    const detail = readHermesSessionDetail(store.snapshot, req.params.sessionId)
+    const detail = await readHermesSessionDetailWithOfficial(store.snapshot, req.params.sessionId)
     if (!detail) {
       res.status(404).json({ error: 'Hermes session not found' })
       return
@@ -255,9 +255,9 @@ app.delete('/api/hermes/sessions/:sessionId', async (req, res) => {
   }
 })
 
-app.post('/api/hermes/sessions/:sessionId/continue', (req, res) => {
+app.post('/api/hermes/sessions/:sessionId/continue', async (req, res) => {
   try {
-    const detail = readHermesSessionDetail(store.snapshot, req.params.sessionId)
+    const detail = await readHermesSessionDetailWithOfficial(store.snapshot, req.params.sessionId)
     if (!detail) {
       res.status(404).json({ error: 'Hermes session not found' })
       return

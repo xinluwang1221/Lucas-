@@ -345,11 +345,21 @@ export type HermesSessionSummary = {
   model?: string
   provider?: string
   platform?: string
+  dataSource?: 'local-transcript' | 'official-dashboard' | 'merged'
   baseUrl?: string
   tools: string[]
   messageCount: number
+  toolCallCount?: number
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
   startedAt: string
   updatedAt: string
+  lastActiveAt?: string
+  endedAt?: string
+  endReason?: string
+  lineageRootId?: string
+  isActive?: boolean
   linkedTaskIds: string[]
   linkedTaskTitle?: string
   linkedWorkspaceIds: string[]

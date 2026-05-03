@@ -162,7 +162,7 @@ Hermes 对接：
 仍只在 Hermes 后端存在、Cowork 尚未完整前端化的能力：
 
 - 官方 Runs API / API Server 的完整任务创建、事件、停止和结果协议。当前已能通过 `/api/hermes/official-api` 探测本机 Hermes 是否具备 `/v1/runs`、events、stop、jobs、responses、dashboard sessions/logs/toolsets 等能力，但还没有把这些协议作为 Cowork 主任务通道。
-- Session 全量浏览、搜索、重命名、删除、来源平台、模型和工具调用历史已部分前端化；官方 Dashboard session actions 和继续对话双向同步还未完成。
+- Session 全量浏览、搜索、重命名、删除、来源平台、模型、工具调用历史和从原生 session 继续对话已部分前端化；官方 Dashboard session 元数据已接入只读合并层，官方全文搜索索引和更多写入动作还未完整产品化。
 - Credential Pools、Auxiliary Providers、Provider OAuth 和更细的 provider routing。
 - 内置工具集的工具级策略、工具失败率、耗时统计和使用量分析。
 - Agent 自动创建/修改 Skill、Skill Hub/外部目录的完整安装治理。
@@ -608,7 +608,8 @@ flowchart TB
 - Session 全量前端化第三步已完成：Cowork 会话标题优先读取 Hermes `state.db.sessions.title`，前端详情页提供“重命名会话”，后端通过 Hermes 原生 `SessionDB.set_session_title()` 写入，不直接改 SQLite。验证点是重命名后 `/api/hermes/sessions` 和 `/api/hermes/sessions/:sessionId` 都显示同一 Hermes 标题。
 - Session 全量前端化第四步已完成：前端详情页提供“删除会话”确认卡，后端通过 Hermes 原生 `SessionDB.delete_session()` 删除数据库记录和消息，同时删除 `session_*.json` transcript 文件；删除前会把 DB 行、messages 和 transcript 文件备份到 `data/backups/hermes-sessions/`。删除不会碰工作区文件，也不会删除 Cowork 任务记录。
 - Session 全量前端化第五步已完成：新增 `POST /api/hermes/sessions/:sessionId/continue`，能把 Hermes 原生 session 打开为 Cowork 任务；如果已有 Cowork 任务，则标记为显式 resume 并打开原任务；如果没有，则导入原生消息、创建本机任务并绑定 `hermesSessionId`。下一次用户追问会通过 gateway `session.resume` 继续同一个 Hermes session，前端打开这类任务时默认切回“使用 Hermes 默认模型”，避免误用旧模型覆盖原会话。
-- 当前 Session 缺口：官方 Dashboard session actions、全文搜索索引和更多 session 元数据仍未完成；本机 Hermes 官方 Dashboard 已确认支持 `GET /api/sessions/search` 和 `DELETE /api/sessions/{session_id}`。写入类入口必须继续保留备份、确认弹窗和失败恢复。
+- Session 全量前端化第六步已完成：`/api/hermes/sessions` 和 `/api/hermes/sessions/:sessionId` 会在不自动启动 Dashboard 的前提下，尝试读取 Hermes 官方 Dashboard `/api/sessions`、`/api/sessions/{id}`、`/api/sessions/{id}/messages` 和 `/api/sessions/search`，把 `source`、`is_active`、`tool_call_count`、token、`last_active`、`ended_at`、`end_reason`、compression lineage 等官方元数据合并进 Cowork 会话。Dashboard 不可用时继续回退本地 transcript。
+- 当前 Session 缺口：官方全文搜索索引还只是合并 Dashboard search hit，没有把 Dashboard 结果做成独立搜索页；更多 Dashboard 写入动作仍需评估。`DELETE /api/sessions/{session_id}` 已确认存在，但 Cowork 暂不直接调用，因为当前本地删除链路带备份、确认弹窗和失败恢复，更符合本机工作台的安全要求。
 
 阶段验收：
 

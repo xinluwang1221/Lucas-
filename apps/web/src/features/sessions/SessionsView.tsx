@@ -1,4 +1,4 @@
-import { Bot, Check, Clock3, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Trash2, Wrench, X } from 'lucide-react'
+import { Bot, Check, Clock3, Database, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Trash2, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
@@ -271,6 +271,7 @@ export function SessionsView({
                   <em>
                     {formatRelativeDate(session.updatedAt)} · {session.messageCount} 条消息
                     {session.model ? ` · ${session.model}` : ''}
+                    {session.platform ? ` · ${sourceLabel(session.platform)}` : ''}
                     {session.linkedTaskTitle ? ` · 关联：${session.linkedTaskTitle}` : ''}
                   </em>
                 </span>
@@ -298,7 +299,7 @@ export function SessionsView({
             <div className="sessions-empty large">
               <Loader2 size={24} className="spin" />
               <strong>正在读取会话</strong>
-              <span>从本机 Hermes session 文件加载消息。</span>
+              <span>从本机 Hermes session 和官方 Dashboard 读取消息。</span>
             </div>
           ) : detailError ? (
             <div className="sessions-empty large error">
@@ -351,6 +352,12 @@ function SessionDetail({
 }) {
   const session = detail.session
   const toolText = session.tools.length ? session.tools.join('、') : '暂无工具记录'
+  const tokenText = formatTokenSummary(session)
+  const statusText = session.isActive
+    ? '进行中'
+    : session.endedAt
+      ? `已结束${session.endReason ? `：${session.endReason}` : ''}`
+      : '未记录'
   const [isRenaming, setIsRenaming] = useState(false)
   const [titleDraft, setTitleDraft] = useState(session.title)
   const [renameLoading, setRenameLoading] = useState(false)
@@ -484,10 +491,14 @@ function SessionDetail({
       )}
 
       <div className="session-detail-grid">
+        <InfoItem icon={<Database size={15} />} label="数据来源" value={dataSourceLabel(session.dataSource, session.platform)} />
+        <InfoItem icon={<Check size={15} />} label="状态" value={statusText} />
         <InfoItem icon={<Bot size={15} />} label="模型" value={session.model ?? '未记录'} />
         <InfoItem icon={<Clock3 size={15} />} label="更新时间" value={formatDateTime(session.updatedAt)} />
         <InfoItem icon={<MessageSquareText size={15} />} label="消息" value={`${session.messageCount} 条`} />
-        <InfoItem icon={<Wrench size={15} />} label="工具" value={toolText} />
+        <InfoItem icon={<Wrench size={15} />} label="工具" value={session.toolCallCount ? `${session.toolCallCount} 次 · ${toolText}` : toolText} />
+        {tokenText && <InfoItem icon={<Bot size={15} />} label="Token" value={tokenText} />}
+        {session.lineageRootId && <InfoItem icon={<Link2 size={15} />} label="压缩链" value={`来自 ${session.lineageRootId}`} />}
       </div>
 
       {linkedTasks.length > 0 && (
@@ -568,6 +579,27 @@ function sourceLabel(value: string) {
   if (value === 'telegram') return 'Telegram'
   if (value === 'slack') return 'Slack'
   return value
+}
+
+function dataSourceLabel(dataSource: HermesSessionSummary['dataSource'], platform?: string) {
+  const platformText = platform ? sourceLabel(platform) : ''
+  if (dataSource === 'merged') return platformText ? `Dashboard + transcript · ${platformText}` : 'Dashboard + transcript'
+  if (dataSource === 'official-dashboard') return platformText ? `Hermes Dashboard · ${platformText}` : 'Hermes Dashboard'
+  if (dataSource === 'local-transcript') return platformText ? `本地 transcript · ${platformText}` : '本地 transcript'
+  return platformText || '未记录'
+}
+
+function formatTokenSummary(session: HermesSessionSummary) {
+  if (session.totalTokens) return `${formatCompactNumber(session.totalTokens)} total`
+  if (session.inputTokens || session.outputTokens) {
+    return `${formatCompactNumber(session.inputTokens ?? 0)} in / ${formatCompactNumber(session.outputTokens ?? 0)} out`
+  }
+  return ''
+}
+
+function formatCompactNumber(value: number) {
+  if (value >= 1000) return `${Math.round(value / 100) / 10}K`
+  return value.toString()
 }
 
 function uniqueOptions(values: string[]) {

@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
+import { requestHermesDashboardJson } from './hermes_dashboard.js'
 import { dataDir, hermesAgentDir, hermesPythonBin } from './paths.js'
 import type { AppState, Task } from './types.js'
 
@@ -17,11 +18,21 @@ export type HermesSessionSummary = {
   model?: string
   provider?: string
   platform?: string
+  dataSource?: 'local-transcript' | 'official-dashboard' | 'merged'
   baseUrl?: string
   tools: string[]
   messageCount: number
+  toolCallCount?: number
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
   startedAt: string
   updatedAt: string
+  lastActiveAt?: string
+  endedAt?: string
+  endReason?: string
+  lineageRootId?: string
+  isActive?: boolean
   linkedTaskIds: string[]
   linkedTaskTitle?: string
   linkedWorkspaceIds: string[]
@@ -80,9 +91,24 @@ export type ReadHermesSessionsOptions = {
   sessionsDir?: string
   hermesHome?: string
   titleOverrides?: Map<string, string>
+  includeOfficial?: boolean
+  dashboardStart?: boolean
 }
 
 type HermesSessionRaw = Record<string, unknown>
+type OfficialDashboardSession = Record<string, unknown>
+type OfficialDashboardMessage = Record<string, unknown>
+type OfficialSearchHit = {
+  sessionId: string
+  snippet: string
+  role?: HermesSessionSearchHit['role']
+}
+
+type OfficialDashboardSessionsResult = {
+  sessions: OfficialDashboardSession[]
+  total?: number
+  searchHits: OfficialSearchHit[]
+}
 
 export function readHermesSessions(state: AppState, options: ReadHermesSessionsOptions = {}): HermesSessionsResponse {
   const sessionsDir = resolveHermesSessionsDir(options.sessionsDir)
@@ -135,6 +161,19 @@ export function readHermesSessions(state: AppState, options: ReadHermesSessionsO
   }
 }
 
+export async function readHermesSessionsWithOfficial(
+  state: AppState,
+  options: ReadHermesSessionsOptions = {}
+): Promise<HermesSessionsResponse> {
+  const local = readHermesSessions(state, options)
+  if (options.includeOfficial === false) return local
+
+  const official = await readOfficialDashboardSessions(options).catch(() => null)
+  if (!official) return local
+
+  return mergeOfficialSessionList(local, official, state, options)
+}
+
 export function readHermesSessionDetail(
   state: AppState,
   sessionId: string,
@@ -154,6 +193,41 @@ export function readHermesSessionDetail(
     sessionsDir,
     session,
     messages: normalizeMessages(raw, session.id, updatedAt),
+    updatedAt: new Date().toISOString()
+  }
+}
+
+export async function readHermesSessionDetailWithOfficial(
+  state: AppState,
+  sessionId: string,
+  options: ReadHermesSessionsOptions = {}
+): Promise<HermesSessionDetail | null> {
+  const local = readHermesSessionDetail(state, sessionId, options)
+  if (options.includeOfficial === false) return local
+
+  const official = await readOfficialDashboardSessionDetail(sessionId, options).catch(() => null)
+  if (!official) return local
+
+  const linkedTasks = buildLinkedTasks(state.tasks)
+  const titleOverrides = resolveHermesSessionTitleOverrides(options)
+  const officialSummary = toOfficialHermesSessionSummary(official.session, linkedTasks, titleOverrides)
+  if (!officialSummary) return local
+
+  if (!local) {
+    return {
+      sessionsDir: resolveHermesSessionsDir(options.sessionsDir),
+      session: officialSummary,
+      messages: normalizeOfficialMessages(official.messages, officialSummary.id),
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  return {
+    ...local,
+    session: mergeHermesSessionSummary(local.session, officialSummary),
+    messages: official.messages.length
+      ? normalizeOfficialMessages(official.messages, officialSummary.id, local.session.updatedAt)
+      : local.messages,
     updatedAt: new Date().toISOString()
   }
 }
@@ -279,6 +353,276 @@ function resolveHermesSessionTitleOverrides(options: ReadHermesSessionsOptions) 
   return readHermesSessionTitleIndex(options.hermesHome)
 }
 
+async function readOfficialDashboardSessions(
+  options: ReadHermesSessionsOptions
+): Promise<OfficialDashboardSessionsResult> {
+  const safeLimit = Number.isFinite(options.limit) && options.limit && options.limit > 0
+    ? Math.min(Math.floor(options.limit), 500)
+    : 200
+  const start = options.dashboardStart ?? false
+  const listResult = await requestHermesDashboardJson(`/api/sessions?limit=${safeLimit}&offset=0`, {}, { start })
+  if (!listResult.ok) throw new Error(`Hermes Dashboard sessions returned ${listResult.status}`)
+
+  const { sessions, total } = extractOfficialSessions(listResult.body)
+  const query = normalizeQuery(options.query)
+  const searchHits = query ? await readOfficialDashboardSessionSearch(query, safeLimit, start).catch(() => []) : []
+  return { sessions, total, searchHits }
+}
+
+async function readOfficialDashboardSessionSearch(query: string, limit: number, start: boolean) {
+  const result = await requestHermesDashboardJson(
+    `/api/sessions/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    {},
+    { start }
+  )
+  if (!result.ok) return []
+  return extractOfficialSearchHits(result.body)
+}
+
+async function readOfficialDashboardSessionDetail(
+  sessionId: string,
+  options: ReadHermesSessionsOptions
+): Promise<{ session: OfficialDashboardSession; messages: OfficialDashboardMessage[] } | null> {
+  const start = options.dashboardStart ?? false
+  const normalized = normalizeSessionId(sessionId)
+  const sessionResult = await requestHermesDashboardJson(`/api/sessions/${encodeURIComponent(normalized)}`, {}, { start })
+  if (sessionResult.status === 404) return null
+  if (!sessionResult.ok || !isRecord(sessionResult.body)) throw new Error(`Hermes Dashboard session detail returned ${sessionResult.status}`)
+
+  const messagesResult = await requestHermesDashboardJson(`/api/sessions/${encodeURIComponent(normalized)}/messages`, {}, { start })
+  const messages = messagesResult.ok ? extractOfficialMessages(messagesResult.body) : []
+  return { session: sessionResult.body, messages }
+}
+
+function extractOfficialSessions(body: unknown) {
+  if (Array.isArray(body)) return { sessions: body.filter(isRecord), total: body.length }
+  if (!isRecord(body)) return { sessions: [], total: 0 }
+  const sessions = Array.isArray(body.sessions) ? body.sessions.filter(isRecord) : []
+  return { sessions, total: numberValue(body.total) ?? sessions.length }
+}
+
+function extractOfficialSearchHits(body: unknown): OfficialSearchHit[] {
+  const rows = isRecord(body) && Array.isArray(body.results)
+    ? body.results
+    : Array.isArray(body)
+      ? body
+      : []
+  return rows.flatMap((row) => {
+    if (!isRecord(row)) return []
+    const sessionId = normalizeSessionId(
+      firstNonEmpty(
+        stringValue(row.session_id),
+        stringValue(row.sessionId),
+        stringValue(row.id),
+        ''
+      )
+    )
+    if (!sessionId) return []
+    return [{
+      sessionId,
+      snippet: stringValue(row.snippet) ?? '',
+      role: normalizeRole(row.role)
+    }]
+  })
+}
+
+function extractOfficialMessages(body: unknown): OfficialDashboardMessage[] {
+  if (Array.isArray(body)) return body.filter(isRecord)
+  if (isRecord(body) && Array.isArray(body.messages)) return body.messages.filter(isRecord)
+  return []
+}
+
+function mergeOfficialSessionList(
+  local: HermesSessionsResponse,
+  official: OfficialDashboardSessionsResult,
+  state: AppState,
+  options: ReadHermesSessionsOptions
+): HermesSessionsResponse {
+  const linkedTasks = buildLinkedTasks(state.tasks)
+  const titleOverrides = resolveHermesSessionTitleOverrides(options)
+  const query = normalizeQuery(options.query)
+  const searchHits = new Map<string, OfficialSearchHit[]>()
+  for (const hit of official.searchHits) {
+    searchHits.set(hit.sessionId, [...(searchHits.get(hit.sessionId) ?? []), hit])
+  }
+
+  const byId = new Map<string, HermesSessionSummary>()
+  for (const session of local.sessions) byId.set(session.id, session)
+
+  for (const raw of official.sessions) {
+    const summary = toOfficialHermesSessionSummary(raw, linkedTasks, titleOverrides)
+    if (!summary) continue
+    const hasSearchHit = searchHits.has(summary.id)
+    if (query && !hasSearchHit && !matchesSessionQuery(summary, query)) continue
+    const existing = byId.get(summary.id)
+    byId.set(summary.id, existing ? mergeHermesSessionSummary(existing, summary) : summary)
+  }
+
+  for (const [sessionId, hits] of searchHits) {
+    const existing = byId.get(sessionId)
+    const matches = hits.map((hit, index) => ({
+      messageId: `${sessionId}:dashboard-search:${index}`,
+      role: hit.role ?? 'assistant',
+      snippet: hit.snippet
+    }))
+    if (existing) {
+      byId.set(sessionId, {
+        ...existing,
+        searchMatches: mergeSearchMatches(existing.searchMatches, matches)
+      })
+      continue
+    }
+    if (!query) continue
+    byId.set(sessionId, toOfficialSearchOnlySummary(sessionId, matches, linkedTasks))
+  }
+
+  const safeLimit = Number.isFinite(options.limit) && options.limit && options.limit > 0
+    ? Math.min(Math.floor(options.limit), 500)
+    : 200
+  const sessions = [...byId.values()]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, safeLimit)
+
+  return {
+    ...local,
+    sessions,
+    total: query ? sessions.length : Math.max(local.total, official.total ?? sessions.length, sessions.length),
+    updatedAt: new Date().toISOString()
+  }
+}
+
+function toOfficialHermesSessionSummary(
+  raw: OfficialDashboardSession,
+  linkedTasks: Map<string, Task[]>,
+  titleOverrides: Map<string, string>
+): HermesSessionSummary | null {
+  const id = normalizeSessionId(firstNonEmpty(stringValue(raw.id), stringValue(raw.session_id), ''))
+  if (!id) return null
+
+  const tasks = linkedTasks.get(id) ?? []
+  const startedAt = normalizeHermesDate(raw.started_at) ?? normalizeHermesDate(raw.session_started) ?? new Date().toISOString()
+  const lastActiveAt = normalizeHermesDate(raw.last_active)
+  const endedAt = normalizeHermesDate(raw.ended_at)
+  const updatedAt = lastActiveAt ?? endedAt ?? normalizeHermesDate(raw.updated_at) ?? startedAt
+  const title = firstNonEmpty(
+    titleOverrides.get(id),
+    stringValue(raw.title),
+    tasks[0]?.title,
+    stringValue(raw.preview),
+    id
+  )
+
+  return {
+    id,
+    file: `dashboard:${id}`,
+    filePath: '',
+    title: truncateText(title, 82),
+    preview: truncateOptional(stringValue(raw.preview), 160),
+    model: stringValue(raw.model),
+    provider: stringValue(raw.provider),
+    platform: stringValue(raw.source) ?? stringValue(raw.platform),
+    dataSource: 'official-dashboard',
+    baseUrl: stringValue(raw.base_url),
+    tools: normalizeTools(raw.tools),
+    messageCount: numberValue(raw.message_count) ?? 0,
+    toolCallCount: numberValue(raw.tool_call_count),
+    inputTokens: firstNumber(raw.input_tokens, raw.prompt_tokens, raw.total_input_tokens),
+    outputTokens: firstNumber(raw.output_tokens, raw.completion_tokens, raw.total_output_tokens),
+    totalTokens: firstNumber(raw.total_tokens, raw.token_count),
+    startedAt,
+    updatedAt,
+    lastActiveAt,
+    endedAt,
+    endReason: stringValue(raw.end_reason),
+    lineageRootId: stringValue(raw._lineage_root_id) ?? stringValue(raw.lineage_root_id),
+    isActive: booleanValue(raw.is_active),
+    linkedTaskIds: tasks.map((task) => task.id),
+    linkedTaskTitle: tasks[0]?.title,
+    linkedWorkspaceIds: [...new Set(tasks.map((task) => task.workspaceId))]
+  }
+}
+
+function toOfficialSearchOnlySummary(
+  sessionId: string,
+  searchMatches: HermesSessionSearchHit[],
+  linkedTasks: Map<string, Task[]>
+): HermesSessionSummary {
+  const tasks = linkedTasks.get(sessionId) ?? []
+  const now = new Date().toISOString()
+  return {
+    id: sessionId,
+    file: `dashboard:${sessionId}`,
+    filePath: '',
+    title: sessionId,
+    preview: searchMatches[0]?.snippet,
+    dataSource: 'official-dashboard',
+    tools: [],
+    messageCount: 0,
+    startedAt: now,
+    updatedAt: now,
+    linkedTaskIds: tasks.map((task) => task.id),
+    linkedTaskTitle: tasks[0]?.title,
+    linkedWorkspaceIds: [...new Set(tasks.map((task) => task.workspaceId))],
+    searchMatches
+  }
+}
+
+function mergeHermesSessionSummary(
+  local: HermesSessionSummary,
+  official: HermesSessionSummary
+): HermesSessionSummary {
+  return {
+    ...local,
+    title: official.title || local.title,
+    preview: official.preview || local.preview,
+    model: official.model || local.model,
+    provider: official.provider || local.provider,
+    platform: official.platform || local.platform,
+    baseUrl: official.baseUrl || local.baseUrl,
+    dataSource: local.dataSource === 'official-dashboard' ? 'official-dashboard' : 'merged',
+    tools: uniqueStrings([...local.tools, ...official.tools]),
+    messageCount: official.messageCount || local.messageCount,
+    toolCallCount: official.toolCallCount ?? local.toolCallCount,
+    inputTokens: official.inputTokens ?? local.inputTokens,
+    outputTokens: official.outputTokens ?? local.outputTokens,
+    totalTokens: official.totalTokens ?? local.totalTokens,
+    startedAt: official.startedAt || local.startedAt,
+    updatedAt: laterIsoDate(local.updatedAt, official.updatedAt),
+    lastActiveAt: official.lastActiveAt ?? local.lastActiveAt,
+    endedAt: official.endedAt ?? local.endedAt,
+    endReason: official.endReason ?? local.endReason,
+    lineageRootId: official.lineageRootId ?? local.lineageRootId,
+    isActive: official.isActive ?? local.isActive,
+    searchMatches: mergeSearchMatches(local.searchMatches, official.searchMatches)
+  }
+}
+
+function normalizeOfficialMessages(
+  messages: OfficialDashboardMessage[],
+  sessionId: string,
+  fallbackDate?: string
+): HermesSessionMessage[] {
+  return messages.flatMap((message, index) => {
+    const content = cleanDisplayContent(contentValue(message.content))
+    const reasoning = firstNonEmpty(
+      contentValue(message.reasoning_content),
+      contentValue(message.reasoning),
+      undefined
+    )
+    const toolName = stringValue(message.tool_name)
+    const displayContent = content || (toolName ? `工具调用：${toolName}` : '')
+    if (!displayContent && !reasoning) return []
+    return [{
+      id: `${sessionId}:dashboard:${stringValue(message.id) ?? index}`,
+      role: normalizeRole(message.role),
+      content: displayContent,
+      reasoning: reasoning || undefined,
+      finishReason: stringValue(message.finish_reason),
+      createdAt: normalizeHermesDate(message.timestamp) ?? normalizeHermesDate(message.created_at) ?? fallbackDate
+    }]
+  })
+}
+
 function readJsonFile(filePath: string): HermesSessionRaw {
   return JSON.parse(fs.readFileSync(filePath, 'utf8')) as HermesSessionRaw
 }
@@ -326,9 +670,11 @@ function toHermesSessionSummary(
     model: stringValue(raw.model),
     provider: stringValue(raw.provider),
     platform: stringValue(raw.platform),
+    dataSource: 'local-transcript',
     baseUrl: stringValue(raw.base_url),
     tools: normalizeTools(raw.tools),
     messageCount: numberValue(raw.message_count) ?? messages.length,
+    toolCallCount: numberValue(raw.tool_call_count),
     startedAt: normalizeHermesDate(raw.session_start) ?? stat.birthtime.toISOString(),
     updatedAt: normalizeHermesDate(raw.last_updated) ?? stat.mtime.toISOString(),
     linkedTaskIds: tasks.map((task) => task.id),
@@ -714,6 +1060,24 @@ function numberValue(value: unknown) {
   return undefined
 }
 
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const parsed = numberValue(value)
+    if (parsed !== undefined) return parsed
+  }
+  return undefined
+}
+
+function booleanValue(value: unknown) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false
+  }
+  return undefined
+}
+
 function firstNonEmpty(...values: Array<string | undefined>) {
   return values.find((value) => value && value.trim())?.trim() ?? ''
 }
@@ -724,9 +1088,49 @@ function truncateText(value: string, maxLength: number) {
   return `${normalized.slice(0, maxLength - 1)}…`
 }
 
+function truncateOptional(value: string | undefined, maxLength: number) {
+  return value ? truncateText(value, maxLength) : undefined
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function mergeSearchMatches(
+  first: HermesSessionSearchHit[] | undefined,
+  second: HermesSessionSearchHit[] | undefined
+) {
+  const seen = new Set<string>()
+  return [...(first ?? []), ...(second ?? [])].filter((match) => {
+    const key = `${match.messageId}:${match.snippet}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, 5)
+}
+
+function laterIsoDate(first: string, second: string) {
+  const firstTime = new Date(first).getTime()
+  const secondTime = new Date(second).getTime()
+  if (!Number.isFinite(firstTime)) return second
+  if (!Number.isFinite(secondTime)) return first
+  return secondTime > firstTime ? second : first
+}
+
 function normalizeHermesDate(value: unknown) {
   if (!value) return undefined
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value < 1_000_000_000_000 ? value * 1000 : value)
+    return Number.isFinite(date.getTime()) ? date.toISOString() : undefined
+  }
   const text = String(value)
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const numeric = Number(text)
+    if (Number.isFinite(numeric)) {
+      const date = new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+      return Number.isFinite(date.getTime()) ? date.toISOString() : undefined
+    }
+  }
   const parsed = new Date(text.endsWith('Z') || /[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`)
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined
 }

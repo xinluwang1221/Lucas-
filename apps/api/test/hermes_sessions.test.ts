@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { normalizeHermesSessionId, readHermesSessionDetail, readHermesSessions } from '../src/hermes_sessions.js'
+import { resetHermesDashboardAdapterForTest } from '../src/hermes_dashboard.js'
+import { normalizeHermesSessionId, readHermesSessionDetail, readHermesSessionDetailWithOfficial, readHermesSessions, readHermesSessionsWithOfficial } from '../src/hermes_sessions.js'
 import type { AppState } from '../src/types.js'
 
 async function main() {
@@ -96,6 +98,47 @@ async function main() {
     const missing = readHermesSessionDetail(state, 'missing', { sessionsDir })
     assert.equal(missing, null)
 
+    const fakeDashboard = http.createServer(handleFakeDashboard)
+    await listen(fakeDashboard)
+    const address = fakeDashboard.address()
+    assert.equal(typeof address, 'object')
+    assert.ok(address)
+    const previousDashboardUrl = process.env.HERMES_COWORK_DASHBOARD_URL
+    const previousDashboardAutostart = process.env.HERMES_COWORK_DASHBOARD_AUTOSTART
+    process.env.HERMES_COWORK_DASHBOARD_URL = `http://127.0.0.1:${address.port}`
+    process.env.HERMES_COWORK_DASHBOARD_AUTOSTART = '0'
+
+    try {
+      const dashboardList = await readHermesSessionsWithOfficial(state, { sessionsDir, titleOverrides, limit: 10 })
+      const mergedSession = dashboardList.sessions.find((session) => session.id === '20260503_010203_000001')
+      assert.ok(mergedSession)
+      assert.equal(mergedSession.dataSource, 'merged')
+      assert.equal(mergedSession.title, 'Hermes 官方标题')
+      assert.equal(mergedSession.platform, 'cli')
+      assert.equal(mergedSession.toolCallCount, 3)
+      assert.equal(mergedSession.inputTokens, 1200)
+      assert.equal(mergedSession.outputTokens, 300)
+      assert.equal(mergedSession.isActive, true)
+      assert.equal(mergedSession.lineageRootId, 'root_20260503_010203_000000')
+
+      const officialSearch = await readHermesSessionsWithOfficial(state, { sessionsDir, query: '官方全文', limit: 10 })
+      assert.equal(officialSearch.sessions.length, 1)
+      assert.equal(officialSearch.sessions[0].id, '20260503_010203_000001')
+      assert.match(officialSearch.sessions[0].searchMatches?.[0]?.snippet ?? '', /官方全文命中/)
+
+      const officialDetail = await readHermesSessionDetailWithOfficial(state, '20260503_010203_000001', { sessionsDir, titleOverrides })
+      assert.ok(officialDetail)
+      assert.equal(officialDetail.session.dataSource, 'merged')
+      assert.equal(officialDetail.messages.length, 2)
+      assert.equal(officialDetail.messages[0].content, '官方用户消息')
+      assert.equal(officialDetail.messages[1].reasoning, '官方推理')
+    } finally {
+      process.env.HERMES_COWORK_DASHBOARD_URL = previousDashboardUrl
+      process.env.HERMES_COWORK_DASHBOARD_AUTOSTART = previousDashboardAutostart
+      await resetHermesDashboardAdapterForTest()
+      await close(fakeDashboard)
+    }
+
     console.log('Hermes sessions parser test passed')
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true })
@@ -106,3 +149,99 @@ main().catch((error) => {
   console.error(error)
   process.exit(1)
 })
+
+async function handleFakeDashboard(req: IncomingMessage, res: ServerResponse<IncomingMessage>) {
+  if (req.url === '/') {
+    sendHtml(res, '<html><head><script>window.__HERMES_SESSION_TOKEN__="fake-token";</script></head></html>')
+    return
+  }
+  if (req.url === '/api/status') {
+    sendJson(res, { version: '0.11.0' })
+    return
+  }
+  if (req.headers['x-hermes-session-token'] !== 'fake-token') {
+    sendJson(res, { detail: 'Unauthorized' }, 401)
+    return
+  }
+  if (req.url?.startsWith('/api/sessions?')) {
+    sendJson(res, {
+      sessions: [fakeDashboardSession()],
+      total: 1,
+      limit: 20,
+      offset: 0
+    })
+    return
+  }
+  if (req.url?.startsWith('/api/sessions/search?')) {
+    sendJson(res, {
+      results: [{
+        session_id: '20260503_010203_000001',
+        snippet: '这里是 Hermes 官方全文命中片段',
+        role: 'assistant',
+        source: 'cli',
+        model: 'mimo-v2.5-pro'
+      }]
+    })
+    return
+  }
+  if (req.url === '/api/sessions/20260503_010203_000001') {
+    sendJson(res, fakeDashboardSession())
+    return
+  }
+  if (req.url === '/api/sessions/20260503_010203_000001/messages') {
+    sendJson(res, {
+      session_id: '20260503_010203_000001',
+      messages: [
+        { id: 1, role: 'user', content: '官方用户消息', timestamp: 1777760524 },
+        { id: 2, role: 'assistant', content: '官方助手消息', reasoning_content: '官方推理', finish_reason: 'stop', timestamp: 1777760525 }
+      ]
+    })
+    return
+  }
+  sendJson(res, { detail: 'not found' }, 404)
+}
+
+function fakeDashboardSession() {
+  return {
+    id: '20260503_010203_000001',
+    source: 'cli',
+    model: 'mimo-v2.5-pro',
+    title: 'Hermes 官方 Dashboard 标题',
+    started_at: 1777760523,
+    last_active: 1777761123,
+    ended_at: null,
+    end_reason: null,
+    message_count: 2,
+    tool_call_count: 3,
+    total_input_tokens: 1200,
+    total_output_tokens: 300,
+    preview: '官方 Dashboard preview',
+    is_active: true,
+    _lineage_root_id: 'root_20260503_010203_000000'
+  }
+}
+
+function listen(server: http.Server) {
+  return new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+}
+
+function close(server: http.Server) {
+  return new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+function sendJson(res: ServerResponse<IncomingMessage>, body: unknown, status = 200) {
+  res.writeHead(status, { 'content-type': 'application/json' })
+  res.end(JSON.stringify(body))
+}
+
+function sendHtml(res: ServerResponse<IncomingMessage>, body: string, status = 200) {
+  res.writeHead(status, { 'content-type': 'text/html' })
+  res.end(body)
+}
