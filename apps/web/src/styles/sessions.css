@@ -30,6 +30,60 @@
   line-height: 1.3;
 }
 
+.session-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-title-edit {
+  display: grid;
+  grid-template-columns: minmax(240px, 520px) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-title-edit input {
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  outline: 0;
+}
+
+.session-title-edit button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 82%, #000000);
+  border-radius: var(--radius-control);
+}
+
+.session-title-edit button:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+
+.session-title-edit .ghost-button {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.session-rename-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: var(--text-caption);
+}
+
 .sessions-header p,
 .session-detail-head span {
   margin: 8px 0 0;

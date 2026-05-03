@@ -385,6 +385,13 @@ export type HermesSessionDetailResponse = {
   updatedAt: string
 }
 
+export type RenameHermesSessionResponse = {
+  sessionId: string
+  title: string
+  detail: HermesSessionDetailResponse
+  updatedAt: string
+}
+
 export type HermesContextSnapshot = {
   sessionId?: string
   model?: string

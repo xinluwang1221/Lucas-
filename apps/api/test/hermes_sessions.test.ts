@@ -60,10 +60,12 @@ async function main() {
   }
 
   try {
-    const list = readHermesSessions(state, { sessionsDir })
+    const titleOverrides = new Map([['20260503_010203_000001', 'Hermes 官方标题']])
+    const list = readHermesSessions(state, { sessionsDir, titleOverrides })
     assert.equal(list.sessions.length, 2)
     assert.equal(list.total, 2)
     assert.equal(list.sessions[0].id, '20260503_010203_000001')
+    assert.equal(list.sessions[0].title, 'Hermes 官方标题')
     assert.equal(list.sessions[0].linkedTaskTitle, '会话能力梳理')
     assert.deepEqual(list.sessions[0].linkedWorkspaceIds, ['workspace_1'])
     assert.deepEqual(list.sessions[0].tools, ['skill_view', 'web_search'])
@@ -79,9 +81,9 @@ async function main() {
     assert.equal(fullTextFiltered.sessions[0].searchMatches?.length, 1)
     assert.match(fullTextFiltered.sessions[0].searchMatches?.[0]?.snippet ?? '', /映射 Cowork/)
 
-    const detail = readHermesSessionDetail(state, 'session_20260503_010203_000001.json', { sessionsDir })
+    const detail = readHermesSessionDetail(state, 'session_20260503_010203_000001.json', { sessionsDir, titleOverrides })
     assert.ok(detail)
-    assert.equal(detail.session.title, '会话能力梳理')
+    assert.equal(detail.session.title, 'Hermes 官方标题')
     assert.equal(detail.messages.length, 2)
     assert.equal(detail.messages[0].role, 'user')
     assert.equal(detail.messages[0].content, '帮我整理 Hermes 会话能力')

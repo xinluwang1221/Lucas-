@@ -1,7 +1,12 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { execFile, execFileSync } from 'node:child_process'
+import { promisify } from 'node:util'
+import { hermesAgentDir, hermesPythonBin } from './paths.js'
 import type { AppState, Task } from './types.js'
+
+const execFileAsync = promisify(execFile)
 
 export type HermesSessionSummary = {
   id: string
@@ -45,6 +50,13 @@ export type HermesSessionDetail = {
   updatedAt: string
 }
 
+export type RenameHermesSessionResult = {
+  sessionId: string
+  title: string
+  detail: HermesSessionDetail
+  updatedAt: string
+}
+
 export type HermesSessionsResponse = {
   sessionsDir: string
   sessions: HermesSessionSummary[]
@@ -57,6 +69,8 @@ export type ReadHermesSessionsOptions = {
   query?: string
   limit?: number
   sessionsDir?: string
+  hermesHome?: string
+  titleOverrides?: Map<string, string>
 }
 
 type HermesSessionRaw = Record<string, unknown>
@@ -64,6 +78,7 @@ type HermesSessionRaw = Record<string, unknown>
 export function readHermesSessions(state: AppState, options: ReadHermesSessionsOptions = {}): HermesSessionsResponse {
   const sessionsDir = resolveHermesSessionsDir(options.sessionsDir)
   const linkedTasks = buildLinkedTasks(state.tasks)
+  const titleOverrides = resolveHermesSessionTitleOverrides(options)
 
   if (!fs.existsSync(sessionsDir)) {
     return {
@@ -83,7 +98,7 @@ export function readHermesSessions(state: AppState, options: ReadHermesSessionsO
       const fullPath = path.join(sessionsDir, file)
       try {
         const raw = readJsonFile(fullPath)
-        const summary = toHermesSessionSummary(raw, file, fullPath, linkedTasks)
+        const summary = toHermesSessionSummary(raw, file, fullPath, linkedTasks, titleOverrides)
         if (!query) return [summary]
 
         const searchMatches = findSessionSearchMatches(raw, summary.id, query)
@@ -122,7 +137,8 @@ export function readHermesSessionDetail(
 
   const raw = readJsonFile(target)
   const linkedTasks = buildLinkedTasks(state.tasks)
-  const session = toHermesSessionSummary(raw, path.basename(target), target, linkedTasks)
+  const titleOverrides = resolveHermesSessionTitleOverrides(options)
+  const session = toHermesSessionSummary(raw, path.basename(target), target, linkedTasks, titleOverrides)
   const updatedAt = session.updatedAt
 
   return {
@@ -133,11 +149,98 @@ export function readHermesSessionDetail(
   }
 }
 
+export async function renameHermesSession(
+  state: AppState,
+  sessionId: string,
+  title: string,
+  options: ReadHermesSessionsOptions = {}
+): Promise<RenameHermesSessionResult> {
+  const nextTitle = String(title ?? '').trim()
+  if (!nextTitle) throw new Error('会话标题不能为空')
+  if (nextTitle.length > 100) throw new Error('会话标题最多 100 个字符')
+
+  const sessionsDir = resolveHermesSessionsDir(options.sessionsDir)
+  const target = findHermesSessionFile(sessionsDir, sessionId)
+  if (!target) throw new Error('Hermes session not found')
+
+  const payload = await runHermesSessionRename(normalizeSessionId(sessionId), nextTitle, options.hermesHome)
+  if (!payload.ok || !payload.sessionId || !payload.title) {
+    throw new Error(payload.error || 'Hermes session rename failed')
+  }
+
+  const titleOverrides = new Map(resolveHermesSessionTitleOverrides(options))
+  titleOverrides.set(payload.sessionId, payload.title)
+  const detail = readHermesSessionDetail(state, payload.sessionId, {
+    ...options,
+    sessionsDir,
+    titleOverrides
+  })
+  if (!detail) throw new Error('Hermes session renamed, but Cowork could not reload it')
+
+  return {
+    sessionId: payload.sessionId,
+    title: payload.title,
+    detail,
+    updatedAt: new Date().toISOString()
+  }
+}
+
 export function resolveHermesSessionsDir(explicitDir?: string) {
   if (explicitDir) return explicitDir
   if (process.env.HERMES_COWORK_SESSIONS_DIR) return process.env.HERMES_COWORK_SESSIONS_DIR
   const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes')
   return path.join(hermesHome, 'sessions')
+}
+
+export function resolveHermesHome(explicitHome?: string) {
+  return explicitHome || process.env.HERMES_HOME || path.join(os.homedir(), '.hermes')
+}
+
+export function readHermesSessionTitleIndex(hermesHome = resolveHermesHome()) {
+  const dbPath = path.join(hermesHome, 'state.db')
+  if (!fs.existsSync(dbPath)) return new Map<string, string>()
+
+  const script = `
+import json
+import os
+import sqlite3
+import sys
+
+db_path = os.path.join(sys.argv[1], "state.db")
+if not os.path.exists(db_path):
+    print("{}")
+    raise SystemExit(0)
+
+conn = sqlite3.connect(db_path)
+try:
+    rows = conn.execute("select id, title from sessions where title is not null and trim(title) != ''").fetchall()
+    print(json.dumps({row[0]: row[1] for row in rows}, ensure_ascii=False))
+finally:
+    conn.close()
+`.trim()
+
+  try {
+    const output = execFileSync(hermesPythonBin, ['-c', script, hermesHome], {
+      cwd: hermesAgentDir,
+      env: buildHermesPythonEnv(hermesHome),
+      encoding: 'utf8',
+      timeout: 5000,
+      maxBuffer: 1024 * 1024
+    })
+    const parsed = JSON.parse(output || '{}') as Record<string, unknown>
+    return new Map(Object.entries(parsed).flatMap(([id, value]) => {
+      const title = stringValue(value)
+      return title ? [[id, title] as const] : []
+    }))
+  } catch {
+    return new Map<string, string>()
+  }
+}
+
+function resolveHermesSessionTitleOverrides(options: ReadHermesSessionsOptions) {
+  if (options.titleOverrides) return options.titleOverrides
+  if (options.sessionsDir) return new Map<string, string>()
+  return readHermesSessionTitleIndex(options.hermesHome)
 }
 
 function readJsonFile(filePath: string): HermesSessionRaw {
@@ -158,15 +261,17 @@ function toHermesSessionSummary(
   raw: HermesSessionRaw,
   file: string,
   filePath: string,
-  linkedTasks: Map<string, Task[]>
+  linkedTasks: Map<string, Task[]>,
+  titleOverrides: Map<string, string> = new Map()
 ): HermesSessionSummary {
   const stat = fs.statSync(filePath)
   const id = normalizeSessionId(stringValue(raw.session_id) || file)
   const tasks = linkedTasks.get(id) ?? []
   const messages = Array.isArray(raw.messages) ? raw.messages : []
   const title = firstNonEmpty(
-    tasks[0]?.title,
+    titleOverrides.get(id),
     stringValue(raw.title),
+    tasks[0]?.title,
     firstMessageContent(messages, 'user'),
     id
   )
@@ -193,6 +298,74 @@ function toHermesSessionSummary(
     linkedTaskIds: tasks.map((task) => task.id),
     linkedTaskTitle: tasks[0]?.title,
     linkedWorkspaceIds: [...new Set(tasks.map((task) => task.workspaceId))]
+  }
+}
+
+async function runHermesSessionRename(sessionId: string, title: string, hermesHome = resolveHermesHome()) {
+  const script = `
+import json
+import sys
+
+hermes_agent_dir = sys.argv[1]
+session_id = sys.argv[2]
+title = sys.argv[3]
+
+if hermes_agent_dir not in sys.path:
+    sys.path.insert(0, hermes_agent_dir)
+
+try:
+    from hermes_state import SessionDB
+    db = SessionDB()
+    try:
+        resolved_session_id = db.resolve_session_id(session_id) or session_id
+        ok = db.set_session_title(resolved_session_id, title)
+        print(json.dumps({
+            "ok": bool(ok),
+            "sessionId": resolved_session_id,
+            "title": db.get_session_title(resolved_session_id),
+        }, ensure_ascii=False))
+    finally:
+        db.close()
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+    raise SystemExit(1)
+`.trim()
+
+  try {
+    const { stdout } = await execFileAsync(hermesPythonBin, ['-c', script, hermesAgentDir, sessionId, title], {
+      cwd: hermesAgentDir,
+      env: buildHermesPythonEnv(hermesHome),
+      timeout: 10000,
+      maxBuffer: 1024 * 1024
+    })
+    return parseHermesRenamePayload(stdout)
+  } catch (error) {
+    const stdout = isRecord(error) ? stringValue(error.stdout) : undefined
+    const parsed = stdout ? parseHermesRenamePayload(stdout) : undefined
+    if (parsed?.error) throw new Error(parsed.error)
+    throw error
+  }
+}
+
+function parseHermesRenamePayload(stdout: string) {
+  const lines = stdout.trim().split(/\n/).filter(Boolean)
+  const lastLine = lines[lines.length - 1] ?? '{}'
+  const parsed = JSON.parse(lastLine) as {
+    ok?: boolean
+    error?: string
+    sessionId?: string
+    title?: string
+  }
+  return parsed
+}
+
+function buildHermesPythonEnv(hermesHome: string) {
+  return {
+    ...process.env,
+    HERMES_HOME: hermesHome,
+    PYTHONPATH: process.env.PYTHONPATH
+      ? `${hermesAgentDir}${path.delimiter}${process.env.PYTHONPATH}`
+      : hermesAgentDir
   }
 }
 

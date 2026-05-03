@@ -1,8 +1,8 @@
-import { Bot, Clock3, Filter, Link2, Loader2, MessageSquareText, RefreshCw, Search, Wrench, X } from 'lucide-react'
+import { Bot, Check, Clock3, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
-import { getHermesSessionDetail, getHermesSessions } from '../settings/runtimeApi'
+import { getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
 
 export function SessionsView({
   sessions,
@@ -136,6 +136,17 @@ export function SessionsView({
     setSearchRefreshKey((value) => value + 1)
   }
 
+  async function handleRenameSession(sessionId: string, title: string) {
+    const result = await renameHermesSession(sessionId, title)
+    setDetail(result.detail)
+    setSearchResult((current) => current
+      ? current.map((session) => session.id === sessionId ? result.detail.session : session)
+      : current
+    )
+    setSearchRefreshKey((value) => value + 1)
+    onRefresh()
+  }
+
   function clearFilters() {
     setQuery('')
     setSelectedPlatform('')
@@ -225,7 +236,7 @@ export function SessionsView({
                   <MessageSquareText size={16} />
                 </span>
                 <span className="session-row-body">
-                  <strong>{session.linkedTaskTitle ?? session.title}</strong>
+                  <strong>{session.title}</strong>
                   <span>{session.preview ?? '暂无消息预览'}</span>
                   {session.searchMatches?.[0] && (
                     <span className="session-row-match">
@@ -235,6 +246,7 @@ export function SessionsView({
                   <em>
                     {formatRelativeDate(session.updatedAt)} · {session.messageCount} 条消息
                     {session.model ? ` · ${session.model}` : ''}
+                    {session.linkedTaskTitle ? ` · 关联：${session.linkedTaskTitle}` : ''}
                   </em>
                 </span>
               </button>
@@ -275,6 +287,7 @@ export function SessionsView({
               linkedTasks={linkedTasks}
               searchHits={selectedSummary?.searchMatches ?? []}
               onOpenTask={onOpenTask}
+              onRename={handleRenameSession}
             />
           ) : null}
         </section>
@@ -296,22 +309,86 @@ function SessionDetail({
   detail,
   linkedTasks,
   searchHits,
-  onOpenTask
+  onOpenTask,
+  onRename
 }: {
   detail: HermesSessionDetailResponse
   linkedTasks: Task[]
   searchHits: HermesSessionSearchHit[]
   onOpenTask: (task: Task) => void
+  onRename: (sessionId: string, title: string) => Promise<void>
 }) {
   const session = detail.session
   const toolText = session.tools.length ? session.tools.join('、') : '暂无工具记录'
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(session.title)
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isRenaming) setTitleDraft(session.title)
+  }, [isRenaming, session.id, session.title])
+
+  async function submitRename() {
+    const nextTitle = titleDraft.trim()
+    if (!nextTitle) {
+      setRenameError('会话标题不能为空')
+      return
+    }
+    setRenameLoading(true)
+    setRenameError(null)
+    try {
+      await onRename(session.id, nextTitle)
+      setIsRenaming(false)
+    } catch (cause) {
+      setRenameError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
+  function cancelRename() {
+    setTitleDraft(session.title)
+    setRenameError(null)
+    setIsRenaming(false)
+  }
 
   return (
     <>
       <header className="session-detail-head">
         <div>
           <p className="eyebrow">Session</p>
-          <h2>{session.linkedTaskTitle ?? session.title}</h2>
+          {isRenaming ? (
+            <div className="session-title-edit">
+              <input
+                value={titleDraft}
+                maxLength={100}
+                autoFocus
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submitRename()
+                  if (event.key === 'Escape') cancelRename()
+                }}
+                aria-label="会话标题"
+              />
+              <button type="button" onClick={submitRename} disabled={renameLoading}>
+                {renameLoading ? <Loader2 size={15} className="spin" /> : <Check size={15} />}
+                保存
+              </button>
+              <button type="button" className="ghost-button compact" onClick={cancelRename} disabled={renameLoading}>
+                <X size={15} />
+                取消
+              </button>
+            </div>
+          ) : (
+            <div className="session-title-row">
+              <h2>{session.title}</h2>
+              <button type="button" className="icon-button" onClick={() => setIsRenaming(true)} aria-label="重命名会话" title="重命名会话">
+                <Pencil size={15} />
+              </button>
+            </div>
+          )}
+          {renameError && <p className="session-rename-error">{renameError}</p>}
           <span>{session.id}</span>
         </div>
         {linkedTasks[0] && (

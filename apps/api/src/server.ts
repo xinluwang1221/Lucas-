@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { readHermesOfficialApiStatus } from './hermes_official_api.js'
-import { readHermesSessionDetail, readHermesSessions } from './hermes_sessions.js'
+import { readHermesSessionDetail, readHermesSessions, renameHermesSession } from './hermes_sessions.js'
 import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -232,6 +232,16 @@ app.get('/api/hermes/sessions/:sessionId', (req, res) => {
     res.json(detail)
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.patch('/api/hermes/sessions/:sessionId', async (req, res) => {
+  try {
+    const result = await renameHermesSession(store.snapshot, req.params.sessionId, String(req.body?.title ?? ''))
+    res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    res.status(message.includes('not found') ? 404 : 400).json({ error: message })
   }
 })
 

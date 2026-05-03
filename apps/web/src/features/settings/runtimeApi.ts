@@ -1,4 +1,4 @@
-import { request } from '../../lib/http'
+import { jsonHeaders, request } from '../../lib/http'
 import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
@@ -6,6 +6,7 @@ import type {
   HermesRuntime,
   HermesSessionDetailResponse,
   HermesSessionsResponse,
+  RenameHermesSessionResponse,
   HermesUpdateStatus
 } from '../../lib/api'
 
@@ -43,4 +44,12 @@ export async function getHermesSessions(params: { q?: string; limit?: number } =
 
 export async function getHermesSessionDetail(sessionId: string): Promise<HermesSessionDetailResponse> {
   return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`)
+}
+
+export async function renameHermesSession(sessionId: string, title: string): Promise<RenameHermesSessionResponse> {
+  return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    headers: jsonHeaders,
+    body: JSON.stringify({ title })
+  })
 }
