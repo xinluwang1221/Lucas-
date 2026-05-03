@@ -52,7 +52,7 @@ export function ConnectorsView({
       <div className="connector-summary">
         <div>
           <strong>{connectors.length}</strong>
-          <span>已安装连接器</span>
+          <span>已安装 MCP 服务</span>
         </div>
         <div>
           <strong>{enabledCount}</strong>
@@ -67,7 +67,7 @@ export function ConnectorsView({
       {error && <div className="settings-error-line">{error}</div>}
 
       <div className="connector-list">
-        {!connectors.length && <p className="muted-copy">暂未读取到 MCP 连接器。可以从市场添加，或在设置里手动配置。</p>}
+        {!connectors.length && <p className="muted-copy">暂未读取到 MCP 服务。可以从市场添加，或在设置里手动配置。</p>}
         {connectors.map((connector) => (
           <article className={connector.enabled ? 'connector-card enabled' : 'connector-card'} key={connector.id}>
             <div className="connector-icon">
@@ -78,7 +78,7 @@ export function ConnectorsView({
                 <strong>{connector.name}</strong>
                 <span>{connector.enabled ? '已启用' : '已停用'}</span>
               </div>
-              <p>{connector.description || connector.command || connector.url || '这个连接器来自 Hermes MCP 配置。'}</p>
+              <p>{connector.description || connector.command || connector.url || '这个 MCP 服务来自 Hermes 配置。'}</p>
               <div className="connector-meta">
                 <em>{connector.transport.toUpperCase()}</em>
                 <em>{connector.status === 'configured' ? '配置完整' : '需要补全'}</em>

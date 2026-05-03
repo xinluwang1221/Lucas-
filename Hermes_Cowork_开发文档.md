@@ -199,7 +199,7 @@ flowchart TB
 | Prompt Builder | 任务资料打包器。把系统规则、用户问题、文件、Skill、记忆组装给模型。 | Cowork 的附件、工作区文件、Skill 预载都要进入这里。 |
 | Provider Resolution | 模型调度器。决定这次用哪个模型、哪个供应商、哪个备用模型。 | Cowork 的模型设置、Key 重填、Fallback 和思考强度入口。 |
 | Tool Dispatch | 工具派发器。Hermes 决定要读文件、跑命令、查网页、用浏览器或调 MCP 时经过这里。 | Cowork 的过程流、右侧资源、MCP 管理和工具调用展示。 |
-| MCP | 外接工具插座。让 Hermes 使用 GitHub、数据库、文件系统、内部 API 等外部工具。 | 设置 > MCP、技能页 Connectors、过程资源里的工具调用。 |
+| MCP | 外接工具插座。让 Hermes 使用 GitHub、数据库、文件系统、内部 API 等外部工具。 | 技能页 > MCP 服务、设置 > MCP、过程资源里的工具调用。 |
 | Session Storage | 工作记忆和历史记录。保存对话、任务状态、检索索引和上下文。 | 左侧会话、继续对话、上下文用量、手动压缩。 |
 | Context Compression | 长对话压缩。对话太长时，把历史压缩成可继续使用的摘要。 | 右侧上下文资源里的用量、压缩建议和手动压缩按钮。 |
 | Skills | 工作方法说明书。告诉 Hermes 某类任务应该怎么做。 | 技能页、Skill 文件预览、加入下一次任务。 |
@@ -241,7 +241,7 @@ flowchart TB
 | Clarify / 澄清反问 | 对话区澄清卡、可选项按钮、自由输入框 | `/api/tasks/:id/clarify`、`ClarifyRequestCard.tsx`、`useTaskActions.ts`、`hermes_gateway.ts` | 已接入 gateway 事件、前端卡片和 fake gateway 链路测试；bridge fallback 无法继续澄清 | Hermes 返回 `clarify.request` 时必须弹卡片；回答后必须调用 `clarify.respond` 并继续原任务；不能降级成普通文字 |
 | 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
-| MCP Server、工具列表、市场、工具级开关 | 设置 > MCP、技能页 Connectors、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
+| MCP Server、工具列表、市场、工具级开关 | 技能页 > MCP 服务、设置 > MCP、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
 | Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；运行由 Hermes gateway/tick 负责 | 任务必须写入 Hermes cron；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
 | Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 技能清单和启用状态优先读取 Hermes 官方 Dashboard `/api/skills`，本机扫描负责补充 `SKILL.md` 和子文件预览；上传技能、启停、加入下一次任务已接入 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；启停 Hermes 官方 Skill 必须写回 Hermes，而不是只改 Cowork 本地状态 |
 | Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
@@ -392,7 +392,7 @@ flowchart TB
 
 - Cowork 后端新增 `hermes_dashboard.ts`，负责启动或探测 `hermes dashboard --no-open`。
 - Hermes Dashboard 的受保护 API 需要本机会话 token；Cowork 后端从 Dashboard HTML 中读取 `window.__HERMES_SESSION_TOKEN__`，再用 `X-Hermes-Session-Token` 请求官方 API。
-- 第一阶段只代理只读接口：状态、Skills、Toolsets、Cron jobs、Sessions、Config、Env 状态和 Model info。写入类接口暂不开放。
+- 第一阶段已代理只读接口：状态、Skills、Toolsets、Cron jobs、Sessions、Config、Env 状态和 Model info。写入类接口按能力逐项开放：Skills 启停写 Hermes `/api/skills/toggle`；Toolsets 启停由 Cowork Adapter 受控写入 Hermes `platform_toolsets.cli`。
 - 设置 > 运行环境已使用 Dashboard adapter 的真实状态：显示官方后台是否启动、官方 API 是否可读、Hermes 版本、Gateway 状态、配置版本和活动会话数，并提供“启动 Hermes 后台”入口。
 
 为什么这样做：
@@ -405,8 +405,8 @@ flowchart TB
 
 - 下一步评估 Cron 写入类接口是否也切到官方 Dashboard API；切换前必须确认备份、错误恢复和 UI 提示。
 - Skills 页已对齐官方 `/api/skills`：官方 API 负责技能清单和启用状态，本机扫描只负责文件预览和 Cowork 上传技能补充。
-- 调度页已读取官方 `/api/tools/toolsets`：用于展示 Hermes 当前启用的内置工具集，避免继续用 MCP 列表推断 Toolsets。
-- 写入类能力逐项开放：Cron create/update、Skill toggle、Config update 必须先补 UI、备份、错误恢复和测试。
+- 技能页已集成官方 `/api/tools/toolsets`：Toolsets 和 Skill、MCP 服务同属“能力管理”，不再把工具集只放在调度页里。Toolset 启停通过 Cowork 后端读取 Hermes config 后写回 `platform_toolsets.cli`，避免前端直接编辑 YAML。
+- 写入类能力逐项开放：Skill toggle 和 Toolset toggle 已有受控写入；Cron create/update、其他 Config update 必须先补 UI、备份、错误恢复和测试。
 
 尚未前端化的 Hermes 官方后台能力：
 
@@ -417,6 +417,7 @@ flowchart TB
 - Dashboard 主题和插件：官方 `/api/dashboard/themes`、`/api/dashboard/plugins` 属于官方 UI 自身能力；Cowork 暂不需要直接前端化，除非未来支持管理 Hermes Dashboard 插件。
 - Gateway 重启与 Hermes 更新动作：官方有 gateway restart / update 类写入动作；Cowork 现有更新页有复测和自动更新守卫，但还未把官方写入接口作为主通道。
 - Action 状态和 Session 详情：官方可读取具体 action 状态、session 详情、messages 和删除 session；Cowork 目前只做了左侧会话与任务级继续对话，尚未把官方 session 管理完整前端化。
+- Toolset 内部工具级策略：Cowork 已能显示每个 Hermes Toolset 下有哪些工具，并能启停整个 Toolset；但还没有做“只启用/禁用某个内置工具”的细粒度 UI。这个能力要等 Hermes 官方配置字段稳定后再做，避免 Cowork 自己发明一套不兼容的工具策略。
 
 判断标准：
 
@@ -479,7 +480,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | 模型候选与选择 | 对话底部模型菜单、设置 > 模型、本次任务模型列表、长期默认模型列表 | `/api/models`、`~/.hermes/config.yaml`、`readHermesModelCatalog()`、`listModelOptions()` | `modelGroupsForProvider()`、`groupModelOptionsForMenu()` |
 | 模型服务配置与重填 Key | 设置 > 模型、对话底部“重填当前 Key / 模型服务设置” | `/api/models`、`/api/models/configure`、`configureHermesModel()`、`parseHermesAuthList()` | 同一个 `modelPanelOpen` 配置弹窗，入口必须能预选当前 provider 和模型 |
-| MCP 服务 | 设置 > MCP、自定义 > Connectors、MCP 市场弹窗 | `/api/hermes/mcp`、Hermes MCP config | 同一套 MCP server 状态、说明、图标和启停逻辑 |
+| MCP 服务 | 技能页 > MCP 服务、设置 > MCP、MCP 市场弹窗 | `/api/hermes/mcp`、Hermes MCP config | 同一套 MCP server 状态、说明、图标和启停逻辑 |
 | 任务运行状态 | 主对话区、右侧任务上下文、左侧工作区会话树 | `/api/state`、任务事件流、Hermes session 元数据 | `Task`、`executionView`、右侧步骤/产物/资源分层 |
 | 上下文用量、过程资源与压缩 | 右侧任务上下文、未来对话框上方风险提示 | `/api/tasks/:taskId/context`、`/api/tasks/:taskId/context/compress`、任务 events、工作区文件索引 | `ContextResourcesCard`，合并展示上下文用量、文件大小/占比、网页、工具和 Skill；不再单独展示来源/阈值/消息数表格 |
 | 产物与文件 | 主结果、右侧产物、工作区文件、附件入口 | `/api/artifacts`、`/api/workspaces/*/files` | 同一套文件预览、Finder 打开、下载逻辑 |
@@ -832,6 +833,7 @@ HC_EVENT\t
   - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
 - 支持 Hermes Cron 管理：`/api/hermes/cron` 优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，Dashboard 不可用时回退本机 `~/.hermes/cron/jobs.json`；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 Hermes cron，输出读取 `~/.hermes/cron/output/<job_id>/`。
 - 支持 Hermes Skills 官方真源：`/api/skills` 优先读取 Hermes Dashboard `/api/skills`，把官方启用状态合并到 Cowork 技能页；本机扫描 `~/.hermes/skills`、用户 skills、Codex 插件 skills 和上传 skills，用于展示 `SKILL.md` 及子文件。启停由 Hermes 官方 `/api/skills/toggle` 写回，Dashboard 不可用时才保留本地扫描兜底。
+- 支持 Hermes Toolsets 官方真源：技能页新增“工具集”子页，读取 Hermes Dashboard `/api/tools/toolsets`，展示 Hermes 内置工具集、中文说明、启用状态、凭据配置状态和工具列表。启停通过 Cowork 后端读取 `/api/config` 后受控写回 `platform_toolsets.cli`，并保留已有 MCP server 名称，避免 `hermes-cli` 复合工具集覆盖用户选择。
 
 ### 前端
 
@@ -850,9 +852,9 @@ HC_EVENT\t
 - 工作区页：点击左侧工作区进入，展示该授权目录的文件管理、最近会话、最近产物和可执行入口；项目页/搜索页只作为高级管理和跨工作区检索入口。
 - 工作区第一阶段已落地：左侧工作区以目录树展示，工作区下挂活跃会话；点击工作区进入文件管理页，点击会话进入对话页；“授权文件夹”通过本机 API 调 macOS Finder 选择目录，不再展示手动路径输入表单。
 - 工作区第二阶段已落地：后端新增目录树、重命名、重新授权和移除工作区 API；文件管理页接入面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。移除工作区只删除 Cowork 记录和该工作区会话索引，不删除真实文件；`.DS_Store`、`.gitkeep` 等系统占位文件默认不展示。
-- 调度页：根据真实 MCP 连接器和已启用 lark skills 汇总网页浏览器、飞书办公、数据与文件三类能力，并可跳转 Connectors 或 MCP 管理。
+- 调度页：根据真实 MCP 服务、Hermes 工具集和已启用 lark skills 汇总网页浏览器、飞书办公、数据与文件三类能力，并跳转到技能页的“工具集”或“MCP 服务”子页。
 - 任务模板页：补充中文办公模板，覆盖文件整理、文档生成、飞书办公、数据分析、网页调研，并支持分类筛选。
-- 自定义页：按 Cowork 产品参考图拆成 `Skills / Connectors` 二级结构。Skills 读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；Connectors 读取真实 Hermes MCP 服务，展示已安装/启用数量、配置路径、服务说明、传输方式和配置状态，并提供“从市场添加”和“打开 MCP 管理”入口。
+- 技能页：按 Cowork 产品参考图拆成 `技能 / MCP 服务 / 工具集` 三个子页。技能读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；MCP 服务读取真实 Hermes MCP 配置；工具集读取 Hermes Dashboard 官方 `/api/tools/toolsets`，并通过 Cowork 后端受控写回 Hermes `platform_toolsets.cli`。
 - 技能详情弹窗：点击技能卡片后，可查看该 skill 的 `SKILL.md` 和配套子文件内容，并可将该 skill 加入下一次任务的预载技能。
 - 对话区内联执行轨迹：用户消息后展示 Hermes 的“查看详情”，包含思考摘要、状态、工具/搜索/文件操作和完成/失败事件；当前阶段只在外层突出显示最后一条活动，完整过程默认折叠到“查看过程记录”，避免思考、工具和答案挤在一起。
 - 对话区执行轨迹优先消费后端 `executionView.activity`，而不是只在前端从原始 `events` 猜测；旧事件推断逻辑只作为兼容回退。
@@ -1143,7 +1145,7 @@ HC_EVENT\t
 `apps/web/src/features/settings/mcp.tsx`
 
 - MCP 设置 feature 模块，已从 `App.tsx` 抽离。
-- 负责“设置 > MCP”的本地服务、Hermes Server、每日推荐、云端四个 Tab，以及 MCP 市场、手动配置/编辑、服务详情、工具开关、连接器摘要。
+- 负责“设置 > MCP”的本地服务、Hermes Server、每日推荐、云端四个 Tab，以及 MCP 市场、手动配置/编辑、服务详情、工具开关、MCP 服务摘要。
 - 后续修复“MCP 页面拥挤”“市场分类与推荐日报”“已安装 MCP 说明/图标/工具级开关”“Hermes mcp serve 诊断”等问题时，优先改这里和 `apps/api/src/mcp.ts`，不要在 `App.tsx` 里新增第二套 MCP UI。
 
 `apps/web/src/features/settings/useMcpState.ts`
@@ -1209,8 +1211,8 @@ HC_EVENT\t
 `apps/web/src/features/skills/SkillsView.tsx`
 
 - 技能主页面模块，已从 `App.tsx` 抽离。
-- 负责 Skills / Connectors 二级结构、技能市场/已安装切换、技能搜索、技能卡片、刷新、上传和跳转 MCP 管理入口。
-- 后续修复“左侧技能入口层级”“技能市场分类”“Connectors 和 MCP 设置入口一致性”等问题时，优先改这里。
+- 负责 `技能 / MCP 服务 / 工具集` 三个子页、技能市场/已安装切换、技能搜索、技能卡片、刷新、上传、MCP 服务摘要和 Hermes Toolsets 管理入口。
+- 后续修复“左侧技能入口层级”“技能市场分类”“MCP 服务和设置入口一致性”“Toolsets 展示与启停”等问题时，优先改这里。
 
 `apps/web/src/features/skills/SkillDetailModal.tsx`
 
@@ -1451,7 +1453,7 @@ POST /api/models/fallbacks
 - 继承 Hermes CLI 配置与模型路由。
 - 多轮任务继续同一个 Hermes session。
 - 多轮任务默认继续同一个 Hermes session；如果用户在同一任务里切换了底部模型，Cowork 会开启新的 Hermes session，避免旧 session 继续沿用之前的模型和 provider。
-- 自定义页：扫描真实本机 skill 并展示在 Skills 子页；Connectors 子页读取 Hermes MCP 配置中的真实服务，如 `csv-analyzer`、`sqlite`、`mimo-web-search`，用于把 MCP 从设置页逐步迁移到产品化连接器入口。
+- 技能页：扫描真实本机 skill 并展示在“技能”子页；“MCP 服务”子页读取 Hermes MCP 配置中的真实服务，如 `csv-analyzer`、`sqlite`、`mimo-web-search`；“工具集”子页读取 Hermes 官方 Dashboard Toolsets，用于统一管理 Skill、MCP 和 Hermes 内置工具。
 - Skill 执行接入：启用的 skill 会进入 Hermes 执行上下文；从 skill 详情点“使用技能”会把该 skill 预载到下一次任务。
 - 模型切换：底部输入框可展开模型菜单，默认项显示 Hermes 当前模型；选择默认项时不传 `--model`，选择指定模型时任务创建和继续对话会携带该模型。
 - 模型设置页已从 SOLO 静态壳改为 Hermes 覆盖页：围绕“默认大脑 / 本次任务模型 / 长期默认模型 / 备用路线 / 模型服务状态”组织信息，并可把候选模型写回 Hermes 默认模型；Provider、Base URL、config/env 路径和凭据状态作为高级信息折叠展示，不再把底层配置项作为主交互。
@@ -1845,8 +1847,8 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 2. 第二刀基本完成：`workspace`。已拆左侧工作区树 `SidebarWorkspaceNode.tsx`、工作区文件页 `ProjectsView.tsx`、目录浏览器 `WorkspaceBrowser.tsx`、预览目标转换 `previewTargets.ts`、workspace API service `workspaceApi.ts`、文件状态 hook `useWorkspaceFiles.ts`、工作区动作 hook `useWorkspaceActions.ts` 和拖拽上传 hook `useWorkspaceDropzone.ts`；后续如继续深化，再拆 workspace provider 或文件编辑状态机。
 3. 第三刀基本完成：`chat`。已拆 `MessageBody.tsx`、`ChatComposer.tsx`、`useConversationBehavior.ts`、`ChatExecutionViews.tsx`、`ExecutionTracePanels.tsx`、`executionTraceModel.ts`、`TaskFocusPanel.tsx`、`TaskInspectorCards.tsx`、`ToolEventsPanel.tsx`、`messageUtils.ts`、`useTaskSelection.ts`、`useTaskStream.ts`、`useTaskContext.ts`、`useTaskActions.ts`、`chatApi.ts`、`taskContextApi.ts` 和 `taskState.ts`；后续如继续深化，再把对话页面壳拆成组件/provider。
 4. 第四刀基本完成：`settings/models`。已拆 `apps/web/src/features/settings/models.tsx`、`apps/web/src/features/settings/useModelState.ts`、`apps/web/src/features/settings/useModelConfigForm.ts`、`apps/web/src/features/settings/useModelActions.ts` 和 `apps/web/src/features/settings/modelApi.ts`，模型设置页、配置/重填 Key 弹窗、模型候选分组、Hermes provider 归一化、MiMo 版本分组、模型数据状态、模型配置表单、模型动作和模型 API service 都在 settings 模块；后续如继续深化，再把模型 provider/form 子组件拆细。
-5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`、`apps/web/src/features/settings/useMcpState.ts` 和 `apps/web/src/features/settings/mcpApi.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、Connectors 摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP 页面大组件拆成二级 Tab 子组件。
-6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts`、`skillsApi.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面、详情弹窗和 Skill API service 都在 skills 模块；后续可继续按需要把 Skills 与 Connectors 拆成更细的二级页面。
+5. 第五刀基本完成：`settings/mcp`。已拆 `apps/web/src/features/settings/mcp.tsx`、`apps/web/src/features/settings/useMcpState.ts` 和 `apps/web/src/features/settings/mcpApi.ts`，MCP 设置页、市场、手动配置/编辑、serve 面板、工具级开关、MCP 服务摘要、MCP 数据状态和后端动作都在 settings 模块；后续如继续深化，再把 MCP 页面大组件拆成二级 Tab 子组件。
+6. 第六刀基本完成：`skills`。已拆 `apps/web/src/features/skills/useSkillsState.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx`、`skillFormatters.ts`、`skillsApi.ts` 和 `index.ts`，技能列表、上传、启用、文件浏览、技能主页面、详情弹窗和 Skill API service 都在 skills 模块；当前技能页已经集成“技能 / MCP 服务 / 工具集”，后续可继续把这三个子页拆成更细模块。
 7. 第七刀基本完成：`settings` 壳继续瘦身。已拆 `apps/web/src/features/settings/HermesUpdatePanel.tsx`、`SettingsModal.tsx`、`SettingsPages.tsx`、`settingsControls.tsx`、`settingsTypes.ts`、`useSettingsPreferences.ts`、`useHermesRuntimeState.ts` 和 `runtimeApi.ts`，Hermes 更新面板、设置弹窗壳、账号/通用/对话流/规则/关于等页面、通用设置控件、设置 tab 类型、默认偏好、runtime/升级/sessions 状态、设置偏好状态和 runtime API service 都不再留在 `App.tsx`；后续如继续深化，再把设置持久化迁移从总逻辑里拆出。
 8. 第八刀完成：`layout`。已拆 `apps/web/src/features/layout/usePanelLayout.ts`、`AppSidebar.tsx` 和 `SecondaryViews.tsx`，左右侧栏折叠、面板宽度、拖拽调整、resize 约束、本地持久化、左侧栏 UI 和次级页面从 `App.tsx` 迁出；后续三栏视觉比例、左侧栏入口层级、定时任务/调度/模板页和响应式规则优先改 layout 模块与 `styles/shell.css`。
 9. 样式主题化第一刀完成：已拆 `apps/web/src/styles/tokens.css`、`base.css`、`shell.css`、`sidebar.css`、`chat.css`、`settings.css`、`workspace.css`、`file-preview.css`；第一批响应式规则已按模块归位。外观设置页已升级为“层级预览 + 主题色/字体/界面选项”的主题后台，主题变量会写入 CSS token；Skills 页已按管理台结构重排；工作区文件页已按“左侧文件列表 + 右侧大预览”重调比例。颜色体系已从单一绿色/旧米色推进为语义 token：`accent`、`success`、`warning`、`danger`、`info`、`violet`、`surface-hover`、`surface-selected`，后续状态、图标、按钮和选中态都应优先使用这些 token。暗色主题已从偏绿黑调整为蓝黑层级，并修正右侧上下文资源、Markdown 表格、实时执行面板、文件预览、文档预览等高频区域的浅色残留。第二轮暗色修复增加了 legacy 组件兼容层，把设置、MCP、模型、市场、技能详情、Hermes 更新面板、调度/空状态等还未完全拆细的旧样式统一映射回 semantic token；同时在 `base.css` 做 button reset，避免浏览器默认灰色按钮破坏主题。`app.css` 继续保留尚未模块化的通用页面、技能页、调度页和 inspector 基础样式。

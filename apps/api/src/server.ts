@@ -12,6 +12,7 @@ import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPre
 import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
+import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
@@ -142,6 +143,16 @@ app.get('/api/hermes/dashboard/official/skills', async (_req, res) => {
 
 app.get('/api/hermes/dashboard/official/toolsets', async (_req, res) => {
   await sendHermesDashboardProxy(res, '/api/tools/toolsets')
+})
+
+app.put('/api/hermes/dashboard/official/toolsets/:toolsetName/toggle', async (req, res) => {
+  try {
+    const enabled = Boolean(req.body?.enabled)
+    const result = await toggleHermesDashboardToolset(req.params.toolsetName, enabled)
+    res.json({ ok: true, ...result })
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.get('/api/hermes/dashboard/official/cron/jobs', async (_req, res) => {

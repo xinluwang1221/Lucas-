@@ -8,7 +8,6 @@ import {
   Hammer,
   Loader2,
   MessageSquarePlus,
-  Plug,
   Presentation,
   Search,
   Square,
@@ -90,14 +89,14 @@ export function DispatchView({
   toolsetsError,
   skills,
   onOpenConnectors,
-  onOpenMcpSettings
+  onOpenToolsets
 }: {
   connectors: HermesMcpConfig['servers']
   toolsets: HermesToolset[]
   toolsetsError: string | null
   skills: Skill[]
   onOpenConnectors: () => void
-  onOpenMcpSettings: () => void
+  onOpenToolsets: () => void
 }) {
   const enabledConnectors = connectors.filter((connector) => connector.enabled)
   const enabledToolsets = toolsets.filter((toolset) => toolset.enabled)
@@ -110,11 +109,11 @@ export function DispatchView({
       <header className="product-page-head">
         <div>
           <h1>调度</h1>
-          <p>这里汇总 Hermes 能触达的外部动作：浏览器、飞书、文件系统、数据分析和本机自动化。</p>
+          <p>这里汇总 Hermes 当前可调度的能力。具体启停都在技能页统一管理。</p>
         </div>
-        <button className="send-button" onClick={onOpenConnectors}>
-          <Plug size={16} />
-          查看连接器
+        <button className="send-button" onClick={onOpenToolsets}>
+          <Hammer size={16} />
+          查看工具集
         </button>
       </header>
 
@@ -153,7 +152,10 @@ export function DispatchView({
                 : '暂无启用工具集'}
           </span>
         </div>
-        <button className="settings-link-button" onClick={onOpenMcpSettings}>
+        <button className="settings-link-button" onClick={onOpenToolsets}>
+          工具集 {enabledToolsets.length}
+        </button>
+        <button className="settings-link-button" onClick={onOpenConnectors}>
           MCP 服务 {enabledConnectors.length}
         </button>
       </div>

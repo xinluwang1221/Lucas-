@@ -10,7 +10,7 @@ import type { Skill, SkillFile } from '../../lib/api'
 
 export function useSkillsState() {
   const [skills, setSkills] = useState<Skill[]>([])
-  const [customizeTab, setCustomizeTab] = useState<'skills' | 'connectors'>('skills')
+  const [customizeTab, setCustomizeTab] = useState<'skills' | 'connectors' | 'toolsets'>('skills')
   const [skillTab, setSkillTab] = useState<'market' | 'installed'>('installed')
   const [skillQuery, setSkillQuery] = useState('')
   const [skillNotice, setSkillNotice] = useState<string | null>(null)

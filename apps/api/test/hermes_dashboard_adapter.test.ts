@@ -1,9 +1,39 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
+
+type FakeRequest = {
+  url: string
+  method: string | undefined
+  token: string | undefined
+  body?: unknown
+}
+
+type FakeState = {
+  config: {
+    model: string
+    platform_toolsets: {
+      cli: string[]
+    }
+  }
+}
 
 async function main() {
-  const requests: Array<{ url: string; token: string | undefined }> = []
-  const server = http.createServer((req, res) => handleFakeDashboard(req, res, requests))
+  const requests: FakeRequest[] = []
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-cowork-dashboard-test-'))
+  const fakeState: FakeState = {
+    config: {
+      model: 'mimo-v2.5-pro',
+      platform_toolsets: {
+        cli: ['hermes-cli', 'custom-mcp']
+      }
+    }
+  }
+  const server = http.createServer((req, res) => {
+    void handleFakeDashboard(req, res, requests, fakeState)
+  })
   await listen(server)
   const address = server.address()
   assert.equal(typeof address, 'object')
@@ -12,8 +42,10 @@ async function main() {
 
   const previousUrl = process.env.HERMES_COWORK_DASHBOARD_URL
   const previousAutostart = process.env.HERMES_COWORK_DASHBOARD_AUTOSTART
+  const previousDataDir = process.env.HERMES_COWORK_DATA_DIR
   process.env.HERMES_COWORK_DASHBOARD_URL = baseUrl
   process.env.HERMES_COWORK_DASHBOARD_AUTOSTART = '0'
+  process.env.HERMES_COWORK_DATA_DIR = dataDir
 
   const {
     extractDashboardSessionToken,
@@ -21,6 +53,7 @@ async function main() {
     requestHermesDashboardJson,
     resetHermesDashboardAdapterForTest
   } = await import('../src/hermes_dashboard.js')
+  const { toggleHermesDashboardToolset } = await import('../src/hermes_toolsets.js')
 
   try {
     assert.equal(
@@ -50,23 +83,43 @@ async function main() {
 
     const toolsets = await requestHermesDashboardJson('/api/tools/toolsets')
     assert.equal(toolsets.ok, true)
-    assert.deepEqual(toolsets.body, { toolsets: [{ name: 'browser', enabled: true }] })
+    assert.deepEqual(toolsets.body, fakeToolsets(fakeState.config.platform_toolsets.cli))
+
+    const toggleResult = await toggleHermesDashboardToolset('browser', false)
+    const toggledToolset = toggleResult.toolset
+    assert.equal(toggledToolset.name, 'browser')
+    assert.equal(toggledToolset.enabled, false)
+    assert.ok(fs.existsSync(toggleResult.backupPath))
+    assert.deepEqual(fakeState.config.platform_toolsets.cli, ['custom-mcp', 'terminal'])
+    const configUpdate = requests.find((request) => request.url === '/api/config' && request.method === 'PUT')
+    assert.ok(configUpdate)
+    assert.equal(configUpdate.token, 'fake-token')
 
     console.log('Hermes dashboard adapter test passed')
   } finally {
     process.env.HERMES_COWORK_DASHBOARD_URL = previousUrl
     process.env.HERMES_COWORK_DASHBOARD_AUTOSTART = previousAutostart
+    process.env.HERMES_COWORK_DATA_DIR = previousDataDir
     await resetHermesDashboardAdapterForTest()
     await close(server)
+    fs.rmSync(dataDir, { recursive: true, force: true })
   }
 }
 
-function handleFakeDashboard(
+async function handleFakeDashboard(
   req: IncomingMessage,
   res: ServerResponse<IncomingMessage>,
-  requests: Array<{ url: string; token: string | undefined }>
+  requests: FakeRequest[],
+  fakeState: FakeState
 ) {
-  requests.push({ url: req.url ?? '', token: req.headers['x-hermes-session-token'] as string | undefined })
+  const body = await readJsonBody(req)
+  requests.push({
+    url: req.url ?? '',
+    method: req.method,
+    token: req.headers['x-hermes-session-token'] as string | undefined,
+    body
+  })
+
   if (req.url === '/') {
     sendHtml(res, '<html><head><script>window.__HERMES_SESSION_TOKEN__="fake-token";</script></head></html>')
     return
@@ -97,10 +150,72 @@ function handleFakeDashboard(
     return
   }
   if (req.url === '/api/tools/toolsets') {
-    sendJson(res, { toolsets: [{ name: 'browser', enabled: true }] })
+    sendJson(res, fakeToolsets(fakeState.config.platform_toolsets.cli))
+    return
+  }
+  if (req.url === '/api/config' && req.method === 'GET') {
+    sendJson(res, fakeState.config)
+    return
+  }
+  if (req.url === '/api/config' && req.method === 'PUT') {
+    if (isRecord(body) && isRecord(body.config) && isRecord(body.config.platform_toolsets)) {
+      const cli = body.config.platform_toolsets.cli
+      if (Array.isArray(cli)) {
+        fakeState.config.platform_toolsets.cli = cli.map((item) => String(item))
+      }
+    }
+    sendJson(res, { ok: true })
     return
   }
   sendJson(res, { detail: 'not found' }, 404)
+}
+
+function fakeToolsets(cliEntries: string[]) {
+  const hasComposite = cliEntries.includes('hermes-cli')
+  const enabled = new Set(cliEntries)
+  return [
+    {
+      name: 'browser',
+      label: 'Browser',
+      description: 'Browser automation',
+      enabled: hasComposite || enabled.has('browser'),
+      available: hasComposite || enabled.has('browser'),
+      configured: true,
+      tools: ['browser_navigate']
+    },
+    {
+      name: 'terminal',
+      label: 'Terminal',
+      description: 'Terminal commands',
+      enabled: hasComposite || enabled.has('terminal'),
+      available: hasComposite || enabled.has('terminal'),
+      configured: true,
+      tools: ['terminal_run']
+    }
+  ]
+}
+
+function readJsonBody(req: IncomingMessage) {
+  return new Promise<unknown>((resolve) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    req.on('end', () => {
+      const text = Buffer.concat(chunks).toString('utf8').trim()
+      if (!text) {
+        resolve(undefined)
+        return
+      }
+      try {
+        resolve(JSON.parse(text))
+      } catch {
+        resolve(text)
+      }
+    })
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function sendJson(res: ServerResponse<IncomingMessage>, body: unknown, status = 200) {

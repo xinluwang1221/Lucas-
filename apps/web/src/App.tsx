@@ -396,7 +396,9 @@ function App() {
   const {
     toolsets,
     toolsetsError,
-    refreshToolsets
+    toolsetUpdatingName,
+    refreshToolsets,
+    toggleToolset
   } = useHermesToolsets()
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const {
@@ -950,6 +952,7 @@ function App() {
           setViewMode('skills')
           void refreshSkills().catch(() => undefined)
           void refreshHermesMcp()
+          void refreshToolsets()
         }}
         onOpenScheduled={() => setViewMode('scheduled')}
         onOpenDispatch={() => {
@@ -974,6 +977,9 @@ function App() {
             query={skillQuery}
             notice={skillNotice}
             connectors={hermesMcp?.servers ?? []}
+            toolsets={toolsets}
+            toolsetsError={toolsetsError}
+            toolsetUpdatingName={toolsetUpdatingName}
             mcpConfigPath={hermesMcp?.configPath}
             mcpError={mcpError}
             onCustomizeTabChange={setCustomizeTab}
@@ -984,6 +990,8 @@ function App() {
             onRefresh={() => void refreshSkills().catch((cause) => setSkillNotice(cause.message))}
             onUploadClick={() => skillFileInputRef.current?.click()}
             onRefreshMcp={() => void refreshHermesMcp()}
+            onRefreshToolsets={() => void refreshToolsets()}
+            onToggleToolset={(toolset) => void toggleToolset(toolset)}
             onOpenMcpSettings={() => {
               setSettingsTab('mcp')
               setSettingsOpen(true)
@@ -1082,9 +1090,10 @@ function App() {
               setViewMode('skills')
               void refreshHermesMcp()
             }}
-            onOpenMcpSettings={() => {
-              setSettingsTab('mcp')
-              setSettingsOpen(true)
+            onOpenToolsets={() => {
+              setCustomizeTab('toolsets')
+              setViewMode('skills')
+              void refreshToolsets()
             }}
           />
         ) : viewMode === 'ideas' ? (
