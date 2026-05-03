@@ -4,6 +4,8 @@ import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSession
 import { MarkdownContent } from '../markdown/MarkdownContent'
 import { continueHermesSession, deleteHermesSession, getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
 
+type ActiveSearchHit = HermesSessionSearchHit & { sessionId: string }
+
 export function SessionsView({
   sessions,
   tasks,
@@ -26,6 +28,8 @@ export function SessionsView({
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchRefreshKey, setSearchRefreshKey] = useState(0)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessions[0]?.id ?? null)
+  const [activeSearchHit, setActiveSearchHit] = useState<ActiveSearchHit | null>(null)
+  const [expandedSearchSessionIds, setExpandedSearchSessionIds] = useState<Set<string>>(() => new Set())
   const [detail, setDetail] = useState<HermesSessionDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
@@ -78,6 +82,8 @@ export function SessionsView({
       setSearchMeta(null)
       setSearchError(null)
       setSearchLoading(false)
+      setActiveSearchHit(null)
+      setExpandedSearchSessionIds(new Set())
       return undefined
     }
 
@@ -89,6 +95,7 @@ export function SessionsView({
         if (alive) {
           setSearchResult(response.sessions)
           setSearchMeta(response.search ?? null)
+          setExpandedSearchSessionIds(new Set(response.sessions[0]?.searchMatches?.length ? [response.sessions[0].id] : []))
         }
       })
       .catch((cause) => {
@@ -109,6 +116,7 @@ export function SessionsView({
 
   useEffect(() => {
     if (selectedSessionId && filteredSessions.some((session) => session.id === selectedSessionId)) return
+    setActiveSearchHit(null)
     setSelectedSessionId(filteredSessions[0]?.id ?? null)
   }, [filteredSessions, selectedSessionId])
 
@@ -185,6 +193,32 @@ export function SessionsView({
     setSearchResult(null)
     setSearchMeta(null)
     setSearchError(null)
+    setActiveSearchHit(null)
+    setExpandedSearchSessionIds(new Set())
+  }
+
+  function selectSession(sessionId: string) {
+    setSelectedSessionId(sessionId)
+    setActiveSearchHit(null)
+    const session = filteredSessions.find((item) => item.id === sessionId)
+    if (hasQuery && session?.searchMatches?.length) {
+      setExpandedSearchSessionIds((current) => new Set([...current, sessionId]))
+    }
+  }
+
+  function toggleSearchResults(sessionId: string) {
+    setExpandedSearchSessionIds((current) => {
+      const next = new Set(current)
+      if (next.has(sessionId)) next.delete(sessionId)
+      else next.add(sessionId)
+      return next
+    })
+  }
+
+  function openSearchHit(session: HermesSessionSummary, hit: HermesSessionSearchHit) {
+    setSelectedSessionId(session.id)
+    setActiveSearchHit({ ...hit, sessionId: session.id })
+    setExpandedSearchSessionIds((current) => new Set([...current, session.id]))
   }
 
   return (
@@ -266,33 +300,60 @@ export function SessionsView({
                 搜索失败：{searchError}
               </div>
             )}
-            {filteredSessions.map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                className={session.id === selectedSessionId ? 'session-row active' : 'session-row'}
-                onClick={() => setSelectedSessionId(session.id)}
-              >
-                <span className="session-row-icon">
-                  <MessageSquareText size={16} />
-                </span>
-                <span className="session-row-body">
-                  <strong>{session.title}</strong>
-                  <span>{session.preview ?? '暂无消息预览'}</span>
-                  {session.searchMatches?.[0] && (
-                    <span className="session-row-match">
-                      命中：{session.searchMatches[0].snippet}
+            {filteredSessions.map((session) => {
+              const searchMatches = session.searchMatches ?? []
+              const expanded = expandedSearchSessionIds.has(session.id)
+              return (
+                <div key={session.id} className={session.id === selectedSessionId ? 'session-list-entry active' : 'session-list-entry'}>
+                  <button
+                    type="button"
+                    className={session.id === selectedSessionId ? 'session-row active' : 'session-row'}
+                    onClick={() => selectSession(session.id)}
+                  >
+                    <span className="session-row-icon">
+                      <MessageSquareText size={16} />
                     </span>
+                    <span className="session-row-body">
+                      <strong>{session.title}</strong>
+                      <span>{session.preview ?? '暂无消息预览'}</span>
+                      {searchMatches[0] && (
+                        <span className="session-row-match">
+                          命中：{searchMatches[0].snippet}
+                        </span>
+                      )}
+                      <em>
+                        {formatRelativeDate(session.updatedAt)} · {session.messageCount} 条消息
+                        {session.model ? ` · ${session.model}` : ''}
+                        {session.platform ? ` · ${sourceLabel(session.platform)}` : ''}
+                        {session.linkedTaskTitle ? ` · 关联：${session.linkedTaskTitle}` : ''}
+                      </em>
+                    </span>
+                  </button>
+                  {hasQuery && searchMatches.length > 0 && (
+                    <div className="session-row-search-results">
+                      <button type="button" className="session-row-search-toggle" onClick={() => toggleSearchResults(session.id)}>
+                        {expanded ? '收起命中' : `展开 ${searchMatches.length} 条命中`}
+                      </button>
+                      {expanded && (
+                        <div className="session-row-hit-list">
+                          {searchMatches.map((hit) => (
+                            <button
+                              key={`${hit.messageId}:${hit.snippet}`}
+                              type="button"
+                              className={activeSearchHit?.sessionId === session.id && activeSearchHit.messageId === hit.messageId ? 'session-row-hit active' : 'session-row-hit'}
+                              onClick={() => openSearchHit(session, hit)}
+                            >
+                              <strong>{hit.source ? searchHitSourceLabel(hit.source) : '命中'} · {roleLabel(hit.role)}</strong>
+                              <span>{hit.snippet}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
-                  <em>
-                    {formatRelativeDate(session.updatedAt)} · {session.messageCount} 条消息
-                    {session.model ? ` · ${session.model}` : ''}
-                    {session.platform ? ` · ${sourceLabel(session.platform)}` : ''}
-                    {session.linkedTaskTitle ? ` · 关联：${session.linkedTaskTitle}` : ''}
-                  </em>
-                </span>
-              </button>
-            ))}
+                </div>
+              )
+            })}
 
             {!filteredSessions.length && (
               <div className="sessions-empty">
@@ -328,6 +389,8 @@ export function SessionsView({
               detail={detail}
               linkedTasks={linkedTasks}
               searchHits={selectedSummary?.searchMatches ?? []}
+              activeSearchHit={activeSearchHit?.sessionId === detail.session.id ? activeSearchHit : null}
+              searchQuery={query.trim()}
               onOpenTask={onOpenTask}
               onContinueSession={handleContinueSession}
               onRename={handleRenameSession}
@@ -353,6 +416,8 @@ function SessionDetail({
   detail,
   linkedTasks,
   searchHits,
+  activeSearchHit,
+  searchQuery,
   onOpenTask,
   onContinueSession,
   onRename,
@@ -361,6 +426,8 @@ function SessionDetail({
   detail: HermesSessionDetailResponse
   linkedTasks: Task[]
   searchHits: HermesSessionSearchHit[]
+  activeSearchHit: ActiveSearchHit | null
+  searchQuery: string
   onOpenTask: (task: Task) => void
   onContinueSession: (sessionId: string) => Promise<Task>
   onRename: (sessionId: string, title: string) => Promise<void>
@@ -383,10 +450,19 @@ function SessionDetail({
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [continueLoading, setContinueLoading] = useState(false)
   const [continueError, setContinueError] = useState<string | null>(null)
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isRenaming) setTitleDraft(session.title)
   }, [isRenaming, session.id, session.title])
+
+  useEffect(() => {
+    setHighlightedMessageId(null)
+  }, [session.id])
+
+  useEffect(() => {
+    if (activeSearchHit) focusSearchHit(activeSearchHit)
+  }, [activeSearchHit, detail.messages, searchQuery])
 
   async function submitRename() {
     const nextTitle = titleDraft.trim()
@@ -433,6 +509,18 @@ function SessionDetail({
     } finally {
       setContinueLoading(false)
     }
+  }
+
+  function focusSearchHit(hit: HermesSessionSearchHit) {
+    const targetId = findSearchHitMessageId(detail.messages, hit, searchQuery)
+    if (!targetId) return
+    setHighlightedMessageId(targetId)
+    window.requestAnimationFrame(() => {
+      document.getElementById(sessionMessageDomId(targetId))?.scrollIntoView({
+        block: 'center',
+        behavior: 'smooth'
+      })
+    })
   }
 
   return (
@@ -534,16 +622,26 @@ function SessionDetail({
         <div className="session-search-matches">
           <strong>搜索命中</strong>
           {searchHits.map((hit) => (
-            <span key={`${hit.messageId}:${hit.snippet}`}>
-              {hit.source ? `${searchHitSourceLabel(hit.source)} · ` : ''}{roleLabel(hit.role)}：{hit.snippet}
-            </span>
+            <button
+              key={`${hit.messageId}:${hit.snippet}`}
+              type="button"
+              className={highlightedMessageId && findSearchHitMessageId(detail.messages, hit, searchQuery) === highlightedMessageId ? 'active' : ''}
+              onClick={() => focusSearchHit(hit)}
+            >
+              <span>{hit.source ? `${searchHitSourceLabel(hit.source)} · ` : ''}{roleLabel(hit.role)}</span>
+              <em>{hit.snippet}</em>
+            </button>
           ))}
         </div>
       )}
 
       <div className="session-message-list">
         {detail.messages.map((message) => (
-          <article key={message.id} className={`session-message ${message.role}`}>
+          <article
+            key={message.id}
+            id={sessionMessageDomId(message.id)}
+            className={`session-message ${message.role}${highlightedMessageId === message.id ? ' matched' : ''}`}
+          >
             <header>
               <strong>{roleLabel(message.role)}</strong>
               {message.createdAt && <span>{formatDateTime(message.createdAt)}</span>}
@@ -606,6 +704,54 @@ function searchSourceStatusLabel(status: 'searched' | 'unavailable' | 'error', m
 function searchHitSourceLabel(source: NonNullable<HermesSessionSearchHit['source']>) {
   if (source === 'official-dashboard') return '官方索引'
   return '本地'
+}
+
+function findSearchHitMessageId(
+  messages: HermesSessionDetailResponse['messages'],
+  hit: HermesSessionSearchHit,
+  query: string
+) {
+  if (messages.some((message) => message.id === hit.messageId)) return hit.messageId
+
+  const candidates = messages.filter((message) => message.role === hit.role)
+  const fallbackCandidates = candidates.length ? candidates : messages
+  const snippetParts = normalizeSearchText(hit.snippet)
+    .split(/\s*\.\.\.\s*|\s*…\s*/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 6)
+    .sort((a, b) => b.length - a.length)
+
+  for (const part of snippetParts) {
+    const matched = fallbackCandidates.find((message) => searchTextForMessage(message).includes(part))
+    if (matched) return matched.id
+  }
+
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean)
+  if (terms.length) {
+    const matched = fallbackCandidates.find((message) => {
+      const text = searchTextForMessage(message)
+      return terms.every((term) => text.includes(term))
+    })
+    if (matched) return matched.id
+  }
+
+  return fallbackCandidates[0]?.id
+}
+
+function searchTextForMessage(message: HermesSessionDetailResponse['messages'][number]) {
+  return normalizeSearchText([message.content, message.reasoning].filter(Boolean).join(' '))
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .replace(/>>>|<<<|<mark>|<\/mark>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function sessionMessageDomId(messageId: string) {
+  return `session-message-${messageId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
 }
 
 function sourceLabel(value: string) {

@@ -133,6 +133,7 @@ async function main() {
       assert.equal(officialSearch.sessions[0].id, '20260503_010203_000001')
       assert.match(officialSearch.sessions[0].searchMatches?.[0]?.snippet ?? '', /官方全文命中/)
       assert.equal(officialSearch.sessions[0].searchMatches?.[0]?.source, 'official-dashboard')
+      assert.equal(officialSearch.sessions[0].searchMatches?.[0]?.messageId, '20260503_010203_000001:dashboard:2')
       assert.deepEqual(officialSearch.search?.sources, [
         {
           id: 'local-transcript',
@@ -198,6 +199,7 @@ async function handleFakeDashboard(req: IncomingMessage, res: ServerResponse<Inc
     sendJson(res, {
       results: [{
         session_id: '20260503_010203_000001',
+        message_id: 2,
         snippet: '这里是 Hermes 官方全文命中片段',
         role: 'assistant',
         source: 'cli',

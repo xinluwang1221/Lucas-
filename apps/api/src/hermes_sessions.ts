@@ -115,6 +115,7 @@ type OfficialDashboardSession = Record<string, unknown>
 type OfficialDashboardMessage = Record<string, unknown>
 type OfficialSearchHit = {
   sessionId: string
+  messageId?: string
   snippet: string
   role?: HermesSessionSearchHit['role']
 }
@@ -465,6 +466,7 @@ function extractOfficialSearchHits(body: unknown): OfficialSearchHit[] {
     if (!sessionId) return []
     return [{
       sessionId,
+      messageId: idValue(row.message_id) ?? idValue(row.messageId) ?? idValue(row.message_db_id),
       snippet: stringValue(row.snippet) ?? '',
       role: normalizeRole(row.role)
     }]
@@ -506,7 +508,7 @@ function mergeOfficialSessionList(
   for (const [sessionId, hits] of searchHits) {
     const existing = byId.get(sessionId)
     const matches = hits.map((hit, index) => ({
-      messageId: `${sessionId}:dashboard-search:${index}`,
+      messageId: hit.messageId ? `${sessionId}:dashboard:${hit.messageId}` : `${sessionId}:dashboard-search:${index}`,
       role: hit.role ?? 'assistant',
       snippet: hit.snippet,
       source: 'official-dashboard' as const
@@ -1174,6 +1176,12 @@ function stringValue(value: unknown) {
   if (typeof value !== 'string') return undefined
   const text = value.trim()
   return text || undefined
+}
+
+function idValue(value: unknown) {
+  if (typeof value === 'string') return stringValue(value)
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
 }
 
 function numberValue(value: unknown) {

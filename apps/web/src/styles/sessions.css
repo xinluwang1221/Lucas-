@@ -321,6 +321,18 @@
   overflow: auto;
 }
 
+.session-list-entry {
+  display: grid;
+  gap: 6px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+}
+
+.session-list-entry.active {
+  background: color-mix(in srgb, var(--accent-soft) 54%, transparent);
+}
+
 .session-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
@@ -385,6 +397,61 @@
   font-size: var(--text-caption);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.session-row-search-results {
+  display: grid;
+  gap: 6px;
+  padding: 0 8px 8px 52px;
+}
+
+.session-row-search-toggle {
+  justify-self: start;
+  min-height: 24px;
+  padding: 0;
+  color: var(--accent-strong);
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.session-row-hit-list {
+  display: grid;
+  gap: 6px;
+}
+
+.session-row-hit {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.session-row-hit:hover,
+.session-row-hit.active {
+  background: var(--moss-soft);
+  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.session-row-hit strong {
+  color: var(--accent-strong);
+  font-size: 11px;
+}
+
+.session-row-hit span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .session-detail-panel {
@@ -472,9 +539,33 @@
   font-size: var(--text-caption);
 }
 
-.session-search-matches span {
+.session-search-matches button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  text-align: left;
+}
+
+.session-search-matches button:hover,
+.session-search-matches button.active {
+  border-color: color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.session-search-matches button span {
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.session-search-matches button em {
   color: var(--ink);
   font-size: var(--text-caption);
+  font-style: normal;
   line-height: 1.6;
 }
 
@@ -536,6 +627,11 @@
 
 .session-message.assistant {
   background: var(--panel);
+}
+
+.session-message.matched {
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .session-message > header {
