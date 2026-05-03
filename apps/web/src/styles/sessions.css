@@ -280,6 +280,38 @@
   font-size: var(--text-caption);
 }
 
+.session-search-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.session-search-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.session-search-source.searched {
+  color: var(--accent-strong);
+  background: var(--moss-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.session-search-source.error,
+.session-search-source.unavailable {
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+}
+
 .sessions-list {
   display: grid;
   align-content: start;

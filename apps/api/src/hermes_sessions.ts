@@ -43,6 +43,20 @@ export type HermesSessionSearchHit = {
   messageId: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   snippet: string
+  source?: 'local-transcript' | 'official-dashboard'
+}
+
+export type HermesSessionSearchState = {
+  query: string
+  sources: HermesSessionSearchSource[]
+}
+
+export type HermesSessionSearchSource = {
+  id: 'local-transcript' | 'official-dashboard'
+  label: string
+  status: 'searched' | 'unavailable' | 'error'
+  matched: number
+  message?: string
 }
 
 export type HermesSessionMessage = {
@@ -82,6 +96,7 @@ export type HermesSessionsResponse = {
   sessions: HermesSessionSummary[]
   total: number
   query?: string
+  search?: HermesSessionSearchState
   updatedAt: string
 }
 
@@ -108,6 +123,8 @@ type OfficialDashboardSessionsResult = {
   sessions: OfficialDashboardSession[]
   total?: number
   searchHits: OfficialSearchHit[]
+  searchStatus: 'not-requested' | 'searched' | 'error'
+  searchError?: string
 }
 
 export function readHermesSessions(state: AppState, options: ReadHermesSessionsOptions = {}): HermesSessionsResponse {
@@ -116,11 +133,13 @@ export function readHermesSessions(state: AppState, options: ReadHermesSessionsO
   const titleOverrides = resolveHermesSessionTitleOverrides(options)
 
   if (!fs.existsSync(sessionsDir)) {
+    const query = normalizeQuery(options.query)
     return {
       sessionsDir,
       sessions: [],
       total: 0,
-      query: normalizeQuery(options.query),
+      query,
+      search: query ? buildSearchState(query, [localSearchSource('unavailable', 0, 'Hermes session 目录不存在。')]) : undefined,
       updatedAt: new Date().toISOString()
     }
   }
@@ -157,6 +176,7 @@ export function readHermesSessions(state: AppState, options: ReadHermesSessionsO
     sessions: allSessions.slice(0, safeLimit),
     total: allSessions.length,
     query,
+    search: query ? buildSearchState(query, [localSearchSource('searched', allSessions.length)]) : undefined,
     updatedAt: new Date().toISOString()
   }
 }
@@ -168,8 +188,15 @@ export async function readHermesSessionsWithOfficial(
   const local = readHermesSessions(state, options)
   if (options.includeOfficial === false) return local
 
-  const official = await readOfficialDashboardSessions(options).catch(() => null)
-  if (!official) return local
+  let official: OfficialDashboardSessionsResult
+  try {
+    official = await readOfficialDashboardSessions(options)
+  } catch (error) {
+    const query = normalizeQuery(options.query)
+    return query
+      ? withOfficialSearchSource(local, officialSearchSource('unavailable', 0, dashboardUnavailableMessage(error)))
+      : local
+  }
 
   return mergeOfficialSessionList(local, official, state, options)
 }
@@ -365,18 +392,36 @@ async function readOfficialDashboardSessions(
 
   const { sessions, total } = extractOfficialSessions(listResult.body)
   const query = normalizeQuery(options.query)
-  const searchHits = query ? await readOfficialDashboardSessionSearch(query, safeLimit, start).catch(() => []) : []
-  return { sessions, total, searchHits }
+  const search = query
+    ? await readOfficialDashboardSessionSearch(query, safeLimit, start)
+    : { hits: [], status: 'not-requested' as const }
+  return {
+    sessions,
+    total,
+    searchHits: search.hits,
+    searchStatus: search.status,
+    searchError: 'error' in search ? search.error : undefined
+  }
 }
 
 async function readOfficialDashboardSessionSearch(query: string, limit: number, start: boolean) {
-  const result = await requestHermesDashboardJson(
-    `/api/sessions/search?q=${encodeURIComponent(query)}&limit=${limit}`,
-    {},
-    { start }
-  )
-  if (!result.ok) return []
-  return extractOfficialSearchHits(result.body)
+  try {
+    const result = await requestHermesDashboardJson(
+      `/api/sessions/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+      {},
+      { start }
+    )
+    if (!result.ok) {
+      return {
+        hits: [],
+        status: 'error' as const,
+        error: `Hermes Dashboard search returned ${result.status}`
+      }
+    }
+    return { hits: extractOfficialSearchHits(result.body), status: 'searched' as const }
+  } catch (error) {
+    return { hits: [], status: 'error' as const, error: errorMessage(error) }
+  }
 }
 
 async function readOfficialDashboardSessionDetail(
@@ -463,7 +508,8 @@ function mergeOfficialSessionList(
     const matches = hits.map((hit, index) => ({
       messageId: `${sessionId}:dashboard-search:${index}`,
       role: hit.role ?? 'assistant',
-      snippet: hit.snippet
+      snippet: hit.snippet,
+      source: 'official-dashboard' as const
     }))
     if (existing) {
       byId.set(sessionId, {
@@ -487,6 +533,13 @@ function mergeOfficialSessionList(
     ...local,
     sessions,
     total: query ? sessions.length : Math.max(local.total, official.total ?? sessions.length, sessions.length),
+    search: query
+      ? mergeSearchState(local.search, officialSearchSource(
+        official.searchStatus === 'searched' ? 'searched' : 'error',
+        official.searchHits.length,
+        official.searchError
+      ))
+      : local.search,
     updatedAt: new Date().toISOString()
   }
 }
@@ -595,6 +648,77 @@ function mergeHermesSessionSummary(
     isActive: official.isActive ?? local.isActive,
     searchMatches: mergeSearchMatches(local.searchMatches, official.searchMatches)
   }
+}
+
+function buildSearchState(query: string, sources: HermesSessionSearchSource[]): HermesSessionSearchState {
+  return {
+    query,
+    sources: mergeSearchSources([], sources)
+  }
+}
+
+function mergeSearchState(
+  current: HermesSessionSearchState | undefined,
+  nextSource: HermesSessionSearchSource
+): HermesSessionSearchState {
+  return {
+    query: current?.query ?? '',
+    sources: mergeSearchSources(current?.sources ?? [], [nextSource])
+  }
+}
+
+function withOfficialSearchSource(
+  response: HermesSessionsResponse,
+  source: HermesSessionSearchSource
+): HermesSessionsResponse {
+  if (!response.query) return response
+  return {
+    ...response,
+    search: mergeSearchState(response.search ?? buildSearchState(response.query, []), source)
+  }
+}
+
+function mergeSearchSources(
+  current: HermesSessionSearchSource[],
+  next: HermesSessionSearchSource[]
+) {
+  const byId = new Map<string, HermesSessionSearchSource>()
+  for (const source of [...current, ...next]) byId.set(source.id, source)
+  return [...byId.values()]
+}
+
+function localSearchSource(
+  status: HermesSessionSearchSource['status'],
+  matched: number,
+  message?: string
+): HermesSessionSearchSource {
+  return {
+    id: 'local-transcript',
+    label: '本地 transcript',
+    status,
+    matched,
+    ...(message ? { message } : {})
+  }
+}
+
+function officialSearchSource(
+  status: HermesSessionSearchSource['status'],
+  matched: number,
+  message?: string
+): HermesSessionSearchSource {
+  return {
+    id: 'official-dashboard',
+    label: 'Hermes 官方全文索引',
+    status,
+    matched,
+    ...(message ? { message } : {})
+  }
+}
+
+function dashboardUnavailableMessage(error: unknown) {
+  const message = errorMessage(error)
+  if (/failed to fetch|fetch failed|connect|ECONNREFUSED|未启动/i.test(message)) return 'Hermes Dashboard 未运行，已使用本地 transcript 搜索。'
+  return message
 }
 
 function normalizeOfficialMessages(
@@ -952,7 +1076,8 @@ function findSessionSearchMatches(raw: HermesSessionRaw, sessionId: string, quer
       return [{
         messageId: message.id,
         role: message.role,
-        snippet: buildSearchSnippet(target, query)
+        snippet: buildSearchSnippet(target, query),
+        source: 'local-transcript' as const
       }]
     })
     .slice(0, 3)
@@ -1076,6 +1201,10 @@ function booleanValue(value: unknown) {
     if (['false', '0', 'no', 'off'].includes(normalized)) return false
   }
   return undefined
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function firstNonEmpty(...values: Array<string | undefined>) {

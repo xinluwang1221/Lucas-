@@ -1,6 +1,6 @@
 import { Bot, Check, Clock3, Database, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Trash2, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
+import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSearchState, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
 import { continueHermesSession, deleteHermesSession, getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
 
@@ -21,6 +21,7 @@ export function SessionsView({
   const [selectedPlatform, setSelectedPlatform] = useState('')
   const [selectedModel, setSelectedModel] = useState('')
   const [searchResult, setSearchResult] = useState<HermesSessionSummary[] | null>(null)
+  const [searchMeta, setSearchMeta] = useState<HermesSessionSearchState | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchRefreshKey, setSearchRefreshKey] = useState(0)
@@ -74,6 +75,7 @@ export function SessionsView({
     const keyword = query.trim()
     if (!keyword) {
       setSearchResult(null)
+      setSearchMeta(null)
       setSearchError(null)
       setSearchLoading(false)
       return undefined
@@ -84,11 +86,15 @@ export function SessionsView({
     setSearchError(null)
     getHermesSessions({ q: keyword, limit: 500 })
       .then((response) => {
-        if (alive) setSearchResult(response.sessions)
+        if (alive) {
+          setSearchResult(response.sessions)
+          setSearchMeta(response.search ?? null)
+        }
       })
       .catch((cause) => {
         if (alive) {
           setSearchResult([])
+          setSearchMeta(null)
           setSearchError(cause instanceof Error ? cause.message : String(cause))
         }
       })
@@ -177,6 +183,7 @@ export function SessionsView({
     setSelectedPlatform('')
     setSelectedModel('')
     setSearchResult(null)
+    setSearchMeta(null)
     setSearchError(null)
   }
 
@@ -240,8 +247,17 @@ export function SessionsView({
           <div className="sessions-list-head">
             <strong>{filteredSessions.length} 个会话</strong>
             <span>
-              {hasQuery ? (searchLoading ? '正在搜索本机 Hermes 消息全文' : '已搜索本机 Hermes 消息全文') : '来自本机 Hermes session 存储'}
+              {hasQuery ? searchStatusText(searchMeta, searchLoading) : '来自本机 Hermes session 存储'}
             </span>
+            {hasQuery && searchMeta?.sources.length ? (
+              <div className="session-search-sources">
+                {searchMeta.sources.map((source) => (
+                  <span key={source.id} className={`session-search-source ${source.status}`} title={source.message}>
+                    {source.label} · {searchSourceStatusLabel(source.status, source.matched)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="sessions-list">
@@ -519,7 +535,7 @@ function SessionDetail({
           <strong>搜索命中</strong>
           {searchHits.map((hit) => (
             <span key={`${hit.messageId}:${hit.snippet}`}>
-              {roleLabel(hit.role)}：{hit.snippet}
+              {hit.source ? `${searchHitSourceLabel(hit.source)} · ` : ''}{roleLabel(hit.role)}：{hit.snippet}
             </span>
           ))}
         </div>
@@ -569,6 +585,27 @@ function roleLabel(role: string) {
   if (role === 'assistant') return 'Hermes'
   if (role === 'tool') return '工具'
   return '系统'
+}
+
+function searchStatusText(search: HermesSessionSearchState | null, loading: boolean) {
+  if (loading) return '正在搜索 Hermes 会话全文'
+  if (!search?.sources.length) return '已搜索 Hermes 会话全文'
+  const searched = search.sources.filter((source) => source.status === 'searched')
+  const matched = searched.reduce((sum, source) => sum + source.matched, 0)
+  const hasOfficial = searched.some((source) => source.id === 'official-dashboard')
+  const sourceText = hasOfficial ? '本地与官方索引' : '本地 transcript'
+  return `已搜索${sourceText} · ${matched} 个命中`
+}
+
+function searchSourceStatusLabel(status: 'searched' | 'unavailable' | 'error', matched: number) {
+  if (status === 'searched') return `${matched} 个命中`
+  if (status === 'unavailable') return '未运行'
+  return '不可用'
+}
+
+function searchHitSourceLabel(source: NonNullable<HermesSessionSearchHit['source']>) {
+  if (source === 'official-dashboard') return '官方索引'
+  return '本地'
 }
 
 function sourceLabel(value: string) {

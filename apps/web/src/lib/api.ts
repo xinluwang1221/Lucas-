@@ -370,6 +370,20 @@ export type HermesSessionSearchHit = {
   messageId: string
   role: 'user' | 'assistant' | 'system' | 'tool'
   snippet: string
+  source?: 'local-transcript' | 'official-dashboard'
+}
+
+export type HermesSessionSearchState = {
+  query: string
+  sources: HermesSessionSearchSource[]
+}
+
+export type HermesSessionSearchSource = {
+  id: 'local-transcript' | 'official-dashboard'
+  label: string
+  status: 'searched' | 'unavailable' | 'error'
+  matched: number
+  message?: string
 }
 
 export type HermesSessionsResponse = {
@@ -377,6 +391,7 @@ export type HermesSessionsResponse = {
   sessions: HermesSessionSummary[]
   total: number
   query?: string
+  search?: HermesSessionSearchState
   updatedAt: string
 }
 

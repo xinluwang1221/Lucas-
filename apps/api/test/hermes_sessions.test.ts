@@ -84,7 +84,14 @@ async function main() {
     assert.equal(fullTextFiltered.sessions.length, 1)
     assert.equal(fullTextFiltered.sessions[0].id, '20260503_010203_000001')
     assert.equal(fullTextFiltered.sessions[0].searchMatches?.length, 1)
+    assert.equal(fullTextFiltered.sessions[0].searchMatches?.[0]?.source, 'local-transcript')
     assert.match(fullTextFiltered.sessions[0].searchMatches?.[0]?.snippet ?? '', /映射 Cowork/)
+    assert.deepEqual(fullTextFiltered.search?.sources, [{
+      id: 'local-transcript',
+      label: '本地 transcript',
+      status: 'searched',
+      matched: 1
+    }])
 
     const detail = readHermesSessionDetail(state, 'session_20260503_010203_000001.json', { sessionsDir, titleOverrides })
     assert.ok(detail)
@@ -125,6 +132,21 @@ async function main() {
       assert.equal(officialSearch.sessions.length, 1)
       assert.equal(officialSearch.sessions[0].id, '20260503_010203_000001')
       assert.match(officialSearch.sessions[0].searchMatches?.[0]?.snippet ?? '', /官方全文命中/)
+      assert.equal(officialSearch.sessions[0].searchMatches?.[0]?.source, 'official-dashboard')
+      assert.deepEqual(officialSearch.search?.sources, [
+        {
+          id: 'local-transcript',
+          label: '本地 transcript',
+          status: 'searched',
+          matched: 0
+        },
+        {
+          id: 'official-dashboard',
+          label: 'Hermes 官方全文索引',
+          status: 'searched',
+          matched: 1
+        }
+      ])
 
       const officialDetail = await readHermesSessionDetailWithOfficial(state, '20260503_010203_000001', { sessionsDir, titleOverrides })
       assert.ok(officialDetail)
