@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { execFile, execFileSync } from 'node:child_process'
 import { promisify } from 'node:util'
-import { hermesAgentDir, hermesPythonBin } from './paths.js'
+import { dataDir, hermesAgentDir, hermesPythonBin } from './paths.js'
 import type { AppState, Task } from './types.js'
 
 const execFileAsync = promisify(execFile)
@@ -54,6 +54,15 @@ export type RenameHermesSessionResult = {
   sessionId: string
   title: string
   detail: HermesSessionDetail
+  updatedAt: string
+}
+
+export type DeleteHermesSessionResult = {
+  sessionId: string
+  deleted: true
+  backupPath?: string
+  transcriptFilesDeleted: number
+  databaseDeleted: boolean
   updatedAt: string
 }
 
@@ -181,6 +190,33 @@ export async function renameHermesSession(
     sessionId: payload.sessionId,
     title: payload.title,
     detail,
+    updatedAt: new Date().toISOString()
+  }
+}
+
+export async function deleteHermesSession(
+  sessionId: string,
+  options: ReadHermesSessionsOptions = {}
+): Promise<DeleteHermesSessionResult> {
+  const sessionsDir = resolveHermesSessionsDir(options.sessionsDir)
+  const target = findHermesSessionFile(sessionsDir, sessionId)
+  if (!target) throw new Error('Hermes session not found')
+
+  const payload = await runHermesSessionDelete(
+    normalizeSessionId(sessionId),
+    sessionsDir,
+    options.hermesHome
+  )
+  if (!payload.ok || !payload.sessionId) {
+    throw new Error(payload.error || 'Hermes session delete failed')
+  }
+
+  return {
+    sessionId: payload.sessionId,
+    deleted: true,
+    backupPath: payload.backupPath,
+    transcriptFilesDeleted: payload.transcriptFilesDeleted ?? 0,
+    databaseDeleted: Boolean(payload.databaseDeleted),
     updatedAt: new Date().toISOString()
   }
 }
@@ -347,6 +383,133 @@ except Exception as exc:
   }
 }
 
+async function runHermesSessionDelete(
+  sessionId: string,
+  sessionsDir: string,
+  hermesHome = resolveHermesHome()
+) {
+  const backupRoot = path.join(dataDir, 'backups', 'hermes-sessions')
+  const script = `
+import json
+import shutil
+import sys
+import time
+from pathlib import Path
+
+hermes_agent_dir = sys.argv[1]
+session_id = sys.argv[2]
+sessions_dir = Path(sys.argv[3])
+backup_root = Path(sys.argv[4])
+
+if hermes_agent_dir not in sys.path:
+    sys.path.insert(0, hermes_agent_dir)
+
+def row_to_dict(row):
+    if row is None:
+        return None
+    return {key: row[key] for key in row.keys()}
+
+def transcript_candidates(target_id):
+    candidates = [
+        sessions_dir / f"{target_id}.json",
+        sessions_dir / f"{target_id}.jsonl",
+        sessions_dir / f"session_{target_id}.json",
+        sessions_dir / f"session_{target_id}.jsonl",
+    ]
+    try:
+        candidates.extend(sessions_dir.glob(f"request_dump_{target_id}_*.json"))
+        candidates.extend(sessions_dir.glob(f"request_dump_session_{target_id}_*.json"))
+    except OSError:
+        pass
+    seen = set()
+    unique = []
+    for candidate in candidates:
+        text = str(candidate)
+        if text in seen:
+            continue
+        seen.add(text)
+        unique.append(candidate)
+    return unique
+
+try:
+    from hermes_state import SessionDB
+    db = SessionDB()
+    try:
+        resolved_session_id = db.resolve_session_id(session_id) or session_id
+        session_row = row_to_dict(db._conn.execute(
+            "select * from sessions where id = ?",
+            (resolved_session_id,),
+        ).fetchone())
+        message_rows = [
+            row_to_dict(row)
+            for row in db._conn.execute(
+                "select * from messages where session_id = ? order by id",
+                (resolved_session_id,),
+            ).fetchall()
+        ]
+        files = [p for p in transcript_candidates(resolved_session_id) if p.exists()]
+        if not session_row and not files:
+            print(json.dumps({"ok": False, "error": "Session not found"}, ensure_ascii=False))
+            raise SystemExit(1)
+
+        safe_session_id = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in resolved_session_id)
+        backup_dir = backup_root / f"{int(time.time())}_{safe_session_id}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        (backup_dir / "session-db-export.json").write_text(json.dumps({
+            "session": session_row,
+            "messages": message_rows,
+            "exportedAt": time.time(),
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        backed_up_files = []
+        for source in files:
+            destination = backup_dir / source.name
+            shutil.copy2(source, destination)
+            backed_up_files.append(str(destination))
+
+        database_deleted = False
+        if session_row:
+            database_deleted = bool(db.delete_session(resolved_session_id, sessions_dir=sessions_dir))
+
+        transcript_deleted = 0
+        for candidate in transcript_candidates(resolved_session_id):
+            try:
+                if candidate.exists():
+                    candidate.unlink()
+                    transcript_deleted += 1
+            except OSError:
+                pass
+
+        print(json.dumps({
+            "ok": bool(database_deleted or transcript_deleted or backed_up_files),
+            "sessionId": resolved_session_id,
+            "backupPath": str(backup_dir),
+            "databaseDeleted": database_deleted,
+            "transcriptFilesDeleted": transcript_deleted,
+        }, ensure_ascii=False))
+    finally:
+        db.close()
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False))
+    raise SystemExit(1)
+`.trim()
+
+  try {
+    const { stdout } = await execFileAsync(hermesPythonBin, ['-c', script, hermesAgentDir, sessionId, sessionsDir, backupRoot], {
+      cwd: hermesAgentDir,
+      env: buildHermesPythonEnv(hermesHome),
+      timeout: 10000,
+      maxBuffer: 1024 * 1024
+    })
+    return parseHermesDeletePayload(stdout)
+  } catch (error) {
+    const stdout = isRecord(error) ? stringValue(error.stdout) : undefined
+    const parsed = stdout ? parseHermesDeletePayload(stdout) : undefined
+    if (parsed?.error) throw new Error(parsed.error)
+    throw error
+  }
+}
+
 function parseHermesRenamePayload(stdout: string) {
   const lines = stdout.trim().split(/\n/).filter(Boolean)
   const lastLine = lines[lines.length - 1] ?? '{}'
@@ -355,6 +518,20 @@ function parseHermesRenamePayload(stdout: string) {
     error?: string
     sessionId?: string
     title?: string
+  }
+  return parsed
+}
+
+function parseHermesDeletePayload(stdout: string) {
+  const lines = stdout.trim().split(/\n/).filter(Boolean)
+  const lastLine = lines[lines.length - 1] ?? '{}'
+  const parsed = JSON.parse(lastLine) as {
+    ok?: boolean
+    error?: string
+    sessionId?: string
+    backupPath?: string
+    databaseDeleted?: boolean
+    transcriptFilesDeleted?: number
   }
   return parsed
 }

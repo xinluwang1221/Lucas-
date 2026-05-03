@@ -6,6 +6,7 @@ import type {
   HermesRuntime,
   HermesSessionDetailResponse,
   HermesSessionsResponse,
+  DeleteHermesSessionResponse,
   RenameHermesSessionResponse,
   HermesUpdateStatus
 } from '../../lib/api'
@@ -51,5 +52,11 @@ export async function renameHermesSession(sessionId: string, title: string): Pro
     method: 'PATCH',
     headers: jsonHeaders,
     body: JSON.stringify({ title })
+  })
+}
+
+export async function deleteHermesSession(sessionId: string): Promise<DeleteHermesSessionResponse> {
+  return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE'
   })
 }

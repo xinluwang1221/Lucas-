@@ -1,8 +1,8 @@
-import { Bot, Check, Clock3, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Wrench, X } from 'lucide-react'
+import { Bot, Check, Clock3, Filter, Link2, Loader2, MessageSquareText, Pencil, RefreshCw, Search, Trash2, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
-import { getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
+import { deleteHermesSession, getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
 
 export function SessionsView({
   sessions,
@@ -26,9 +26,13 @@ export function SessionsView({
   const [detail, setDetail] = useState<HermesSessionDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [deletedSessionIds, setDeletedSessionIds] = useState<Set<string>>(() => new Set())
 
   const hasQuery = Boolean(query.trim())
-  const baseSessions = hasQuery ? (searchResult ?? []) : sessions
+  const baseSessions = useMemo(
+    () => (hasQuery ? (searchResult ?? []) : sessions).filter((session) => !deletedSessionIds.has(session.id)),
+    [deletedSessionIds, hasQuery, searchResult, sessions]
+  )
 
   const platformOptions = useMemo(
     () => uniqueOptions(sessions.map((session) => session.platform).filter(Boolean) as string[]),
@@ -54,8 +58,8 @@ export function SessionsView({
   )
 
   const selectedSummary = useMemo(
-    () => filteredSessions.find((session) => session.id === selectedSessionId) ?? sessions.find((session) => session.id === selectedSessionId) ?? null,
-    [filteredSessions, selectedSessionId, sessions]
+    () => filteredSessions.find((session) => session.id === selectedSessionId) ?? sessions.find((session) => session.id === selectedSessionId && !deletedSessionIds.has(session.id)) ?? null,
+    [deletedSessionIds, filteredSessions, selectedSessionId, sessions]
   )
 
   const linkedTasks = useMemo(() => {
@@ -143,6 +147,17 @@ export function SessionsView({
       ? current.map((session) => session.id === sessionId ? result.detail.session : session)
       : current
     )
+    setSearchRefreshKey((value) => value + 1)
+    onRefresh()
+  }
+
+  async function handleDeleteSession(sessionId: string) {
+    await deleteHermesSession(sessionId)
+    setDeletedSessionIds((current) => new Set([...current, sessionId]))
+    setSearchResult((current) => current ? current.filter((session) => session.id !== sessionId) : current)
+    const nextSession = filteredSessions.find((session) => session.id !== sessionId)
+    setDetail(null)
+    setSelectedSessionId(nextSession?.id ?? null)
     setSearchRefreshKey((value) => value + 1)
     onRefresh()
   }
@@ -288,6 +303,7 @@ export function SessionsView({
               searchHits={selectedSummary?.searchMatches ?? []}
               onOpenTask={onOpenTask}
               onRename={handleRenameSession}
+              onDelete={handleDeleteSession}
             />
           ) : null}
         </section>
@@ -310,13 +326,15 @@ function SessionDetail({
   linkedTasks,
   searchHits,
   onOpenTask,
-  onRename
+  onRename,
+  onDelete
 }: {
   detail: HermesSessionDetailResponse
   linkedTasks: Task[]
   searchHits: HermesSessionSearchHit[]
   onOpenTask: (task: Task) => void
   onRename: (sessionId: string, title: string) => Promise<void>
+  onDelete: (sessionId: string) => Promise<void>
 }) {
   const session = detail.session
   const toolText = session.tools.length ? session.tools.join('、') : '暂无工具记录'
@@ -324,6 +342,9 @@ function SessionDetail({
   const [titleDraft, setTitleDraft] = useState(session.title)
   const [renameLoading, setRenameLoading] = useState(false)
   const [renameError, setRenameError] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isRenaming) setTitleDraft(session.title)
@@ -351,6 +372,17 @@ function SessionDetail({
     setTitleDraft(session.title)
     setRenameError(null)
     setIsRenaming(false)
+  }
+
+  async function confirmDelete() {
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      await onDelete(session.id)
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : String(cause))
+      setDeleteLoading(false)
+    }
   }
 
   return (
@@ -391,13 +423,38 @@ function SessionDetail({
           {renameError && <p className="session-rename-error">{renameError}</p>}
           <span>{session.id}</span>
         </div>
-        {linkedTasks[0] && (
-          <button type="button" className="ghost-button" onClick={() => onOpenTask(linkedTasks[0])}>
-            <Link2 size={15} />
-            打开关联任务
+        <div className="session-detail-actions">
+          {linkedTasks[0] && (
+            <button type="button" className="ghost-button" onClick={() => onOpenTask(linkedTasks[0])}>
+              <Link2 size={15} />
+              打开关联任务
+            </button>
+          )}
+          <button type="button" className="ghost-button danger-lite" onClick={() => setDeleteConfirmOpen(true)}>
+            <Trash2 size={15} />
+            删除
           </button>
-        )}
+        </div>
       </header>
+
+      {deleteConfirmOpen && (
+        <div className="session-delete-confirm">
+          <div>
+            <strong>删除这个 Hermes 原生会话？</strong>
+            <p>会删除 Hermes 会话历史和本机 transcript 文件；不会删除工作区文件，也不会删除 Cowork 任务记录。删除前会保存一份本机备份。</p>
+            {deleteError && <span>{deleteError}</span>}
+          </div>
+          <div>
+            <button type="button" className="ghost-button" onClick={() => setDeleteConfirmOpen(false)} disabled={deleteLoading}>
+              取消
+            </button>
+            <button type="button" className="danger-button" onClick={confirmDelete} disabled={deleteLoading}>
+              {deleteLoading ? <Loader2 size={15} className="spin" /> : <Trash2 size={15} />}
+              确认删除
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="session-detail-grid">
         <InfoItem icon={<Bot size={15} />} label="模型" value={session.model ?? '未记录'} />

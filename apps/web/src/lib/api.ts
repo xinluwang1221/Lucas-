@@ -392,6 +392,15 @@ export type RenameHermesSessionResponse = {
   updatedAt: string
 }
 
+export type DeleteHermesSessionResponse = {
+  sessionId: string
+  deleted: true
+  backupPath?: string
+  transcriptFilesDeleted: number
+  databaseDeleted: boolean
+  updatedAt: string
+}
+
 export type HermesContextSnapshot = {
   sessionId?: string
   model?: string
