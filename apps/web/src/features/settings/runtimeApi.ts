@@ -1,5 +1,6 @@
 import { jsonHeaders, request } from '../../lib/http'
 import type {
+  ContinueHermesSessionResponse,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
   HermesDashboardAdapterStatus,
@@ -58,5 +59,16 @@ export async function renameHermesSession(sessionId: string, title: string): Pro
 export async function deleteHermesSession(sessionId: string): Promise<DeleteHermesSessionResponse> {
   return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`, {
     method: 'DELETE'
+  })
+}
+
+export async function continueHermesSession(
+  sessionId: string,
+  workspaceId?: string
+): Promise<ContinueHermesSessionResponse> {
+  return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}/continue`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ workspaceId })
   })
 }

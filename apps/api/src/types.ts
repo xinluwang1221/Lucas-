@@ -74,6 +74,7 @@ export type Task = {
   status: TaskStatus
   prompt: string
   hermesSessionId?: string
+  hermesSessionResumeMode?: 'explicit'
   error?: string
   stdout?: string
   stderr?: string

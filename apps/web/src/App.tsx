@@ -1017,10 +1017,12 @@ function App() {
           <SessionsView
             sessions={hermesSessions}
             tasks={state.tasks}
+            selectedWorkspaceId={selectedWorkspaceId}
             onRefresh={() => void refreshHermesSessions()}
             onOpenTask={(task) => {
               setSelectedWorkspaceId(task.workspaceId)
               setSelectedTaskId(task.id)
+              if (task.hermesSessionResumeMode === 'explicit') setSelectedModelId('auto')
               setViewMode('tasks')
             }}
           />

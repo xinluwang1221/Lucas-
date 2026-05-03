@@ -142,6 +142,7 @@ export type Task = {
   status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped'
   prompt: string
   hermesSessionId?: string
+  hermesSessionResumeMode?: 'explicit'
   error?: string
   stdout?: string
   stderr?: string
@@ -399,6 +400,12 @@ export type DeleteHermesSessionResponse = {
   transcriptFilesDeleted: number
   databaseDeleted: boolean
   updatedAt: string
+}
+
+export type ContinueHermesSessionResponse = {
+  ok: true
+  created: boolean
+  task: Task
 }
 
 export type HermesContextSnapshot = {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { readHermesSessionDetail, readHermesSessions } from '../src/hermes_sessions.js'
+import { normalizeHermesSessionId, readHermesSessionDetail, readHermesSessions } from '../src/hermes_sessions.js'
 import type { AppState } from '../src/types.js'
 
 async function main() {
@@ -60,6 +60,9 @@ async function main() {
   }
 
   try {
+    assert.equal(normalizeHermesSessionId('session_20260503_010203_000001.json'), '20260503_010203_000001')
+    assert.equal(normalizeHermesSessionId('20260503_010203_000001.json'), '20260503_010203_000001')
+
     const titleOverrides = new Map([['20260503_010203_000001', 'Hermes 官方标题']])
     const list = readHermesSessions(state, { sessionsDir, titleOverrides })
     assert.equal(list.sessions.length, 2)

@@ -631,8 +631,12 @@ function buildSearchSnippet(value: string, query: string) {
   return `${prefix}${normalized.slice(start, end)}${suffix}`
 }
 
-function normalizeSessionId(value: string) {
+export function normalizeHermesSessionId(value: string) {
   return value.replace(/\.json$/, '').replace(/^session_/, '')
+}
+
+function normalizeSessionId(value: string) {
+  return normalizeHermesSessionId(value)
 }
 
 function normalizeQuery(value: unknown) {

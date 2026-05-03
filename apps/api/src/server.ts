@@ -12,7 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { readHermesOfficialApiStatus } from './hermes_official_api.js'
-import { deleteHermesSession, readHermesSessionDetail, readHermesSessions, renameHermesSession } from './hermes_sessions.js'
+import { deleteHermesSession, normalizeHermesSessionId, readHermesSessionDetail, readHermesSessions, renameHermesSession, type HermesSessionDetail, type HermesSessionMessage } from './hermes_sessions.js'
 import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -38,7 +38,7 @@ import {
 } from './models.js'
 import { installUploadedSkill, listLocalSkills, listSkillFiles, listSkills, readSkillFile, toggleHermesDashboardSkill } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
-import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, MessageAnnotation, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
+import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, Message, MessageAnnotation, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -252,6 +252,23 @@ app.delete('/api/hermes/sessions/:sessionId', async (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     res.status(message.toLowerCase().includes('not found') ? 404 : 400).json({ error: message })
+  }
+})
+
+app.post('/api/hermes/sessions/:sessionId/continue', (req, res) => {
+  try {
+    const detail = readHermesSessionDetail(store.snapshot, req.params.sessionId)
+    if (!detail) {
+      res.status(404).json({ error: 'Hermes session not found' })
+      return
+    }
+
+    const workspaceId = typeof req.body?.workspaceId === 'string' ? req.body.workspaceId.trim() : undefined
+    const result = createCoworkTaskFromHermesSession(detail, workspaceId || undefined)
+    res.status(result.created ? 201 : 200).json({ ok: true, ...result })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    res.status(message.toLowerCase().includes('workspace not found') ? 404 : 400).json({ error: message })
   }
 })
 
@@ -1921,8 +1938,109 @@ function resolveRequestedModel(modelId?: string, modelConfigKey?: string, modelP
   return models.find((model) => model.id === requested) ?? selectedModelOption(settings)
 }
 
+function createCoworkTaskFromHermesSession(detail: HermesSessionDetail, requestedWorkspaceId?: string) {
+  const normalizedSessionId = normalizeHermesSessionId(detail.session.id)
+  const now = new Date().toISOString()
+  const existingTask = store.snapshot.tasks.find((task) => (
+    task.hermesSessionId ? normalizeHermesSessionId(task.hermesSessionId) === normalizedSessionId : false
+  ))
+
+  if (existingTask) {
+    store.update((state) => {
+      const task = state.tasks.find((item) => item.id === existingTask.id)
+      if (!task) return
+      task.hermesSessionResumeMode = 'explicit'
+      task.updatedAt = now
+    })
+    const updatedState = store.snapshot
+    const updatedTask = updatedState.tasks.find((task) => task.id === existingTask.id) ?? existingTask
+    return { created: false, task: enrichTask(updatedState, updatedTask) }
+  }
+
+  const state = store.snapshot
+  const workspace = resolveHermesSessionWorkspace(state, detail, requestedWorkspaceId)
+  const firstUserMessage = detail.messages.find((message) => message.role === 'user' && message.content.trim())
+  const prompt = firstUserMessage?.content.trim() || detail.session.title || `继续 Hermes 会话 ${normalizedSessionId}`
+  const taskId = crypto.randomUUID()
+  const task: Task = {
+    id: taskId,
+    workspaceId: workspace.id,
+    modelId: 'auto',
+    modelConfigKey: undefined,
+    skillNames: [],
+    title: (detail.session.title || prompt).slice(0, 64),
+    status: 'completed',
+    prompt,
+    hermesSessionId: normalizedSessionId,
+    hermesSessionResumeMode: 'explicit',
+    startedAt: detail.session.startedAt,
+    completedAt: detail.session.updatedAt,
+    createdAt: detail.session.startedAt || now,
+    updatedAt: now
+  }
+  const importedMessages = importHermesSessionMessages(taskId, detail.messages, detail.session.updatedAt || now)
+
+  store.update((state) => {
+    state.tasks.unshift(task)
+    state.messages.push(...importedMessages)
+  })
+
+  const updatedState = store.snapshot
+  const createdTask = updatedState.tasks.find((item) => item.id === taskId) ?? task
+  return { created: true, task: enrichTask(updatedState, createdTask) }
+}
+
+function resolveHermesSessionWorkspace(state: AppState, detail: HermesSessionDetail, requestedWorkspaceId?: string) {
+  if (requestedWorkspaceId) {
+    const requested = state.workspaces.find((workspace) => workspace.id === requestedWorkspaceId)
+    if (!requested) throw new Error('workspace not found')
+    return requested
+  }
+
+  for (const workspaceId of detail.session.linkedWorkspaceIds) {
+    const linked = state.workspaces.find((workspace) => workspace.id === workspaceId)
+    if (linked) return linked
+  }
+
+  const defaultWorkspace = state.workspaces.find((workspace) => workspace.id === 'default')
+  const fallbackWorkspace = defaultWorkspace ?? state.workspaces[0]
+  if (!fallbackWorkspace) throw new Error('workspace not found')
+  return fallbackWorkspace
+}
+
+function importHermesSessionMessages(
+  taskId: string,
+  messages: HermesSessionMessage[],
+  fallbackCreatedAt: string
+): Message[] {
+  const imported = messages.flatMap((message): Message[] => {
+    const content = message.content.trim() || message.reasoning?.trim() || ''
+    if (!content) return []
+    const role: Message['role'] =
+      message.role === 'user' || message.role === 'assistant' || message.role === 'system' ? message.role : 'system'
+    return [{
+      id: crypto.randomUUID(),
+      taskId,
+      role,
+      content: message.role === 'tool' ? `工具记录：\n${content}` : content,
+      createdAt: message.createdAt || fallbackCreatedAt
+    }]
+  })
+
+  if (imported.length) return imported
+
+  return [{
+    id: crypto.randomUUID(),
+    taskId,
+    role: 'system',
+    content: '已连接 Hermes 原生会话。你可以在这里继续提问，Cowork 会通过 Hermes gateway resume 原会话。',
+    createdAt: fallbackCreatedAt
+  }]
+}
+
 function shouldResumeHermesSession(task: Task, model: ModelOption, modelConfigKey: string) {
   if (!task.hermesSessionId) return false
+  if (task.hermesSessionResumeMode === 'explicit') return true
   if (task.modelConfigKey) return task.modelConfigKey === modelConfigKey
   if (model.id === 'auto') return false
   return (task.modelId || 'auto') === model.id && (task.provider || '') === (model.provider || '')

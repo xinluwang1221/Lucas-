@@ -2,16 +2,18 @@ import { Bot, Check, Clock3, Filter, Link2, Loader2, MessageSquareText, Pencil, 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
-import { deleteHermesSession, getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
+import { continueHermesSession, deleteHermesSession, getHermesSessionDetail, getHermesSessions, renameHermesSession } from '../settings/runtimeApi'
 
 export function SessionsView({
   sessions,
   tasks,
+  selectedWorkspaceId,
   onRefresh,
   onOpenTask
 }: {
   sessions: HermesSessionSummary[]
   tasks: Task[]
+  selectedWorkspaceId?: string
   onRefresh: () => void
   onOpenTask: (task: Task) => void
 }) {
@@ -162,6 +164,14 @@ export function SessionsView({
     onRefresh()
   }
 
+  async function handleContinueSession(sessionId: string) {
+    const result = await continueHermesSession(sessionId, selectedWorkspaceId)
+    onOpenTask(result.task)
+    setSearchRefreshKey((value) => value + 1)
+    onRefresh()
+    return result.task
+  }
+
   function clearFilters() {
     setQuery('')
     setSelectedPlatform('')
@@ -302,6 +312,7 @@ export function SessionsView({
               linkedTasks={linkedTasks}
               searchHits={selectedSummary?.searchMatches ?? []}
               onOpenTask={onOpenTask}
+              onContinueSession={handleContinueSession}
               onRename={handleRenameSession}
               onDelete={handleDeleteSession}
             />
@@ -326,6 +337,7 @@ function SessionDetail({
   linkedTasks,
   searchHits,
   onOpenTask,
+  onContinueSession,
   onRename,
   onDelete
 }: {
@@ -333,6 +345,7 @@ function SessionDetail({
   linkedTasks: Task[]
   searchHits: HermesSessionSearchHit[]
   onOpenTask: (task: Task) => void
+  onContinueSession: (sessionId: string) => Promise<Task>
   onRename: (sessionId: string, title: string) => Promise<void>
   onDelete: (sessionId: string) => Promise<void>
 }) {
@@ -345,6 +358,8 @@ function SessionDetail({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [continueLoading, setContinueLoading] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isRenaming) setTitleDraft(session.title)
@@ -382,6 +397,18 @@ function SessionDetail({
     } catch (cause) {
       setDeleteError(cause instanceof Error ? cause.message : String(cause))
       setDeleteLoading(false)
+    }
+  }
+
+  async function continueSession() {
+    setContinueLoading(true)
+    setContinueError(null)
+    try {
+      await onContinueSession(session.id)
+    } catch (cause) {
+      setContinueError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setContinueLoading(false)
     }
   }
 
@@ -424,18 +451,18 @@ function SessionDetail({
           <span>{session.id}</span>
         </div>
         <div className="session-detail-actions">
-          {linkedTasks[0] && (
-            <button type="button" className="ghost-button" onClick={() => onOpenTask(linkedTasks[0])}>
-              <Link2 size={15} />
-              打开关联任务
-            </button>
-          )}
+          <button type="button" className="ghost-button" onClick={continueSession} disabled={continueLoading}>
+            {continueLoading ? <Loader2 size={15} className="spin" /> : <Link2 size={15} />}
+            {linkedTasks[0] ? '打开关联任务' : '继续对话'}
+          </button>
           <button type="button" className="ghost-button danger-lite" onClick={() => setDeleteConfirmOpen(true)}>
             <Trash2 size={15} />
             删除
           </button>
         </div>
       </header>
+
+      {continueError && <div className="sessions-inline-error">继续会话失败：{continueError}</div>}
 
       {deleteConfirmOpen && (
         <div className="session-delete-confirm">

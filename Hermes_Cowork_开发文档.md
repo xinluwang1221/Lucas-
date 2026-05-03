@@ -607,7 +607,8 @@ flowchart TB
 - Session 全量前端化第二步已完成：`/api/hermes/sessions?q=` 已能扫描 Hermes 原生 session 消息全文并返回命中片段；前端“会话”页改为服务端全文搜索，并增加来源和模型筛选。
 - Session 全量前端化第三步已完成：Cowork 会话标题优先读取 Hermes `state.db.sessions.title`，前端详情页提供“重命名会话”，后端通过 Hermes 原生 `SessionDB.set_session_title()` 写入，不直接改 SQLite。验证点是重命名后 `/api/hermes/sessions` 和 `/api/hermes/sessions/:sessionId` 都显示同一 Hermes 标题。
 - Session 全量前端化第四步已完成：前端详情页提供“删除会话”确认卡，后端通过 Hermes 原生 `SessionDB.delete_session()` 删除数据库记录和消息，同时删除 `session_*.json` transcript 文件；删除前会把 DB 行、messages 和 transcript 文件备份到 `data/backups/hermes-sessions/`。删除不会碰工作区文件，也不会删除 Cowork 任务记录。
-- 当前 Session 缺口：官方 Dashboard session actions、继续对话的双向同步仍未完成；本机 Hermes 官方 Dashboard 已确认支持 `GET /api/sessions/search` 和 `DELETE /api/sessions/{session_id}`。写入类入口必须继续保留备份、确认弹窗和失败恢复。
+- Session 全量前端化第五步已完成：新增 `POST /api/hermes/sessions/:sessionId/continue`，能把 Hermes 原生 session 打开为 Cowork 任务；如果已有 Cowork 任务，则标记为显式 resume 并打开原任务；如果没有，则导入原生消息、创建本机任务并绑定 `hermesSessionId`。下一次用户追问会通过 gateway `session.resume` 继续同一个 Hermes session，前端打开这类任务时默认切回“使用 Hermes 默认模型”，避免误用旧模型覆盖原会话。
+- 当前 Session 缺口：官方 Dashboard session actions、全文搜索索引和更多 session 元数据仍未完成；本机 Hermes 官方 Dashboard 已确认支持 `GET /api/sessions/search` 和 `DELETE /api/sessions/{session_id}`。写入类入口必须继续保留备份、确认弹窗和失败恢复。
 
 阶段验收：
 
@@ -864,14 +865,14 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 - 维护运行中任务句柄 `HermesRuntimeHandle`，而不是直接假设每个任务都是一个子进程；停止任务时调用 handle 的 `stop()`。
 - 派生 `executionView`。
 - 提供工作区文件列表、预览、Finder 定位。
-- 提供 `/api/hermes/sessions`、`/api/hermes/sessions/:sessionId`、`PATCH /api/hermes/sessions/:sessionId` 和 `DELETE /api/hermes/sessions/:sessionId`：扫描 `~/.hermes/sessions/session_*.json`，读取 Hermes `state.db.sessions.title`，返回 session 元数据、模型、消息数、更新时间、工具、消息正文和 Cowork 任务关联；重命名和删除都通过 Hermes 原生 `SessionDB` 执行。
+- 提供 `/api/hermes/sessions`、`/api/hermes/sessions/:sessionId`、`PATCH /api/hermes/sessions/:sessionId`、`DELETE /api/hermes/sessions/:sessionId` 和 `POST /api/hermes/sessions/:sessionId/continue`：扫描 `~/.hermes/sessions/session_*.json`，读取 Hermes `state.db.sessions.title`，返回 session 元数据、模型、消息数、更新时间、工具、消息正文和 Cowork 任务关联；重命名和删除都通过 Hermes 原生 `SessionDB` 执行；继续对话会把原生 session 绑定或导入为 Cowork 任务，并标记为显式 resume。
 - 提供 `/api/tasks/:taskId/context` 和 `/api/tasks/:taskId/context/compress`：前者读取当前任务对应 Hermes session 的上下文用量，后者调用 Hermes 原生手动压缩能力并把新 session 状态写回任务事件。
 
 `apps/api/src/hermes_sessions.ts`
 
 - Hermes 原生会话 Adapter，已从 `server.ts` 抽离。
 - 负责解析 `~/.hermes/sessions/session_*.json`，读取 `~/.hermes/state.db.sessions.title`，归一化 session id、标题、预览、模型、provider、platform、base URL、工具、消息数、更新时间、消息正文和 Cowork 任务关联。
-- 对外提供 `readHermesSessions()`、`readHermesSessionDetail()`、`renameHermesSession()`、`deleteHermesSession()` 和 `resolveHermesSessionsDir()`；测试可通过 `sessionsDir` 参数或 `HERMES_COWORK_SESSIONS_DIR` 指向临时目录。
+- 对外提供 `readHermesSessions()`、`readHermesSessionDetail()`、`renameHermesSession()`、`deleteHermesSession()`、`normalizeHermesSessionId()` 和 `resolveHermesSessionsDir()`；测试可通过 `sessionsDir` 参数或 `HERMES_COWORK_SESSIONS_DIR` 指向临时目录。
 - 写入动作只能通过 Hermes 原生 `SessionDB`：重命名调用 `set_session_title()`；删除调用 `delete_session()`，并在删除前备份 DB 行、messages 和 transcript 文件。
 
 `apps/api/src/file_preview.ts`
@@ -1409,15 +1410,15 @@ HC_EVENT\t
 `apps/web/src/features/settings/runtimeApi.ts`
 
 - Hermes runtime / 更新 API service，已从 `apps/web/src/lib/api.ts` 抽离。
-- 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新、Hermes session 索引、session 详情、session 重命名和 session 删除。
+- 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新、Hermes session 索引、session 详情、session 重命名、session 删除和原生 session 继续对话。
 - 后续扩展“Kernel Manager 安装 / 固定内核版本锁定 / 补丁记录 / 回滚 / 多电脑迁移检查”时，先在这里确认 API 边界，再由 `useHermesRuntimeState.ts` 和 `HermesUpdatePanel.tsx` 消费。
 
 `apps/web/src/features/sessions/SessionsView.tsx`
 
 - Hermes 原生会话页面，已作为左侧“会话”入口接入。
-- 负责本机会话全文搜索、来源/模型筛选、会话列表、详情消息浏览、重命名、删除、模型/来源/工具摘要和 Cowork 关联任务跳转。
-- 只通过 `/api/hermes/sessions`、`/api/hermes/sessions/:sessionId`、`PATCH /api/hermes/sessions/:sessionId` 和 `DELETE /api/hermes/sessions/:sessionId` 消费后端归一化数据；不直接读取本机文件，不直接写 SQLite。
-- 后续补“继续对话双向同步”时，必须先扩展 `apps/api/src/hermes_sessions.ts` 或接入 Hermes 官方 Dashboard Sessions API，再让本页面消费。
+- 负责本机会话全文搜索、来源/模型筛选、会话列表、详情消息浏览、重命名、删除、模型/来源/工具摘要、Cowork 关联任务跳转和原生 session 继续对话。
+- 只通过 `/api/hermes/sessions`、`/api/hermes/sessions/:sessionId`、`PATCH /api/hermes/sessions/:sessionId`、`DELETE /api/hermes/sessions/:sessionId` 和 `POST /api/hermes/sessions/:sessionId/continue` 消费后端归一化数据；不直接读取本机文件，不直接写 SQLite。
+- 继续对话的规则：已有 Cowork 任务时打开并标记显式 resume；没有任务时由后端导入 Hermes 消息并创建 Cowork 任务。前端只负责打开返回的任务，不在页面里伪造会话状态。
 
 `apps/web/src/features/skills/SkillsView.tsx`
 
@@ -2089,7 +2090,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 优先级 1：
 
 - Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
-- Session 全量前端化：已完成只读列表、全文搜索、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名和原生会话删除；下一步补官方 session actions、全文搜索索引和继续对话双向同步。
+- Session 全量前端化：已完成只读列表、全文搜索、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除和从原生 session 继续对话；下一步补官方 session actions、全文搜索索引和更多 session 元数据。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
 - Logs / Analytics 用户化：只展示失败原因、工具耗时、模型用量、最近异常和下一步动作。
