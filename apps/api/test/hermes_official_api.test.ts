@@ -19,7 +19,23 @@ async function main() {
   assert.equal(caps.get('run_stop')?.available, true)
   assert.equal(caps.get('jobs_api')?.available, true)
   assert.equal(caps.get('dashboard_sessions')?.available, true)
+  assert.equal(caps.get('dashboard_session_search')?.available, true)
+  assert.equal(caps.get('dashboard_session_delete')?.available, true)
+  assert.equal(caps.get('dashboard_session_rename')?.available, false)
+  assert.equal(caps.get('dashboard_session_resume_rest')?.available, false)
+  assert.equal(caps.get('dashboard_session_export')?.available, false)
+  assert.equal(caps.get('tui_websocket_resume')?.available, true)
   assert.equal(caps.get('mcp_session_events')?.available, true)
+  const sessionActions = new Map(source.sessionActions.actions.map((action) => [action.id, action]))
+  assert.equal(sessionActions.get('list_detail_messages')?.officialStatus, 'available')
+  assert.equal(sessionActions.get('search')?.officialStatus, 'available')
+  assert.equal(sessionActions.get('delete')?.officialStatus, 'available')
+  assert.equal(sessionActions.get('delete')?.decision, 'keep_cowork_safe_write')
+  assert.equal(sessionActions.get('rename')?.officialStatus, 'missing_rest')
+  assert.equal(sessionActions.get('continue')?.officialStatus, 'missing_rest')
+  assert.equal(sessionActions.get('continue')?.decision, 'keep_cowork_gateway')
+  assert.match(sessionActions.get('continue')?.userMeaning || '', /HERMES_TUI_RESUME/)
+  assert.equal(sessionActions.get('export')?.decision, 'watch_upstream')
 
   const requests: Array<{ url: string; authorization?: string }> = []
   const server = http.createServer((req, res) => {
@@ -80,11 +96,15 @@ message.delta tool.started tool.completed reasoning.available
 `, 'utf8')
   fs.writeFileSync(path.join(agentDir, 'hermes_cli/web_server.py'), `
 @app.get("/api/sessions")
+@app.get("/api/sessions/search")
 @app.get("/api/sessions/{session_id}/messages")
+@app.delete("/api/sessions/{session_id}")
 @app.get("/api/logs")
 @app.get("/api/analytics/usage")
 @app.get("/api/skills")
 @app.get("/api/tools/toolsets")
+def _resolve_chat_argv(): pass
+HERMES_TUI_RESUME
 `, 'utf8')
   fs.writeFileSync(path.join(agentDir, 'mcp_serve.py'), 'events_poll events_wait permissions_respond', 'utf8')
 }

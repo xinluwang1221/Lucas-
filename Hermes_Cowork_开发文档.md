@@ -501,7 +501,7 @@ flowchart TB
 - 使用量分析：官方 `/api/analytics/usage` 可作为模型调用、会话和工具使用统计来源；Cowork 尚未做“本机使用报告”页面。
 - Dashboard 主题和插件：官方 `/api/dashboard/themes`、`/api/dashboard/plugins` 属于官方 UI 自身能力；Cowork 暂不需要直接前端化，除非未来支持管理 Hermes Dashboard 插件。
 - Gateway 重启与 Hermes 更新动作：官方有 gateway restart / update 类写入动作；Cowork 现有更新页有复测和自动更新守卫，但还未把官方写入接口作为主通道。
-- Action 状态和 Session 详情：官方可读取具体 action 状态、session 详情、messages 和删除 session；Cowork 目前只做了左侧会话与任务级继续对话，尚未把官方 session 管理完整前端化。
+- Action 状态和 Session 详情：官方可读取具体 action 状态、session 列表、搜索、详情、messages，并暴露 `DELETE /api/sessions/{session_id}`；Cowork 已完成列表、搜索、命中定位、详情、重命名、删除和继续对话。当前结论是：读取和搜索优先使用官方 Dashboard；删除虽然有官方 REST，但 Cowork 保留带备份和确认的安全删除链路；重命名、继续、导出暂未发现官方 Dashboard REST，继续由 Cowork adapter / gateway 承担。
 - Toolset 内部工具级策略：Cowork 已能显示每个 Hermes Toolset 下有哪些工具，并能启停整个 Toolset；但还没有做“只启用/禁用某个内置工具”的细粒度 UI。这个能力要等 Hermes 官方配置字段稳定后再做，避免 Cowork 自己发明一套不兼容的工具策略。
 
 判断标准：
@@ -611,7 +611,8 @@ flowchart TB
 - Session 全量前端化第六步已完成：`/api/hermes/sessions` 和 `/api/hermes/sessions/:sessionId` 会在不自动启动 Dashboard 的前提下，尝试读取 Hermes 官方 Dashboard `/api/sessions`、`/api/sessions/{id}`、`/api/sessions/{id}/messages` 和 `/api/sessions/search`，把 `source`、`is_active`、`tool_call_count`、token、`last_active`、`ended_at`、`end_reason`、compression lineage 等官方元数据合并进 Cowork 会话。Dashboard 不可用时继续回退本地 transcript。
 - Session 全量前端化第七步已完成：搜索响应新增 `search.sources`，前端会显示本地 transcript 和 Hermes 官方全文索引分别是否参与搜索、各自命中数量、Dashboard 未运行时的回退状态。搜索命中片段也会标注来自“本地”还是“官方索引”，避免用户误以为只搜了单一来源。
 - Session 全量前端化第八步已完成：搜索结果在左侧会话列表中可展开，点击某条命中会打开对应会话并滚动高亮到对应消息；右侧详情里的“搜索命中”也可点击定位。本地 transcript 命中使用本地消息 id 精确定位；官方 Dashboard 如果返回 `message_id`，Cowork 会映射到官方消息 id，否则按搜索片段和关键词在详情消息中兜底定位。
-- 当前 Session 缺口：更多 Dashboard 写入动作仍需评估。`DELETE /api/sessions/{session_id}` 已确认存在，但 Cowork 暂不直接调用，因为当前本地删除链路带备份、确认弹窗和失败恢复，更符合本机工作台的安全要求。
+- Session 全量前端化第九步已完成：`/api/hermes/official-api` 新增 `sessionActions` 决策表，明确官方 Dashboard Session action 覆盖边界。当前本机 Hermes 已暴露 session 读取、搜索、详情、messages 和 `DELETE /api/sessions/{session_id}`；未暴露 rename、resume、export 的 Dashboard REST。Cowork 因此继续保留：`SessionDB.set_session_title()` 重命名、带备份的本机删除、gateway `session.resume` 继续对话。验证点是 `npm run test:hermes-official-api` 会检查这些 action 的官方状态和 Cowork 决策。
+- 当前 Session 缺口：更多 Dashboard 写入动作仍需随 Hermes upstream 观察。只有当官方 REST 同时覆盖用户确认、备份/回滚、错误恢复和前端可解释状态时，Cowork 才考虑替换现有安全链路。
 
 阶段验收：
 
@@ -2093,7 +2094,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 优先级 1：
 
 - Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
-- Session 全量前端化：已完成只读列表、全文搜索、搜索来源覆盖、搜索命中展开与消息定位、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除和从原生 session 继续对话；下一步补官方 session actions、官方写入链路和更多 session 元数据。
+- Session 全量前端化：已完成只读列表、全文搜索、搜索来源覆盖、搜索命中展开与消息定位、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除、从原生 session 继续对话，以及官方 session actions 探测。下一步转向 Logs / Analytics 用户化和更多 session 元数据展示，不再临时增加没有后端真源的 session 按钮。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
 - Logs / Analytics 用户化：只展示失败原因、工具耗时、模型用量、最近异常和下一步动作。
