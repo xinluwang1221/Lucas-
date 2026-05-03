@@ -190,6 +190,59 @@
   font-weight: 800;
 }
 
+.runtime-dashboard-card {
+  display: grid;
+  gap: 14px;
+  padding: 15px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.runtime-dashboard-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.runtime-dashboard-head strong,
+.runtime-dashboard-head p {
+  display: block;
+}
+
+.runtime-dashboard-head strong {
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 760;
+}
+
+.runtime-dashboard-head p {
+  max-width: 560px;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.runtime-dashboard-error {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+.runtime-dashboard-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .settings-section-copy {
   margin: -2px 0 12px;
   color: var(--ink-soft);

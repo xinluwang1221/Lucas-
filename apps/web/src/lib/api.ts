@@ -301,6 +301,25 @@ export type HermesRuntime = {
   versionText: string
   statusText: string
   parsed: Record<string, Record<string, string>>
+  dashboard?: HermesDashboardAdapterStatus
+  updatedAt: string
+}
+
+export type HermesDashboardAdapterStatus = {
+  available: boolean
+  running: boolean
+  baseUrl: string
+  protectedApiReady: boolean
+  startedByCowork: boolean
+  pid?: number
+  version?: string
+  releaseDate?: string
+  configVersion?: number
+  latestConfigVersion?: number
+  gatewayRunning?: boolean
+  gatewayState?: string
+  activeSessions?: number
+  error?: string
   updatedAt: string
 }
 

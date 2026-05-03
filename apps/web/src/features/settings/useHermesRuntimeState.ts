@@ -4,7 +4,8 @@ import {
   getHermesSessions,
   getHermesUpdateStatus,
   runHermesAutoUpdate,
-  runHermesCompatibilityTest
+  runHermesCompatibilityTest,
+  startHermesDashboard
 } from './runtimeApi'
 import type {
   HermesAutoUpdateResult,
@@ -30,6 +31,8 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
   const [hermesAutoUpdating, setHermesAutoUpdating] = useState(false)
   const [hermesAutoUpdateError, setHermesAutoUpdateError] = useState<string | null>(null)
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
+  const [hermesDashboardStarting, setHermesDashboardStarting] = useState(false)
+  const [hermesDashboardError, setHermesDashboardError] = useState<string | null>(null)
 
   const refreshRuntime = useCallback(async () => {
     try {
@@ -92,6 +95,20 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
     }
   }, [])
 
+  const handleStartHermesDashboard = useCallback(async () => {
+    setHermesDashboardStarting(true)
+    setHermesDashboardError(null)
+    try {
+      const dashboard = await startHermesDashboard()
+      setRuntime((current) => current ? { ...current, dashboard, updatedAt: new Date().toISOString() } : current)
+      await refreshRuntime()
+    } catch (cause) {
+      setHermesDashboardError(errorMessage(cause))
+    } finally {
+      setHermesDashboardStarting(false)
+    }
+  }, [refreshRuntime])
+
   return {
     runtime,
     hermesUpdate,
@@ -103,11 +120,14 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
     hermesAutoUpdateResult,
     hermesAutoUpdating,
     hermesAutoUpdateError,
+    hermesDashboardStarting,
+    hermesDashboardError,
     hermesSessions,
     refreshRuntime,
     refreshHermesUpdateStatus,
     handleRunHermesCompatibilityTest,
     handleRunHermesAutoUpdate,
+    handleStartHermesDashboard,
     refreshHermesSessions
   }
 }

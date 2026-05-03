@@ -313,11 +313,14 @@ function App() {
     hermesAutoUpdateResult,
     hermesAutoUpdating,
     hermesAutoUpdateError,
+    hermesDashboardStarting,
+    hermesDashboardError,
     hermesSessions,
     refreshRuntime,
     refreshHermesUpdateStatus,
     handleRunHermesCompatibilityTest,
     handleRunHermesAutoUpdate,
+    handleStartHermesDashboard,
     refreshHermesSessions
   } = useHermesRuntimeState({ onRuntimeError: setError })
   const [mcpMarketplaceOpen, setMcpMarketplaceOpen] = useState(false)
@@ -1454,8 +1457,12 @@ function App() {
             mcpServeStatus={mcpServeStatus}
             mcpServeUpdating={mcpServeUpdating}
             mcpServeError={mcpServeError}
+            hermesDashboardStarting={hermesDashboardStarting}
+            hermesDashboardError={hermesDashboardError}
             onTabChange={setSettingsTab}
             onClose={() => setSettingsOpen(false)}
+            onRefreshRuntime={() => void refreshRuntime()}
+            onStartHermesDashboard={() => void handleStartHermesDashboard()}
             onRefreshHermesUpdate={() => void refreshHermesUpdateStatus()}
             onRunHermesCompatibilityTest={() => void handleRunHermesCompatibilityTest()}
             onRunHermesAutoUpdate={() => void handleRunHermesAutoUpdate()}

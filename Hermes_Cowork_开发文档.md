@@ -237,7 +237,7 @@ flowchart TB
 | Hermes 后端能力 | Cowork 用户入口 | Cowork Adapter / 代码边界 | 当前覆盖状态 | 漏开发风险检查点 |
 | --- | --- | --- | --- | --- |
 | 任务执行、继续对话、停止、流式事件 | 对话区、输入框、左侧会话、右侧工作区 | `/api/tasks`、`/api/tasks/:id/stream`、`hermes_runtime.ts`、`hermes_gateway.ts`、`useTaskStream.ts` | 已接入 gateway 优先、bridge 回退、SSE 同步和轮询兜底 | 用户气泡是否立即出现；运行中是否实时更新；停止是否回写 Hermes；继续对话是否使用同一 session |
-| 官方 Dashboard API、运行状态和只读后端真源 | 设置诊断、未来 Cron/Skill/Toolset 统一后端源 | `/api/hermes/dashboard`、`/api/hermes/dashboard/official/*`、`hermes_dashboard.ts` | 已新增 Dashboard adapter：可启动/探测 `hermes dashboard --no-open`、读取 session token、代理官方只读接口 | 不允许前端各自拼静态清单；写入类接口必须逐项评估 UI 和备份策略后再开放 |
+| 官方 Dashboard API、运行状态和只读后端真源 | 设置 > 运行环境、未来 Cron/Skill/Toolset 统一后端源 | `/api/hermes/dashboard`、`/api/hermes/dashboard/official/*`、`hermes_dashboard.ts`、`useHermesRuntimeState.ts` | 已新增 Dashboard adapter：可启动/探测 `hermes dashboard --no-open`、读取 session token、代理官方只读接口；设置页已展示官方后台状态并提供启动入口 | 不允许前端各自拼静态清单；写入类接口必须逐项评估 UI 和备份策略后再开放 |
 | Clarify / 澄清反问 | 对话区澄清卡、可选项按钮、自由输入框 | `/api/tasks/:id/clarify`、`ClarifyRequestCard.tsx`、`useTaskActions.ts`、`hermes_gateway.ts` | 已接入 gateway 事件、前端卡片和 fake gateway 链路测试；bridge fallback 无法继续澄清 | Hermes 返回 `clarify.request` 时必须弹卡片；回答后必须调用 `clarify.respond` 并继续原任务；不能降级成普通文字 |
 | 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
@@ -392,6 +392,7 @@ flowchart TB
 - Cowork 后端新增 `hermes_dashboard.ts`，负责启动或探测 `hermes dashboard --no-open`。
 - Hermes Dashboard 的受保护 API 需要本机会话 token；Cowork 后端从 Dashboard HTML 中读取 `window.__HERMES_SESSION_TOKEN__`，再用 `X-Hermes-Session-Token` 请求官方 API。
 - 第一阶段只代理只读接口：状态、Skills、Toolsets、Cron jobs、Sessions、Config、Env 状态和 Model info。写入类接口暂不开放。
+- 设置 > 运行环境已使用 Dashboard adapter 的真实状态：显示官方后台是否启动、官方 API 是否可读、Hermes 版本、Gateway 状态、配置版本和活动会话数，并提供“启动 Hermes 后台”入口。
 
 为什么这样做：
 
@@ -405,6 +406,16 @@ flowchart TB
 - 把 Skills 页从本机目录扫描逐步对齐官方 `/api/skills`，只在 Cowork 自定义上传 skill 时保留本地补充源。
 - 把 Connectors/Toolsets 逐步对齐官方 `/api/tools/toolsets`，避免 MCP、工具集和调度页三套来源不一致。
 - 写入类能力逐项开放：Cron create/update、Skill toggle、Config update 必须先补 UI、备份、错误恢复和测试。
+
+尚未前端化的 Hermes 官方后台能力：
+
+- Provider OAuth：官方有 Provider OAuth 的开始授权、提交、轮询和删除能力；Cowork 目前模型设置仍主要走 Key/Base URL 配置，尚未做“在前端完成授权”的流程。
+- 官方日志：官方 `/api/logs` 能读取后台日志；Cowork 目前只在错误卡片和少量调试区展示归一化错误，尚未做用户可理解的日志诊断页。
+- 原始配置查看与编辑：官方 `/api/config/raw` 能读取或更新 raw config；Cowork 目前只开放模型、MCP、Cron 等产品化配置，不直接暴露 raw config 编辑。
+- 使用量分析：官方 `/api/analytics/usage` 可作为模型调用、会话和工具使用统计来源；Cowork 尚未做“本机使用报告”页面。
+- Dashboard 主题和插件：官方 `/api/dashboard/themes`、`/api/dashboard/plugins` 属于官方 UI 自身能力；Cowork 暂不需要直接前端化，除非未来支持管理 Hermes Dashboard 插件。
+- Gateway 重启与 Hermes 更新动作：官方有 gateway restart / update 类写入动作；Cowork 现有更新页有复测和自动更新守卫，但还未把官方写入接口作为主通道。
+- Action 状态和 Session 详情：官方可读取具体 action 状态、session 详情、messages 和删除 session；Cowork 目前只做了左侧会话与任务级继续对话，尚未把官方 session 管理完整前端化。
 
 判断标准：
 
@@ -860,7 +871,7 @@ HC_EVENT\t
 - 文件预览布局稳定性已修正：右侧预览打开时会自动保证预览列的最小可用宽度，`app-shell`、中间工作区、右侧 inspector 和预览面板统一锁定在视口高度内滚动，避免外层页面和预览内层同时滚动导致出界、底部抖动或宽度跳动。
 - 右侧任务上下文：默认顺序固定为任务拆解、任务产出物、上下文与资源。任务拆解不能写死固定五步，只能展示产品级计划：少量、面向用户目标、能表达“先做什么、再做什么、交付什么”的步骤。Hermes `todo` 如果只是运行清单（例如读取文件、调用工具、检索资料、整理结果，或超过 6 步的操作流），必须放到对话区过程流，不进入任务拆解。Hermes 未暴露产品级拆解时，任务拆解显示空态，不能再从 thinking/status/tool/artifact/complete 事件推导假步骤。工具调用、网页、文件、Skill 归入“上下文与资源”或过程记录，不污染任务拆解。Plan、ReAct、Reflection、Result 只作为每步后面的中文小标签（计划/行动/校验/结果），不能在顶部铺成静态模式条；表情化 thinking、后台心跳、`The user is`、`reasoning.available`、`Hermes 已返回最终结果` 等原始事件不能作为用户可见步骤或说明。
 - 左下角本机偏好菜单：点击 Lucas 弹出本机菜单，可切换语言展示项、循环切换主题、进入设置弹窗；点击菜单外空白区域会关闭。
-- 设置弹窗：包含本机、通用、外观、MCP、模型、对话流、外部应用授权、云端运行环境、命令、规则、关于等分类；外观页是主题后台，负责主题模式、强调色、浅色背景/前景、字体、字号、半透明侧栏和字体平滑；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
+- 设置弹窗：包含本机、通用、外观、MCP、模型、对话流、外部应用授权、运行环境、命令、规则、关于等分类；外观页是主题后台，负责主题模式、强调色、浅色背景/前景、字体、字号、半透明侧栏和字体平滑；运行环境页展示 Cowork 本机后端和 Hermes 官方后台状态；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
 - 关于页新增 Hermes 后台更新区：读取本机 Hermes 版本、GitHub 最新 tag、Cowork 已验证基线、工作树状态和基础检查结果，先做升级风险判断；页面默认只展示升级结论、检查更新、运行复测和自动更新入口，版本路径、基础检查、升级建议、复测明细和命令输出全部收进折叠诊断区，避免后台信息铺满主界面。静态可见信息必须是用户可决策信息：当前无需更新且复测通过时显示“当前很好，无需操作”，本机仓库改动等维护信息只放在诊断详情；旧自动更新失败结果如果被新的成功复测覆盖，不再继续挂红色卡片。
 - 设置弹窗已补响应式与内部滚动规则：桌面下固定弹窗高度、面板独立滚动；窄窗口下侧栏折为顶部网格，模型/MCP/定时任务等卡片栅格自动降列，避免内容撑出屏幕。
 - 界面语言规范：Hermes Cowork 的按钮、标题、状态、表头、空状态和说明文案默认使用简体中文；GitHub、MCP、Hermes、OpenAI 等品牌/协议名、配置键、命令行片段和第三方返回内容可保留原文。
@@ -1448,7 +1459,7 @@ POST /api/models/fallbacks
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区规划已回正：授权目录必须作为左侧目录树存在，工作区下展示该目录内的工作会话；点击工作区进入文件管理页，跨工作区搜索和归档仍放在搜索/高级页面。
 - 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：读取 `~/.hermes/cron/jobs.json`、gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 `BackgroundServiceStatus` 或 `HermesMcpRecommendations`，避免把后台服务和 MCP 市场推荐误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
-- 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`。后续 Cron、Skills、Toolsets 的用户入口应逐步消费这个官方结构化真源，减少配置文件和前端静态清单漂移。
+- 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`；设置 > 运行环境已前端化官方后台状态和启动入口。后续 Cron、Skills、Toolsets 的用户入口应逐步消费这个官方结构化真源，减少配置文件和前端静态清单漂移。
 - 账户菜单与设置弹窗：左下角 Lucas 可展开菜单，并打开多分类设置页；通用/MCP/模型/对话流/规则已具备截图中的主要行控件、开关、选择器、空状态和二级添加模型弹窗。
 - MCP 设置页已改为读取 Hermes 的真实 MCP 配置；开关会写回 Hermes `config.yaml` 的 `enabled` 字段。
 - MCP 设置页已从单页堆叠整理为二级 Tab：本地服务、Hermes Server、每日推荐、云端；设置弹窗改成固定高度和内部滚动，避免长内容撑出屏幕。

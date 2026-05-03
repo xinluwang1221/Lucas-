@@ -646,15 +646,73 @@ export function AboutSettingsSection({
   )
 }
 
-export function CloudRuntimeSettingsSection({ runtime }: { runtime: HermesRuntime | null }) {
+export function CloudRuntimeSettingsSection({
+  runtime,
+  dashboardStarting,
+  dashboardError,
+  onRefreshRuntime,
+  onStartDashboard
+}: {
+  runtime: HermesRuntime | null
+  dashboardStarting: boolean
+  dashboardError: string | null
+  onRefreshRuntime: () => void
+  onStartDashboard: () => void
+}) {
+  const dashboard = runtime?.dashboard
+  const dashboardReady = Boolean(dashboard?.available && dashboard.protectedApiReady)
+  const dashboardStatus = dashboardReady ? '已连接' : dashboard?.running ? '需重新连接' : '未启动'
+
   return (
-    <InfoSettingsSection
-      title="云端运行环境"
-      items={[
-        ['运行范围', '本机'],
-        ['后端', 'Hermes Cowork API'],
-        ['Hermes', runtime?.bridgeMode ?? '未知']
-      ]}
-    />
+    <SettingsSection title="运行环境">
+      <SettingsBlock title="Hermes 官方后台">
+        <div className="runtime-dashboard-card">
+          <div className="runtime-dashboard-head">
+            <div>
+              <strong>官方 Dashboard API</strong>
+              <p>
+                {dashboardReady
+                  ? 'Cowork 已能读取 Hermes 官方状态、Skills、Cron 和工具集。'
+                  : '启动后，Cowork 会用 Hermes 官方结构化状态校验后续页面。'}
+              </p>
+            </div>
+            <span className={dashboardReady ? 'status-pill ok' : 'status-pill warn'}>{dashboardStatus}</span>
+          </div>
+          <InfoGrid
+            items={[
+              ['地址', dashboard?.baseUrl ?? '未连接'],
+              ['Hermes 版本', dashboard?.version ?? '未知'],
+              ['Gateway', dashboard?.gatewayState ?? '未知'],
+              ['官方 API', dashboard?.protectedApiReady ? '可读取' : '不可读取'],
+              ['配置版本', formatConfigVersion(dashboard?.configVersion, dashboard?.latestConfigVersion)],
+              ['活动会话', dashboard?.activeSessions === undefined ? '未知' : `${dashboard.activeSessions} 个`]
+            ]}
+          />
+          {dashboard?.error && <p className="runtime-dashboard-error">{dashboard.error}</p>}
+          {dashboardError && <p className="runtime-dashboard-error">{dashboardError}</p>}
+          <div className="runtime-dashboard-actions">
+            <button className="settings-button" onClick={onRefreshRuntime}>刷新状态</button>
+            <button className="settings-primary-button" disabled={dashboardStarting} onClick={onStartDashboard}>
+              {dashboardStarting ? '启动中' : '启动 Hermes 后台'}
+            </button>
+          </div>
+        </div>
+      </SettingsBlock>
+      <SettingsBlock title="Cowork 本机后端">
+        <InfoGrid
+          items={[
+            ['运行范围', '本机'],
+            ['后端', 'Hermes Cowork API'],
+            ['任务通道', runtime?.bridgeMode ?? '未知']
+          ]}
+        />
+      </SettingsBlock>
+    </SettingsSection>
   )
+}
+
+function formatConfigVersion(current?: number, latest?: number) {
+  if (current === undefined && latest === undefined) return '未知'
+  if (current !== undefined && latest !== undefined) return `${current} / ${latest}`
+  return String(current ?? latest)
 }

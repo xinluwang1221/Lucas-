@@ -2,6 +2,7 @@ import { request } from '../../lib/http'
 import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
+  HermesDashboardAdapterStatus,
   HermesRuntime,
   HermesSessionsResponse,
   HermesUpdateStatus
@@ -9,6 +10,10 @@ import type {
 
 export async function getHermesRuntime(): Promise<HermesRuntime> {
   return request('/api/hermes/runtime')
+}
+
+export async function startHermesDashboard(): Promise<HermesDashboardAdapterStatus> {
+  return request('/api/hermes/dashboard/start', { method: 'POST' })
 }
 
 export async function getHermesUpdateStatus(): Promise<HermesUpdateStatus> {
