@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
 import { requestHermesDashboardJson } from './hermes_dashboard.js'
-import { uploadedSkillsDir } from './paths.js'
+import { hermesAgentDir, hermesBin, hermesPythonBin, uploadedSkillsDir } from './paths.js'
 import { SkillSetting } from './types.js'
 
 export type SkillSource = 'hermes' | 'user' | 'system' | 'plugin' | 'uploaded'
@@ -28,6 +29,43 @@ export type SkillFile = {
   size: number
   modifiedAt: string
   previewable: boolean
+}
+
+export type SkillHubSource = 'all' | 'official' | 'skills-sh' | 'well-known' | 'github' | 'clawhub' | 'lobehub'
+
+export type SkillHubItem = {
+  name: string
+  description: string
+  source: string
+  identifier: string
+  trustLevel: 'builtin' | 'trusted' | 'community' | string
+  repo?: string
+  path?: string
+  tags: string[]
+  extra: Record<string, unknown>
+}
+
+export type SkillHubResponse = {
+  query: string
+  source: SkillHubSource
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  sourceCounts: Record<string, number>
+  timedOutSources: string[]
+  items: SkillHubItem[]
+  updatedAt: string
+}
+
+export type SkillHubInstallResult = {
+  ok: boolean
+  identifier: string
+  category?: string
+  output: string
+  error?: string
+  skills: LocalSkill[]
+  installedAt: string
 }
 
 type SkillRoot = {
@@ -91,6 +129,48 @@ export function installUploadedSkill(tempPath: string, originalName: string) {
     id: skillId('uploaded', name),
     name,
     path: targetPath
+  }
+}
+
+export async function searchSkillHub(options: {
+  query?: string
+  source?: string
+  page?: number
+  pageSize?: number
+}): Promise<SkillHubResponse> {
+  const query = String(options.query ?? '').trim().slice(0, 120)
+  const source = normalizeSkillHubSource(options.source)
+  const page = normalizeInteger(options.page, 1, 1, 50)
+  const pageSize = normalizeInteger(options.pageSize, 18, 6, 48)
+  const raw = await runSkillHubPython('search', [query, source, String(page), String(pageSize)])
+  return JSON.parse(raw) as SkillHubResponse
+}
+
+export async function installSkillFromHub(identifier: string, settings: Record<string, SkillSetting> = {}, category = ''): Promise<SkillHubInstallResult> {
+  const safeIdentifier = identifier.trim()
+  if (!safeIdentifier || /[\r\n]/.test(safeIdentifier)) throw new Error('Skill 标识不合法')
+  const safeCategory = normalizeSkillCategory(category)
+  const args = ['skills', 'install', safeIdentifier, '--yes']
+  if (safeCategory) args.push('--category', safeCategory)
+
+  const output = await new Promise<string>((resolve, reject) => {
+    execFile(hermesBin, args, { cwd: hermesAgentDir, timeout: 120000, maxBuffer: 1024 * 1024 * 3 }, (error, stdout, stderr) => {
+      const combined = `${stdout}\n${stderr}`.trim()
+      if (error) {
+        reject(new Error(combined || error.message || 'Hermes Skills Hub 安装失败'))
+        return
+      }
+      resolve(combined)
+    })
+  })
+
+  return {
+    ok: true,
+    identifier: safeIdentifier,
+    category: safeCategory || undefined,
+    output,
+    skills: await listSkills(settings),
+    installedAt: new Date().toISOString()
   }
 }
 
@@ -393,4 +473,133 @@ function skillSourceMode() {
 function normalizeOfficialSkillName(value: unknown) {
   const text = stringValue(value).trim()
   return text ? normalizeSkillName(text) : ''
+}
+
+function normalizeSkillHubSource(value: unknown): SkillHubSource {
+  const source = String(value ?? 'all').trim().toLowerCase()
+  return ['all', 'official', 'skills-sh', 'well-known', 'github', 'clawhub', 'lobehub'].includes(source)
+    ? source as SkillHubSource
+    : 'all'
+}
+
+function normalizeInteger(value: unknown, fallback: number, min: number, max: number) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(number)))
+}
+
+function normalizeSkillCategory(value: unknown) {
+  const category = String(value ?? '').trim().toLowerCase()
+  if (!category) return ''
+  if (!/^[a-z0-9][a-z0-9_/-]{0,80}$/.test(category)) throw new Error('Skill 分类不合法')
+  return category
+}
+
+function runSkillHubPython(mode: 'search', args: string[]) {
+  const python = String.raw`
+import json
+import sys
+
+from tools.skills_hub import GitHubAuth, create_source_router, parallel_search_sources, unified_search
+
+mode = sys.argv[1]
+query = sys.argv[2].strip()
+source = sys.argv[3]
+page = max(1, int(sys.argv[4]))
+page_size = max(1, min(48, int(sys.argv[5])))
+
+trust_rank = {"builtin": 3, "trusted": 2, "community": 1}
+per_source_limits = {
+    "official": 200,
+    "skills-sh": 200,
+    "well-known": 50,
+    "github": 200,
+    "clawhub": 500,
+    "claude-marketplace": 100,
+    "lobehub": 500,
+}
+
+def item(meta):
+    return {
+        "name": meta.name,
+        "description": meta.description,
+        "source": meta.source,
+        "identifier": meta.identifier,
+        "trustLevel": meta.trust_level,
+        "repo": meta.repo or "",
+        "path": meta.path or "",
+        "tags": list(meta.tags or []),
+        "extra": dict(meta.extra or {}),
+    }
+
+sources = create_source_router(GitHubAuth())
+timed_out = []
+source_counts = {}
+
+if query:
+    results = unified_search(query, sources, source_filter=source, limit=max(page_size * page, page_size))
+    total = len(results)
+    start = (page - 1) * page_size
+    page_items = results[start:start + page_size]
+else:
+    all_results, source_counts, timed_out = parallel_search_sources(
+        sources,
+        query="",
+        per_source_limits=per_source_limits,
+        source_filter=source,
+        overall_timeout=30,
+    )
+    seen = {}
+    for result in all_results:
+        rank = trust_rank.get(result.trust_level, 0)
+        current = seen.get(result.name)
+        if current is None or rank > trust_rank.get(current.trust_level, 0):
+            seen[result.name] = result
+    results = list(seen.values())
+    results.sort(key=lambda result: (
+        -trust_rank.get(result.trust_level, 0),
+        result.source != "official",
+        result.name.lower(),
+    ))
+    total = len(results)
+    start = (page - 1) * page_size
+    page_items = results[start:start + page_size]
+
+payload = {
+    "query": query,
+    "source": source,
+    "page": page,
+    "pageSize": page_size,
+    "total": total,
+    "totalPages": max(1, (total + page_size - 1) // page_size),
+    "sourceCounts": source_counts,
+    "timedOutSources": timed_out,
+    "items": [item(result) for result in page_items],
+    "updatedAt": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+}
+print(json.dumps(payload, ensure_ascii=False))
+`
+
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      hermesPythonBin,
+      ['-c', python, mode, ...args],
+      {
+        cwd: hermesAgentDir,
+        timeout: 45000,
+        maxBuffer: 1024 * 1024 * 4,
+        env: {
+          ...process.env,
+          PYTHONPATH: [hermesAgentDir, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
+        }
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`${stdout}\n${stderr}`.trim() || error.message))
+          return
+        }
+        resolve(stdout.trim())
+      }
+    )
+  })
 }

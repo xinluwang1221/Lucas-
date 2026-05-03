@@ -4,10 +4,13 @@ import {
   CheckCircle2,
   Clock3,
   Database,
+  Download,
+  ExternalLink,
   FileText,
   Globe2,
   HelpCircle,
   Image,
+  Layers3,
   Loader2,
   MessageSquare,
   Monitor,
@@ -16,13 +19,16 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Terminal,
   Volume2,
   Wrench
 } from 'lucide-react'
-import type { HermesMcpConfig, HermesToolset, Skill } from '../../lib/api'
+import { useEffect, useMemo, useState } from 'react'
+import type { HermesMcpConfig, HermesMcpRecommendations, HermesToolset, Skill, SkillHubItem, SkillHubSource } from '../../lib/api'
 import { ConnectorsView as McpConnectorsView } from '../settings/mcp'
 import { shortenSkillPath, sourceLabel } from './skillFormatters'
+import { installSkillFromHub, searchSkillHub } from './skillsApi'
 
 type CustomizeTab = 'skills' | 'connectors' | 'toolsets'
 
@@ -33,6 +39,7 @@ export function SkillsView({
   query,
   notice,
   connectors,
+  mcpRecommendations,
   toolsets,
   toolsetsError,
   toolsetUpdatingName,
@@ -57,6 +64,7 @@ export function SkillsView({
   query: string
   notice: string | null
   connectors: HermesMcpConfig['servers']
+  mcpRecommendations?: HermesMcpRecommendations | null
   toolsets: HermesToolset[]
   toolsetsError: string | null
   toolsetUpdatingName: string | null
@@ -67,7 +75,7 @@ export function SkillsView({
   onQueryChange: (value: string) => void
   onToggleSkill: (skill: Skill) => void
   onOpenSkill: (skill: Skill) => void
-  onRefresh: () => void
+  onRefresh: () => void | Promise<void>
   onUploadClick: () => void
   onRefreshMcp: () => void
   onRefreshToolsets: () => void
@@ -83,6 +91,13 @@ export function SkillsView({
   })
   const enabledCount = enabledSkills.length
   const disabledCount = Math.max(0, skills.length - enabledCount)
+  const installedSkillNames = useMemo(() => new Set(skills.map((skill) => skill.name.toLowerCase())), [skills])
+  const [hubSource, setHubSource] = useState<SkillHubSource>('all')
+  const [hubResult, setHubResult] = useState<Awaited<ReturnType<typeof searchSkillHub>> | null>(null)
+  const [hubLoading, setHubLoading] = useState(false)
+  const [hubError, setHubError] = useState<string | null>(null)
+  const [hubInstallingId, setHubInstallingId] = useState<string | null>(null)
+  const [hubNotice, setHubNotice] = useState<string | null>(null)
   const enabledToolsets = toolsets.filter((toolset) => toolset.enabled)
   const unconfiguredEnabledToolsets = enabledToolsets.filter((toolset) => !toolset.configured)
   const enabledConnectors = connectors.filter((connector) => connector.enabled)
@@ -150,6 +165,54 @@ export function SkillsView({
   const capabilityAction = capabilityItems.find((item) => item.tone === 'warning')
     ?? capabilityItems.find((item) => item.tone === 'idle')
     ?? capabilityItems.find((item) => item.id === customizeTab)
+
+  useEffect(() => {
+    if (customizeTab !== 'skills') return
+    let alive = true
+    const timer = window.setTimeout(() => {
+      setHubLoading(true)
+      setHubError(null)
+      searchSkillHub({
+        query,
+        source: hubSource,
+        pageSize: query.trim() ? 12 : 18
+      }).then((result) => {
+        if (!alive) return
+        setHubResult(result)
+      }).catch((error) => {
+        if (!alive) return
+        setHubError(error instanceof Error ? error.message : String(error))
+      }).finally(() => {
+        if (alive) setHubLoading(false)
+      })
+    }, 260)
+
+    return () => {
+      alive = false
+      window.clearTimeout(timer)
+    }
+  }, [customizeTab, hubSource, query])
+
+  async function handleInstallHubSkill(item: SkillHubItem) {
+    const installed = installedSkillNames.has(item.name.toLowerCase())
+    if (installed) return
+    const confirmed = window.confirm(`安装 Skill「${item.name}」到 Hermes 本机技能目录？\n\n来源：${hubSourceLabel(item.source)}\n标识：${item.identifier}`)
+    if (!confirmed) return
+
+    try {
+      setHubInstallingId(item.identifier)
+      setHubError(null)
+      const result = await installSkillFromHub(item.identifier)
+      setHubNotice(`已通过 Hermes Skills Hub 安装 ${item.name}。`)
+      if (result.skills?.length) {
+        await onRefresh()
+      }
+    } catch (error) {
+      setHubError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setHubInstallingId(null)
+    }
+  }
 
   return (
     <section className="customize-page">
@@ -238,7 +301,7 @@ export function SkillsView({
 
         {customizeTab === 'skills' ? (
           <>
-            {notice && <div className="skill-notice">{notice}</div>}
+            {(notice || hubNotice) && <div className="skill-notice">{notice || hubNotice}</div>}
 
             <div className="skills-summary">
               <div className="skills-summary-card">
@@ -266,6 +329,20 @@ export function SkillsView({
                 </div>
               </div>
             </div>
+
+            <SkillHubPanel
+              result={hubResult}
+              loading={hubLoading}
+              error={hubError}
+              source={hubSource}
+              installedNames={installedSkillNames}
+              installingId={hubInstallingId}
+              onSourceChange={(nextSource) => {
+                setHubSource(nextSource)
+                setHubNotice(null)
+              }}
+              onInstall={(item) => void handleInstallHubSkill(item)}
+            />
 
             <div className="skills-toolbar">
               <div className="skills-tabs" role="tablist" aria-label="技能视图">
@@ -412,11 +489,132 @@ export function SkillsView({
         ) : (
           <McpConnectorsView
             connectors={connectors}
+            recommendations={mcpRecommendations}
             configPath={mcpConfigPath}
             error={mcpError}
             onOpenSettings={onOpenMcpSettings}
+            onOpenMarketplace={onOpenMcpMarketplace}
           />
         )}
+      </div>
+    </section>
+  )
+}
+
+const skillHubSources: Array<{ id: SkillHubSource; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'official', label: '官方' },
+  { id: 'skills-sh', label: 'skills.sh' },
+  { id: 'well-known', label: 'Well-known' },
+  { id: 'github', label: 'GitHub' },
+  { id: 'clawhub', label: 'ClawHub' },
+  { id: 'lobehub', label: 'LobeHub' }
+]
+
+function SkillHubPanel({
+  result,
+  loading,
+  error,
+  source,
+  installedNames,
+  installingId,
+  onSourceChange,
+  onInstall
+}: {
+  result: Awaited<ReturnType<typeof searchSkillHub>> | null
+  loading: boolean
+  error: string | null
+  source: SkillHubSource
+  installedNames: Set<string>
+  installingId: string | null
+  onSourceChange: (source: SkillHubSource) => void
+  onInstall: (item: SkillHubItem) => void
+}) {
+  const items = result?.items ?? []
+  const sourceCount = result?.sourceCounts?.[source] ?? result?.total ?? 0
+  const totalLabel = result?.query ? `${result.total} 个匹配结果` : `${sourceCount || result?.total || 0} 个可浏览 Skill`
+
+  return (
+    <section className="skill-hub-panel">
+      <div className="skill-hub-head">
+        <div>
+          <span className="section-kicker">Hermes 原生生态</span>
+          <h2>Skills Hub</h2>
+          <p>直接调用 Hermes Skills Hub。来源包括官方目录、skills.sh、well-known、GitHub、ClawHub 和 LobeHub，不在 Cowork 里造一套假市场。</p>
+        </div>
+        <div className="skill-hub-status">
+          <Layers3 size={15} />
+          <strong>{loading ? '同步中' : totalLabel}</strong>
+        </div>
+      </div>
+
+      <div className="skill-hub-source-tabs" role="tablist" aria-label="Skill 生态来源">
+        {skillHubSources.map((option) => (
+          <button
+            key={option.id}
+            className={source === option.id ? 'active' : ''}
+            onClick={() => onSourceChange(option.id)}
+          >
+            {option.label}
+            {result?.sourceCounts?.[option.id] ? <span>{result.sourceCounts[option.id]}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {error && <div className="settings-error-line">{error}</div>}
+      {result?.timedOutSources?.length ? (
+        <div className="skill-hub-warning">以下来源响应超时：{result.timedOutSources.join('、')}。可切换单一来源重试。</div>
+      ) : null}
+
+      <div className="skill-hub-grid">
+        {loading && !items.length && (
+          <div className="skill-hub-empty">
+            <Loader2 size={18} className="spin" />
+            <span>正在读取 Hermes Skills Hub</span>
+          </div>
+        )}
+        {!loading && !error && !items.length && (
+          <div className="skill-hub-empty">
+            <Search size={18} />
+            <span>没有匹配的生态 Skill。</span>
+          </div>
+        )}
+        {items.map((item) => {
+          const installed = installedNames.has(item.name.toLowerCase())
+          const installing = installingId === item.identifier
+          return (
+            <article className={installed ? 'skill-hub-card installed' : 'skill-hub-card'} key={`${item.source}:${item.identifier}`}>
+              <div className="skill-hub-card-head">
+                <div className="skill-hub-icon">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{hubSourceLabel(item.source)}</span>
+                </div>
+              </div>
+              <p>{item.description || '这个 Skill 来自 Hermes 生态源。安装后会写入 Hermes 本机技能目录。'}</p>
+              <div className="skill-hub-meta">
+                <em><ShieldCheck size={12} />{hubTrustLabel(item.trustLevel)}</em>
+                {item.tags.slice(0, 3).map((tag) => <em key={tag}>{tag}</em>)}
+              </div>
+              {(item.repo || item.path) && (
+                <div className="skill-hub-path" title={[item.repo, item.path].filter(Boolean).join(' · ')}>
+                  <ExternalLink size={12} />
+                  <span>{[item.repo, item.path].filter(Boolean).join(' · ')}</span>
+                </div>
+              )}
+              <button
+                className={installed ? 'skill-hub-install installed' : 'skill-hub-install'}
+                disabled={installed || installing}
+                onClick={() => onInstall(item)}
+              >
+                {installing ? <Loader2 size={14} className="spin" /> : installed ? <CheckCircle2 size={14} /> : <Download size={14} />}
+                {installed ? '已安装' : '安装'}
+              </button>
+            </article>
+          )
+        })}
       </div>
     </section>
   )
@@ -439,6 +637,17 @@ function abilityActionText(item: { id: CustomizeTab; title: string; tone: string
   if (item.tone === 'warning') return `${item.title}有配置需要处理：${item.status}。点击对应卡片进入管理。`
   if (item.tone === 'idle') return `${item.title}目前没有启用。需要 Hermes 使用这类能力时，先点击对应卡片启用。`
   return `正在查看${item.title}。这里管理 Hermes 实际可调用的能力，不放临时前端占位。`
+}
+
+function hubSourceLabel(source: string) {
+  return skillHubSources.find((item) => item.id === source)?.label || source
+}
+
+function hubTrustLabel(value: string) {
+  if (value === 'builtin') return '内置'
+  if (value === 'trusted') return '可信源'
+  if (value === 'community') return '社区'
+  return value || '未标注'
 }
 
 function toolsetGroup(name: string) {

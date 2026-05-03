@@ -284,6 +284,43 @@ export type Skill = {
   updatedAt: string
 }
 
+export type SkillHubSource = 'all' | 'official' | 'skills-sh' | 'well-known' | 'github' | 'clawhub' | 'lobehub'
+
+export type SkillHubItem = {
+  name: string
+  description: string
+  source: string
+  identifier: string
+  trustLevel: 'builtin' | 'trusted' | 'community' | string
+  repo?: string
+  path?: string
+  tags: string[]
+  extra: Record<string, unknown>
+}
+
+export type SkillHubResponse = {
+  query: string
+  source: SkillHubSource
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  sourceCounts: Record<string, number>
+  timedOutSources: string[]
+  items: SkillHubItem[]
+  updatedAt: string
+}
+
+export type SkillHubInstallResult = {
+  ok: boolean
+  identifier: string
+  category?: string
+  output: string
+  error?: string
+  skills: Skill[]
+  installedAt: string
+}
+
 export type HermesToolset = {
   name: string
   label: string

@@ -991,6 +991,7 @@ function App() {
             query={skillQuery}
             notice={skillNotice}
             connectors={hermesMcp?.servers ?? []}
+            mcpRecommendations={mcpRecommendations}
             toolsets={toolsets}
             toolsetsError={toolsetsError}
             toolsetUpdatingName={toolsetUpdatingName}

@@ -329,8 +329,8 @@ flowchart TB
 | Prompt / Context：Context files、context references、`@file`、`@folder`、`@diff`、`@url`、记忆文件 | 工作区、附件、文件批注、右侧上下文与资源、输入框上下文 chip | 部分覆盖。工作区/附件/批注已写入 prompt；context files 管理、references 可视化和压缩策略仍不完整 | 把工作区文件、附件、批注、Hermes context references、手动压缩合并成一套上下文管理；新增 context 文件列表、大小/占比和移除入口 | 发送带附件/批注任务后检查 Hermes prompt；`GET /api/tasks/:id/context`；文件引用点击预览 |
 | 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
 | 工具与 Toolsets：web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code | 技能页 > 工具集、过程资源、设置 > 运行环境诊断 | 部分覆盖。Toolsets 已进入技能页；工具级策略、工具使用统计和失败诊断还缺 | 把 Toolsets 做成技能页的一级能力：分类、启停、凭据状态、内置工具列表、使用统计、失败原因；与 MCP/Skill 同页但语义分清 | Dashboard `/api/tools/toolsets`、启停后 config 检查、任务过程资源工具调用检查 |
-| Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、未来 Skill 市场 | 部分覆盖。清单、启停、上传、文件树、加入下一次任务已接；外部目录、Hub、Agent 自动沉淀未完整 | 技能页继续做分类、搜索、依赖、运行前预载、安装来源和 Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
-| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、MCP 市场、过程资源 | 部分覆盖。安装、测试、启停、工具 include/exclude、Hermes MCP serve 已接；OAuth/远程 MCP/权限说明还缺 | MCP 页升级为外部能力管理：市场分类、图片图标、功能描述、OAuth、远程 HTTP、工具级开关、Hermes MCP server 生产化 | `hermes mcp test`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
+| Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、Skills Hub | 部分覆盖。清单、启停、上传、文件树、加入下一次任务、Hermes Skills Hub 浏览/搜索/安装已接；外部目录、Agent 自动沉淀还未完整 | 技能页继续做分类、依赖、运行前预载、安装前风险说明、Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、`/api/skills/hub`、`hermes skills browse/search/install`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
+| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、MCP 市场、过程资源 | 部分覆盖。安装、测试、启停、工具 include/exclude、Hermes MCP serve、技能页 MCP 生态概览已接；OAuth/远程 MCP/权限说明还缺 | MCP 页升级为外部能力管理：市场分类、图片图标、功能描述、OAuth、远程 HTTP、工具级开关、Hermes MCP server 生产化；技能页只放生态入口和状态概览 | `hermes mcp test`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
 | Cron / Automation：自然语言、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 左侧定时任务页、未来产物区、未来投递设置 | 部分覆盖。真实 Hermes Cron 基础管理已接；周期选择、Skill 分类多选、delivery target、输出产物还需完善 | 定时任务页只管理 Hermes Cron：周期选择器、工作区绑定、Skill 类目多选、运行产物、失败处理和投递渠道 | `test:hermes-cron`、Dashboard cron jobs、`~/.hermes/cron/output`、gateway/tick 运行检查 |
 | Gateway / Messaging / Mobile：长驻 gateway、平台消息、session routing、slash command、cron tick、background maintenance | 本机 gateway、未来 Electron 常驻、未来手机端 | 未完整覆盖。当前只有本机 gateway；移动端和云端中转未实现 | 设计“云端加密中转 + Mac 主机执行”：云端只做账号/设备配对、消息路由和推送；Hermes/files/tools 只在 Mac 执行 | gateway 连接测试、多设备协议设计文档、移动端发任务到 Mac 的端到端 smoke |
 | 媒体与浏览器：Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件预览、图片/文件批注、未来语音入口、未来浏览器过程面板 | 未完整覆盖。文件/图片预览已做；视觉理解、浏览器自动化可视化、TTS/Voice 还未产品化 | 新增语音输入/TTS 输出、图片视觉理解入口、浏览器任务过程可视化；执行仍走 Hermes 工具，不在 Cowork 重写工具 | Browser tool smoke、图片任务 smoke、Voice/TTS 本机权限检查、过程事件展示 |
@@ -1045,6 +1045,7 @@ HC_EVENT\t
   - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
 - 支持 Hermes Cron 管理：`/api/hermes/cron` 优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，Dashboard 不可用时回退本机 `~/.hermes/cron/jobs.json`；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 Hermes cron，输出读取 `~/.hermes/cron/output/<job_id>/`。
 - 支持 Hermes Skills 官方真源：`/api/skills` 优先读取 Hermes Dashboard `/api/skills`，把官方启用状态合并到 Cowork 技能页；本机扫描 `~/.hermes/skills`、用户 skills、Codex 插件 skills 和上传 skills，用于展示 `SKILL.md` 及子文件。启停由 Hermes 官方 `/api/skills/toggle` 写回，Dashboard 不可用时才保留本地扫描兜底。
+- 支持 Hermes Skills Hub 原生生态：`/api/skills/hub` 直接调用固定 Hermes 内核里的 Skills Hub，读取 official、skills.sh、well-known、GitHub、ClawHub、LobeHub 等来源；`/api/skills/hub/install` 调用 `hermes skills install <identifier> --yes` 安装到 Hermes 本机技能目录。Cowork 技能页只负责展示、筛选、确认和刷新，不维护第二套 Skill 市场数据。
 - 支持 Hermes Toolsets 官方真源：技能页新增“工具集”子页，读取 Hermes Dashboard `/api/tools/toolsets`，展示 Hermes 内置工具集、中文说明、启用状态、凭据配置状态和工具列表。启停通过 Cowork 后端读取 `/api/config` 后受控写回 `platform_toolsets.cli`，并保留已有 MCP server 名称，避免 `hermes-cli` 复合工具集覆盖用户选择。
 
 ### 前端
@@ -1646,6 +1647,8 @@ POST /api/artifacts/:artifactId/reveal
 
 ```http
 GET /api/skills
+GET /api/skills/hub?q=browser&source=all&page=1&pageSize=18
+POST /api/skills/hub/install
 GET /api/skills/:skillId/files
 GET /api/skills/:skillId/files/content?path=...
 POST /api/skills/:skillId/toggle
@@ -2106,7 +2109,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 
 - Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
 - Session 全量前端化：已完成只读列表、全文搜索、搜索来源覆盖、搜索命中展开与消息定位、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除、从原生 session 继续对话，以及官方 session actions 探测。下一步转向 Logs / Analytics 用户化和更多 session 元数据展示，不再临时增加没有后端真源的 session 按钮。
-- Skills / MCP / Toolsets 统一技能页能力中心：第一步已完成，技能页顶部能汇总工作方法、外部服务和内置工具的启用状态、配置风险和跨入口跳转。下一步继续补工具集失败统计、MCP 工具级管理前移和 Skill 分类市场。
+- Skills / MCP / Toolsets 统一技能页能力中心：第二步已完成，技能页顶部能汇总工作方法、外部服务和内置工具的启用状态、配置风险和跨入口跳转；Skill 子页已接 Hermes Skills Hub 原生生态浏览/搜索/安装；MCP 子页已补生态市场概览和设置跳转。下一步继续补工具集失败统计、MCP 工具级管理前移、Skill 安装风险说明和 Agent 自动沉淀 Skill 确认流。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
 - Logs / Analytics 用户化：前三步已落到设置 > 诊断，能展示模型调用量、Token、预估费用、Top 模型、近期错误、下一步动作、近期 Cowork 任务异常、审批/澄清等待、工具调用、失败率，并能把日志异常按 Hermes session 或时间窗口回链到 Cowork 任务。下一步再补更细的工具耗时分布和可折叠原始诊断。
 

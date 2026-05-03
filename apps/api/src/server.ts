@@ -37,7 +37,7 @@ import {
   setHermesDefaultModel,
   setHermesFallbackProviders
 } from './models.js'
-import { installUploadedSkill, listLocalSkills, listSkillFiles, listSkills, readSkillFile, toggleHermesDashboardSkill } from './skills.js'
+import { installSkillFromHub, installUploadedSkill, listLocalSkills, listSkillFiles, listSkills, readSkillFile, searchSkillHub, toggleHermesDashboardSkill } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, Message, MessageAnnotation, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
 
@@ -915,6 +915,29 @@ app.get('/api/skills', async (_req, res) => {
     res.json(await listSkills(store.snapshot.skillSettings))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/skills/hub', async (req, res) => {
+  try {
+    res.json(await searchSkillHub({
+      query: typeof req.query.q === 'string' ? req.query.q : '',
+      source: typeof req.query.source === 'string' ? req.query.source : 'all',
+      page: typeof req.query.page === 'string' ? Number(req.query.page) : undefined,
+      pageSize: typeof req.query.pageSize === 'string' ? Number(req.query.pageSize) : undefined
+    }))
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/skills/hub/install', async (req, res) => {
+  try {
+    const identifier = String(req.body?.identifier ?? '')
+    const category = String(req.body?.category ?? '')
+    res.status(201).json(await installSkillFromHub(identifier, store.snapshot.skillSettings, category))
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
   }
 })
 

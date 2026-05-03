@@ -36,16 +36,22 @@ export type McpScope = 'local' | 'serve' | 'recommendations' | 'cloud'
 
 export function ConnectorsView({
   connectors,
+  recommendations,
   configPath,
   error,
-  onOpenSettings
+  onOpenSettings,
+  onOpenMarketplace
 }: {
   connectors: HermesMcpConfig['servers']
+  recommendations?: HermesMcpRecommendations | null
   configPath?: string
   error: string | null
   onOpenSettings: () => void
+  onOpenMarketplace?: () => void
 }) {
   const enabledCount = connectors.filter((connector) => connector.enabled).length
+  const recommendationCount = recommendations?.categories.reduce((total, category) => total + category.candidates.length, 0) ?? 0
+  const recommendationLabels = recommendations?.categories.filter((category) => category.candidates.length).map((category) => category.label).slice(0, 3) ?? []
 
   return (
     <div className="connectors-panel">
@@ -61,6 +67,28 @@ export function ConnectorsView({
         <div>
           <strong>{configPath ? 'Hermes' : '未连接'}</strong>
           <span>{configPath ?? '暂未读取到 MCP 配置'}</span>
+        </div>
+      </div>
+
+      <div className="mcp-ecosystem-panel">
+        <div>
+          <span className="section-kicker">Hermes 原生生态</span>
+          <strong>MCP 市场与服务发现</strong>
+          <p>这里聚合 Hermes MCP 配置、市场推荐和工具级能力。安装与测试仍写回 Hermes MCP 配置，不在 Cowork 里维护第二套服务清单。</p>
+        </div>
+        <div className="mcp-ecosystem-grid">
+          <span><b>{connectors.length}</b> 本机服务</span>
+          <span><b>{enabledCount}</b> 已启用</span>
+          <span><b>{recommendationCount || '待生成'}</b> 市场推荐</span>
+        </div>
+        {recommendationLabels.length ? (
+          <p className="mcp-ecosystem-copy">当前推荐方向：{recommendationLabels.join('、')}。</p>
+        ) : (
+          <p className="mcp-ecosystem-copy">还没有推荐日报时，可以先从市场搜索常用 MCP，或在设置里手动配置。</p>
+        )}
+        <div className="mcp-ecosystem-actions">
+          <button className="settings-link-button" onClick={onOpenMarketplace}><Plus size={13} /> 从市场添加</button>
+          <button className="settings-link-button" onClick={onOpenSettings}>打开 MCP 管理</button>
         </div>
       </div>
 
