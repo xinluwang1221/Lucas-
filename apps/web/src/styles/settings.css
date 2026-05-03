@@ -309,6 +309,8 @@
 
 .diagnostics-model-list,
 .diagnostics-log-files,
+.diagnostics-tool-list,
+.diagnostics-task-issues,
 .diagnostics-issue-list,
 .diagnostics-next-actions {
   display: grid;
@@ -318,6 +320,8 @@
 
 .diagnostics-model-list div,
 .diagnostics-log-files div,
+.diagnostics-tool-list > div,
+.diagnostics-task-issues > div,
 .diagnostics-next-actions div {
   display: flex;
   align-items: center;
@@ -330,8 +334,26 @@
   border-radius: var(--radius-control);
 }
 
+.diagnostics-tool-list > div,
+.diagnostics-task-issues > div {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.diagnostics-tool-list > div > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
 .diagnostics-model-list strong,
-.diagnostics-log-files strong {
+.diagnostics-log-files strong,
+.diagnostics-tool-list strong,
+.diagnostics-task-issues strong {
   min-width: 0;
   overflow: hidden;
   color: var(--ink);
@@ -342,10 +364,33 @@
 }
 
 .diagnostics-model-list span,
-.diagnostics-log-files span {
+.diagnostics-log-files span,
+.diagnostics-tool-list span,
+.diagnostics-task-issues span {
   flex: 0 0 auto;
   color: var(--ink-soft);
   font-size: var(--text-caption);
+}
+
+.diagnostics-tool-list p,
+.diagnostics-task-issues p,
+.diagnostics-task-issues em {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  font-style: normal;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-task-issues span {
+  width: fit-content;
+  padding: 2px 7px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-pill);
+  font-weight: 760;
 }
 
 .diagnostics-issue {

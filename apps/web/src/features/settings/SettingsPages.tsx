@@ -728,6 +728,7 @@ export function RuntimeDiagnosticsSettingsSection({
   const status = diagnostics?.status ?? 'unavailable'
   const statusLabel = status === 'ok' ? '正常' : status === 'warn' ? '需要关注' : '未连接'
   const usage = diagnostics?.usage
+  const taskHealth = diagnostics?.taskHealth
   return (
     <SettingsSection title="诊断">
       <SettingsBlock title="运行诊断">
@@ -765,6 +766,44 @@ export function RuntimeDiagnosticsSettingsSection({
           ))}
           {!usage?.topModels.length && <p className="diagnostics-empty">暂无模型使用记录。</p>}
         </div>
+      </SettingsBlock>
+
+      <SettingsBlock title="任务与工具">
+        <div className="diagnostics-metric-grid">
+          <MetricCard label="近期任务" value={formatNumber(taskHealth?.recentTasks)} />
+          <MetricCard label="运行中" value={formatNumber(taskHealth?.runningTasks)} />
+          <MetricCard label="失败任务" value={formatNumber(taskHealth?.failedTasks)} />
+          <MetricCard label="需关注" value={formatNumber(taskHealth?.tasksWithIssues)} />
+        </div>
+        {taskHealth?.tools.length ? (
+          <div className="diagnostics-tool-list">
+            {taskHealth.tools.map((tool) => (
+              <div key={tool.name}>
+                <div>
+                  <strong>{tool.name}</strong>
+                  <span>{tool.calls} 次调用 · {tool.failures} 次失败 · {tool.failureRate}% 失败率{tool.averageMs !== undefined ? ` · 平均 ${formatDurationMs(tool.averageMs)}` : ''}</span>
+                </div>
+                {tool.lastError && <p>{tool.lastError}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="diagnostics-empty">暂无可统计的工具调用。任务开始通过 Cowork 执行后，这里会显示工具调用和失败率。</p>
+        )}
+        {taskHealth?.recentTaskIssues.length ? (
+          <div className="diagnostics-task-issues">
+            {taskHealth.recentTaskIssues.map((issue) => (
+              <div key={issue.id}>
+                <span>{formatTaskStatus(issue.status)}</span>
+                <strong>{issue.title}</strong>
+                <p>{issue.toolName ? `${issue.toolName}：${issue.message}` : issue.message}</p>
+                {issue.hermesSessionId && <em>Session {issue.hermesSessionId}</em>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="diagnostics-empty">暂无可关联的任务异常。</p>
+        )}
       </SettingsBlock>
 
       <SettingsBlock title="近期异常">
@@ -818,6 +857,20 @@ function formatCompactNumber(value?: number) {
 
 function formatUsd(value?: number) {
   return `$${(value ?? 0).toFixed(2)}`
+}
+
+function formatDurationMs(value: number) {
+  if (value < 1000) return `${value}ms`
+  if (value < 60_000) return `${(value / 1000).toFixed(1)}s`
+  return `${Math.round(value / 60_000)}min`
+}
+
+function formatTaskStatus(status: HermesDiagnosticsStatus['taskHealth']['recentTaskIssues'][number]['status']) {
+  if (status === 'running') return '运行中'
+  if (status === 'completed') return '已完成'
+  if (status === 'failed') return '失败'
+  if (status === 'stopped') return '已停止'
+  return '等待'
 }
 
 function formatConfigVersion(current?: number, latest?: number) {

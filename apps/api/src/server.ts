@@ -191,7 +191,7 @@ app.get('/api/hermes/diagnostics', async (req, res) => {
   try {
     const startDashboard = ['1', 'true', 'yes'].includes(String(req.query.start ?? '').toLowerCase())
     const days = Number(req.query.days ?? 30)
-    res.json(await readHermesDiagnostics({ days, startDashboard }))
+    res.json(await readHermesDiagnostics({ days, startDashboard, tasks: store.snapshot.tasks }))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }

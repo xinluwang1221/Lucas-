@@ -379,6 +379,36 @@ export type HermesDiagnosticsStatus = {
       message: string
     }>
   }
+  taskHealth: {
+    windowDays: number
+    totalTasks: number
+    recentTasks: number
+    runningTasks: number
+    completedTasks: number
+    failedTasks: number
+    tasksWithIssues: number
+    recentTaskIssues: Array<{
+      id: string
+      taskId: string
+      title: string
+      status: Task['status']
+      hermesSessionId?: string
+      toolName?: string
+      message: string
+      updatedAt: string
+    }>
+    tools: Array<{
+      name: string
+      calls: number
+      failures: number
+      failureRate: number
+      averageMs?: number
+      lastTaskId?: string
+      lastTaskTitle?: string
+      lastError?: string
+      lastSeenAt?: string
+    }>
+  }
   nextActions: string[]
   updatedAt: string
 }

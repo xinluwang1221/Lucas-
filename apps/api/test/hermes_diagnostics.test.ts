@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict'
 import { readHermesDiagnostics } from '../src/hermes_diagnostics.js'
 import type { HermesDashboardProxyResult } from '../src/hermes_dashboard.js'
+import type { Task } from '../src/types.js'
 
 async function main() {
   const diagnostics = await readHermesDiagnostics({
     days: 7,
-    requestDashboard: async (apiPath) => fakeDashboard(apiPath)
+    requestDashboard: async (apiPath) => fakeDashboard(apiPath),
+    tasks: fakeTasks()
   })
 
   assert.equal(diagnostics.status, 'warn')
@@ -20,7 +22,13 @@ async function main() {
   assert.equal(diagnostics.logHealth.recentIssues.length, 2)
   assert.match(diagnostics.logHealth.recentIssues.map((issue) => issue.message).join('\n'), /模型凭据失败/)
   assert.doesNotMatch(diagnostics.logHealth.recentIssues.map((issue) => issue.message).join('\n'), /Invalid API Key/)
+  assert.equal(diagnostics.taskHealth.recentTasks, 2)
+  assert.equal(diagnostics.taskHealth.tasksWithIssues, 2)
+  assert.equal(diagnostics.taskHealth.tools[0].name, '网页搜索')
+  assert.equal(diagnostics.taskHealth.tools[0].failureRate, 100)
+  assert.match(diagnostics.taskHealth.recentTaskIssues.map((issue) => issue.message).join('\n'), /等待人工审批|网页搜索/)
   assert.match(diagnostics.nextActions.join('\n'), /模型凭据/)
+  assert.match(diagnostics.nextActions.join('\n'), /工具失败率/)
 
   const unavailable = await readHermesDiagnostics({
     requestDashboard: async () => {
@@ -32,6 +40,63 @@ async function main() {
   assert.match(unavailable.nextActions[0], /启动 Hermes 官方后台/)
 
   console.log('Hermes diagnostics test passed')
+}
+
+function fakeTasks(): Task[] {
+  const now = new Date().toISOString()
+  return [
+    {
+      id: 'task-search-failed',
+      workspaceId: 'default',
+      title: '搜索 MCP 文档',
+      status: 'failed',
+      prompt: '搜索 MCP 文档',
+      error: 'web_search timeout',
+      createdAt: now,
+      updatedAt: now,
+      events: [
+        {
+          id: 'evt-start',
+          type: 'tool.started',
+          name: 'mimo_web_search',
+          createdAt: now
+        },
+        {
+          id: 'evt-fail',
+          type: 'tool.completed',
+          name: 'mimo_web_search',
+          isError: true,
+          error: 'timeout',
+          elapsedMs: 3200,
+          createdAt: now
+        },
+        {
+          id: 'evt-task-fail',
+          type: 'task.failed',
+          error: 'web_search timeout',
+          createdAt: now
+        }
+      ]
+    },
+    {
+      id: 'task-approval',
+      workspaceId: 'default',
+      title: '整理本地文件',
+      status: 'running',
+      prompt: '整理本地文件',
+      hermesSessionId: 'session-1',
+      createdAt: now,
+      updatedAt: now,
+      events: [
+        {
+          id: 'evt-approval',
+          type: 'approval.request',
+          command: 'rm -rf tmp',
+          createdAt: now
+        }
+      ]
+    }
+  ]
 }
 
 async function fakeDashboard(apiPath: string): Promise<HermesDashboardProxyResult> {
