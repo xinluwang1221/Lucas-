@@ -7,14 +7,14 @@
 - 新开发、代码审查、GitHub 交接和新对话恢复上下文时，都以本文档为准。
 - `README.md` 只保留项目简介、运行命令和本文档入口。
 
-当前阶段结论：
+当前阶段结论（2026-05-03）：
 
-- Hermes Cowork 已经从静态前端原型推进到本机 Hermes 工作台原型。
-- 当前主线不是扩散新功能，而是工程稳定、后端覆盖、信息降噪和客户端化准备。
-- 文件编辑、主题化、客户端化和 Hermes 后端融合都属于重功能，必须先按本文档的模块边界推进。
-- 技术路线定为 React + TypeScript UI、Node + TypeScript Local Adapter、SQLite 本地状态、Electron macOS 客户端壳、Hermes managed runtime。
-- Hermes 暂不直接混入 Cowork 主目录，先作为 Cowork 管理的 runtime：负责安装、版本锁定、升级、回滚和兼容性复测。
-- 本文档有两种读法：产品判断先看“架构覆盖、能力矩阵、开发方案解释区”；继续编码先看“关键文件说明、测试命令、后续开发建议”。
+- Hermes Cowork 已进入“Hermes 能力释放规划阶段”：前端框架基本成型，下一阶段重点不是继续堆页面，而是把 Hermes 当前版本能力拆成产品能力树，再逐步前端化、客户端化、内核化。
+- Hermes 当前本机版本会作为 Cowork 的固定 Agent 内核管理；后续不默认追随 upstream 主线更新，只有在 Cowork 兼容性复测通过后才吸收必要补丁。
+- Cowork 不重写 Hermes Agent loop，也不做第二套 Agent；Cowork 的职责是把 Hermes 的任务、上下文、模型、工具、MCP、Skill、Cron、审批、回滚和产物能力变成可理解、可确认、可复测的本机客户端体验。
+- 技术路线定为 React + TypeScript UI、Node + TypeScript Kernel Manager、本地状态存储、Electron macOS 客户端壳、固定 Hermes Core runtime。
+- 后续重功能开发必须先完成“官网能力树 -> 本机 Hermes 代码 -> Cowork 覆盖矩阵 -> UI/后端实现”的链路，禁止发现一个问题就临时造一个前端状态。
+- 本文档有两种读法：产品判断先看“官网能力基线、架构覆盖、能力矩阵、开发方案解释区”；继续编码先看“关键文件说明、测试命令、后续开发建议”。
 
 ## 1. 项目定位
 
@@ -97,14 +97,93 @@ Hermes 对接：
 - 回退运行通道：`hermes_bridge.py` 复用 Hermes `HermesCLI` 初始化路径，再嵌入 `AIAgent`；主要用于预加载 Cowork skill、上下文读取/压缩兜底和 gateway 不可用时的任务执行。
 - 官方 Dashboard 通道：`hermes dashboard --host 127.0.0.1 --port 9120 --no-open`，Cowork 后端通过本机页面注入的 `X-Hermes-Session-Token` 代理官方 Dashboard API，只把状态、Skills、Toolsets、Cron、Sessions、Config 等结构化后端状态给前端消费。
 
+## 3.0 Hermes 官网能力基线（2026-05-03）
+
+本节是 Cowork 后续开发的能力基线。每次开发 Hermes 相关能力前，先按这里确认“官网说 Hermes 已经有什么”，再看本机 Hermes 代码是否具备稳定入口，最后才决定 Cowork 要做成什么 UI。
+
+读取来源：
+
+- Hermes Architecture：`https://hermes-agent.nousresearch.com/docs/developer-guide/architecture`
+- Agent Loop Internals：`https://hermes-agent.nousresearch.com/docs/developer-guide/agent-loop/`
+- API Server：`https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server`
+- Context Files：`https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files`
+- Context References：`https://hermes-agent.nousresearch.com/docs/user-guide/features/context-references`
+- AI Providers：`https://hermes-agent.nousresearch.com/docs/integrations/providers`
+- Fallback Providers：`https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers/`
+- Credential Pools：`https://hermes-agent.nousresearch.com/docs/user-guide/features/credential-pools/`
+- Tools & Toolsets：`https://hermes-agent.nousresearch.com/docs/user-guide/features/tools`
+- Skills System：`https://hermes-agent.nousresearch.com/docs/user-guide/features/skills`
+- MCP：`https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp`
+- Scheduled Tasks：`https://hermes-agent.nousresearch.com/docs/user-guide/features/cron`
+- Gateway Internals：`https://hermes-agent.nousresearch.com/docs/developer-guide/gateway-internals`
+- Browser Automation：`https://hermes-agent.nousresearch.com/docs/user-guide/features/browser`
+- Voice Mode：`https://hermes-agent.nousresearch.com/docs/user-guide/features/voice-mode`
+- Security：`https://hermes-agent.nousresearch.com/docs/user-guide/security/`
+- Checkpoints and Rollback：`https://hermes-agent.nousresearch.com/docs/user-guide/checkpoints-and-rollback`
+
+本机 Hermes 版本基线：
+
+- 本机源码目录：`/Users/lucas/.hermes/hermes-agent`
+- 当前检测版本：`v2026.4.23-927-g58a6171bf-dirty`
+- 当前 commit：`58a6171bfb0ba2ca10b1b08854511736cd77a623`
+- 当前分支状态：本机 `main` 落后 upstream，且 Hermes 自身有未提交改动。后续融合内核前，必须先把这个版本作为 Cowork 固定内核快照处理，不能直接拉 upstream 覆盖。
+- Cowork 仓库基线备份：`baselines/hermes-core/v2026.4.23-927-g58a6171bf`
+- 基线 manifest：`baselines/hermes-core/BASELINE_MANIFEST.md`
+
+能力树：
+
+| 类别 | Hermes 官方能力 | Cowork 当前状态 | 产品判断 |
+| --- | --- | --- | --- |
+| 入口与运行时 | CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 已有 gateway 优先、bridge 回退、Dashboard adapter；未完整采用官方 Runs/API Server | Cowork 是新的本机客户端入口，不能替代 Agent loop；下一步评估官方 Runs API 是否替换私有 bridge/gateway 部分能力。 |
+| Agent Loop | `AIAgent` 负责 prompt、provider、模型调用、工具执行、fallback、history、context、memory | 已把事件归类成正文、过程、审批、澄清、产物；仍有部分事件靠归一化推断 | Cowork 只展示 Agent loop，不重写 Agent loop。过程 UI 必须来自 Hermes 事件或可解释的归一化，不做假步骤。 |
+| Prompt / Context | `SOUL.md`、`MEMORY.md`、`USER.md`、`.hermes.md`、`AGENTS.md`、`CLAUDE.md`、`.cursorrules`、`@file`、`@folder`、`@diff`、`@url` | 工作区、附件、文件批注、上下文资源已接入；压缩和 context files 管理仍不完整 | 工作区不是聊天分类，而是授权上下文边界。附件、文件引用和批注都应落到 Hermes context 能力。 |
+| 模型与 Provider | 主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 已做模型配置、Key 重填、Fallback、reasoning；Credential Pools 和 Auxiliary Providers 还未完整产品化 | 模型页不能只是模型列表，要覆盖 Key 池、备用路线、辅助任务模型、失败修复和思考强度。 |
+| 工具与 Toolsets | web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code 等 | 技能页已合并 Skill/MCP/Toolsets；内置工具级开关、工具失败统计未完整覆盖 | 技能页是“能力中心”，工具、MCP、Skill 都在这里统一管理。 |
+| Skills | 本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 已支持清单、启停、上传、文件树、加入下一次任务；Agent 自动沉淀 Skill 未完整产品化 | Skill 是工作方法系统，不是普通插件列表；后续要做分类、依赖、运行前预载和自动沉淀。 |
+| MCP | stdio / HTTP server、自动发现、工具前缀、server filtering、Hermes 自身作为 MCP server | 已覆盖服务、市场、测试、启停、工具 include/exclude、Hermes MCP serve；OAuth/远程 MCP 权限仍需深化 | MCP 页要表达“外部能力管理”，而不是只展示配置。 |
+| Cron / Automation | 自然语言任务、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 已接真实 Hermes Cron；周期选择器和 Skill 分类选择器已规划/部分落地；投递渠道还未完整 | Cron 是 Agent task，不是系统定时器。任务说明必须自包含，运行产物和失败恢复要进入 UI。 |
+| Gateway / Messaging / Mobile | 长驻 gateway、多平台消息入口、授权、session routing、slash command、cron tick、background maintenance | 当前只做本机 gateway；移动端和云端中转未实现 | 未来移动端走“云端加密中转 + Mac 主机执行”，云端不跑 Agent、不接触工作区文件。 |
+| 媒体与浏览器 | Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件/图片预览和批注已做；视觉理解、浏览器过程可视化、语音/TTS 未完整 | 这些能力应优先调用 Hermes 工具，Cowork 做入口、权限、过程展示和产物卡。 |
+| 安全、审批与回滚 | 危险命令审批、YOLO、smart approval、容器隔离、MCP credential filtering、context scanning、checkpoint/rollback | 审批卡已接；澄清卡已接；checkpoint/rollback、allowlist、YOLO 风险说明未完整 | 安全不是错误提示，而是一等 UI：审批、回滚、检查点、权限解释必须可操作。 |
+
+当前已前端化的重点能力：
+
+- 对话任务、继续对话、停止、SSE 流式事件。
+- 模型配置、Key 重填、Fallback、MiMo/DeepSeek 等模型入口。
+- MCP 服务管理、市场推荐、工具级 include/exclude、Hermes MCP serve。
+- Skill 清单、详情、文件树、启停、上传、加入下一次任务。
+- Hermes Cron 真实任务列表和基础操作。
+- 工作区授权、附件、文件预览、文件批注、产物卡片。
+- 审批卡和澄清卡的 UI/事件链路。
+- Dashboard adapter 的只读能力：status、skills、toolsets、cron、sessions、config、env、model-info。
+
+仍只在 Hermes 后端存在、Cowork 尚未完整前端化的能力：
+
+- 官方 Runs API / API Server 的完整任务创建、事件、停止和结果协议。
+- Session 全量浏览、搜索、删除、重命名、来源平台、模型和工具调用历史。
+- Credential Pools、Auxiliary Providers、Provider OAuth 和更细的 provider routing。
+- 内置工具集的工具级策略、工具失败率、耗时统计和使用量分析。
+- Agent 自动创建/修改 Skill、Skill Hub/外部目录的完整安装治理。
+- MCP OAuth、远程 HTTP MCP 权限说明、Hermes 作为 MCP server 的生产级管理。
+- Cron delivery target、运行产物卡片、运行失败恢复和投递渠道。
+- Browser Automation 的过程可视化、Vision/Image/TTS/Voice 的产品入口。
+- Checkpoint / Rollback、永久 allowlist、YOLO 风险提示、容器隔离状态、context scanning 结果。
+
+暂不进入当前产品规划的能力：
+
+- Hermes 官方 Dashboard 自身的主题、插件和 UI 定制。
+- 面向大众用户的多平台消息全量接入。Cowork 只保留未来“手机端加密中转到本机 Mac”的路线。
+- 直接把 Hermes upstream 每次更新自动合并进 Cowork。当前策略是固定内核、按需吸收补丁、升级前自动复测。
+
 ## 3.1 Cowork 与 Hermes 对应架构图
 
-Hermes Cowork 的产品边界必须按下面这张图理解：Cowork 是 Hermes 的本机工作台，不替代 Hermes Agent。Cowork 的价值是把 Hermes 后端已经具备但原本隐藏在 CLI/TUI、配置文件、session、事件流里的能力，变成用户能看到、能确认、能复测、能继续操作的产品入口。
+Hermes Cowork 的产品边界必须按下面这组图理解：Cowork 是本机客户端和可视化工作台，Cowork 本机后端是 Kernel Manager，Hermes 当前版本是固定 Agent 内核。Cowork 不替代 Hermes Agent，而是把 Hermes 后端已经具备但原本隐藏在 CLI/TUI、Dashboard、配置文件、session、事件流里的能力，变成用户能看到、能确认、能复测、能继续操作的产品入口。
 
 官网依据：
 
 - Hermes 官网把 Hermes 定位为“会长期运行、能记住经验、能通过多平台入口工作的自主 Agent”，不是单个聊天 API：`https://hermes-agent.nousresearch.com/`
 - Hermes 官方架构把系统分成入口层、`AIAgent`、提示词组装、模型选择、工具派发、Session 存储和工具后端：`https://hermes-agent.nousresearch.com/docs/developer-guide/architecture`
+- Hermes 官方 API Server 文档说明 Hermes 已经有面向本机/远程控制的 structured API 和 runs/events/stop 类能力：`https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server`
 - Hermes MCP 文档说明 MCP 是外接工具服务器能力，Hermes 会在启动时发现并注册工具：`https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp`
 - Hermes 安全文档说明危险命令审批、人类确认、隔离和上下文文件扫描是后端安全模型的一部分：`https://hermes-agent.nousresearch.com/docs/user-guide/security`
 
@@ -115,10 +194,12 @@ Hermes Cowork 的产品边界必须按下面这张图理解：Cowork 是 Hermes 
 ```mermaid
 flowchart TB
   U["你<br/>提出任务、放文件、确认风险操作"]
-  C["Hermes Cowork<br/>可视化工作台<br/>对话、文件、设置、审批、结果"]
-  A["Cowork 本机后端<br/>翻译任务、保存记录、连接 Hermes"]
-  H["Hermes Agent<br/>理解任务、规划、调用工具、保存记忆"]
+  C["Hermes Cowork 客户端<br/>可视化工作台<br/>对话、文件、设置、审批、结果"]
+  A["Cowork Kernel Manager<br/>翻译任务、保存记录、连接和管理 Hermes 内核"]
+  H["Hermes Core 固定内核<br/>理解任务、规划、调用工具、保存记忆"]
   R["外部资源<br/>模型、MCP、文件、网页、终端"]
+  M["未来手机端<br/>只发消息和确认，不执行 Agent"]
+  Cloud["云端加密中转<br/>只做设备配对、消息转发、推送"]
 
   U --> C
   C --> A
@@ -127,12 +208,14 @@ flowchart TB
   R --> H
   H --> A
   A --> C
+  M <--> Cloud
+  Cloud <--> C
 ```
 
 用一句话理解：
 
 ```text
-你在 Cowork 里开车；Cowork 是方向盘、仪表盘和刹车；Hermes 是发动机和自动驾驶系统；模型、MCP、浏览器、文件和终端是 Hermes 可以调用的动力和工具。
+你在 Cowork 里开车；Cowork 是方向盘、仪表盘和刹车；Kernel Manager 是发动机管理系统；Hermes Core 是自动驾驶内核；模型、MCP、浏览器、文件和终端是 Hermes 可以调用的动力和工具。
 ```
 
 ### 3.1.2 任务图：一次对话怎么跑完
@@ -171,21 +254,24 @@ flowchart TB
   M["模型<br/>Key、Base URL、Fallback、思考强度"]
   P["MCP<br/>安装、测试、启停、工具级开关"]
   K["Skill<br/>查看文件、启用、加入下一次任务"]
-  V["Hermes 更新<br/>检测、复测、升级、回滚准备"]
+  V["Hermes 内核管理<br/>固定版本、补丁、复测、升级、回滚准备"]
 
   HC["Hermes 配置<br/>config.yaml、.env、mcp_servers"]
-  HA["Hermes Agent<br/>下一次任务按这些配置执行"]
+  KM["Cowork Kernel Manager<br/>备份、写入、复测、启动内核"]
+  HA["Hermes Core<br/>下一次任务按这些配置执行"]
 
-  S --> M --> HC
-  S --> P --> HC
-  S --> K --> HA
-  S --> V --> HA
+  S --> M --> KM
+  S --> P --> KM
+  S --> K --> KM
+  S --> V --> KM
+  KM --> HC
+  KM --> HA
   HC --> HA
 ```
 
 这张图对应设置页：
 
-- 模型、MCP、更新最终都要落到 Hermes 自己的配置或 runtime 状态。
+- 模型、MCP、更新最终都要落到 Hermes 自己的配置或 runtime 状态，但写入必须经过 Cowork Kernel Manager 做备份、归一化和复测。
 - Skill 更像“工作方法说明书”，会进入下一次任务的上下文。
 - Cowork 不应该维护另一套假的模型、MCP 或 Skill 状态。
 
@@ -232,24 +318,21 @@ flowchart TB
 
 ## 3.2 Hermes 能力覆盖矩阵
 
-这张表是 Cowork 防止漏能力的主索引。后续任何新功能，都要先判断它是在覆盖 Hermes 后端能力，还是 Cowork 自己补充的桌面工作台能力。
+这张表是 Cowork 防止漏能力的主索引。后续任何新功能，都要先判断它是在覆盖哪一类 Hermes 官方能力，再确认 Cowork 当前入口和验证方式。
 
-| Hermes 后端能力 | Cowork 用户入口 | Cowork Adapter / 代码边界 | 当前覆盖状态 | 漏开发风险检查点 |
+| Hermes 官方能力 | Cowork 用户入口 | 当前覆盖状态 | 下一步产品化动作 | 验证方式 |
 | --- | --- | --- | --- | --- |
-| 任务执行、继续对话、停止、流式事件 | 对话区、输入框、左侧会话、右侧工作区 | `/api/tasks`、`/api/tasks/:id/stream`、`hermes_runtime.ts`、`hermes_gateway.ts`、`useTaskStream.ts` | 已接入 gateway 优先、bridge 回退、SSE 同步和轮询兜底 | 用户气泡是否立即出现；运行中是否实时更新；停止是否回写 Hermes；继续对话是否使用同一 session |
-| 官方 Dashboard API、运行状态和只读后端真源 | 设置 > 运行环境、未来 Cron/Skill/Toolset 统一后端源 | `/api/hermes/dashboard`、`/api/hermes/dashboard/official/*`、`hermes_dashboard.ts`、`useHermesRuntimeState.ts` | 已新增 Dashboard adapter：可启动/探测 `hermes dashboard --no-open`、读取 session token、代理官方只读接口；设置页已展示官方后台状态并提供启动入口 | 不允许前端各自拼静态清单；写入类接口必须逐项评估 UI 和备份策略后再开放 |
-| Clarify / 澄清反问 | 对话区澄清卡、可选项按钮、自由输入框 | `/api/tasks/:id/clarify`、`ClarifyRequestCard.tsx`、`useTaskActions.ts`、`hermes_gateway.ts` | 已接入 gateway 事件、前端卡片和 fake gateway 链路测试；bridge fallback 无法继续澄清 | Hermes 返回 `clarify.request` 时必须弹卡片；回答后必须调用 `clarify.respond` 并继续原任务；不能降级成普通文字 |
-| 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
-| 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
-| MCP Server、工具列表、市场、工具级开关 | 技能页 > MCP 服务、设置 > MCP、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
-| Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；运行由 Hermes gateway/tick 负责 | 任务必须写入 Hermes cron；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
-| Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 技能清单和启用状态优先读取 Hermes 官方 Dashboard `/api/skills`，本机扫描负责补充 `SKILL.md` 和子文件预览；上传技能、启停、加入下一次任务已接入 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；启停 Hermes 官方 Skill 必须写回 Hermes，而不是只改 Cowork 本地状态 |
-| Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
-| 工作区、附件、产物、文件预览 | 工作区页、输入框附件、消息文件卡片、右侧预览 | `/api/workspaces`、`/api/artifacts`、`file_preview.ts`、`workspaceApi.ts`、`FilePreviewPanel.tsx` | 已支持目录授权、附件上传、产物识别、文件卡片、右侧预览、本机打开和框选批注 | 拖入文件必须先进入对话框；Office 预览要尽量接近本机打开；预览不能造成布局抖动 |
-| 文件区域批注 | 右侧文件预览、输入框批注 chip、用户消息批注卡片 | `Message.annotations`、`FilePreviewPanel.tsx`、`ChatComposer.tsx`、`promptWithContext()` | 已支持预览区拖拽框选、生成批注编号、可选补充说明、自动识别可读选区文本；无法识别时后端补充文件正文摘录；批注进入输入框并写入 Hermes 实际 prompt | 尚未生成截图裁片；PDF/Office 在浏览器或 Quick Look 无法暴露文本时仍不能精确映射到页码、段落或单元格，后续要做类型专用定位 |
-| Runtime 版本、升级、复测、回滚准备 | 设置 > 关于 > Hermes 后台更新 | `hermes_update.ts`、`HermesUpdatePanel.tsx`、`runtimeApi.ts` | 已有检测、复测、自动更新入口；仍未做完整 managed runtime 安装器 | 升级前后必须跑模型、MCP、session、流式事件 smoke；红色信息只能给可处理动作 |
-| 错误、认证失败、后端异常 | 对话失败卡、模型设置、右侧状态 | `hermes_python.ts`、`hermes_gateway.ts`、`TaskFocusPanel.tsx` | 已做部分错误脱敏和 401 识别 | 不能只显示 Failed to fetch；用户必须知道下一步是重填 Key、重试、还是等待后端 |
-| UI 主题、密度、层级、暗色模式 | 设置 > 外观、左下本机偏好菜单 | `tokens.css`、`useSettingsPreferences.ts`、`SettingsPages.tsx` | 已有亮色/暗色/系统、字体字号、强调色；暗色仍需继续统一 | 新样式必须使用 token；不要在组件里散写颜色和字号 |
+| 入口与运行时：CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 对话区、启动流程、设置 > 运行环境、未来客户端壳 | 部分覆盖。当前 gateway 优先、bridge 回退、Dashboard adapter 可读；官方 API Server / Runs API 尚未成为主通道 | 评估官方 API Server 的 runs/events/stop/session 协议，决定哪些私有 gateway/bridge 能迁移到官方通道；设计 Kernel Manager 启停、健康检查和内核目录管理 | `npm run smoke:hermes-real`、`GET /api/hermes/runtime`、官方 API Server smoke、升级前兼容性复测 |
+| Agent Loop：`AIAgent` 组装 prompt、选择 provider、调用模型、执行工具、fallback、history、context、memory | 主对话流、运行过程、右侧任务拆解、审批卡、澄清卡、产物卡 | 部分覆盖。已做事件归类和 message parts；产品级 plan/todo/reflection 仍依赖 Hermes 暴露程度 | 建立 Hermes 事件语义表：正文、过程、工具、计划、澄清、审批、产物、错误；禁止把工具清单伪装成任务拆解 | fake gateway 事件测试、真实任务观察、`test:task-decomposition`、运行中 UI smoke |
+| Prompt / Context：Context files、context references、`@file`、`@folder`、`@diff`、`@url`、记忆文件 | 工作区、附件、文件批注、右侧上下文与资源、输入框上下文 chip | 部分覆盖。工作区/附件/批注已写入 prompt；context files 管理、references 可视化和压缩策略仍不完整 | 把工作区文件、附件、批注、Hermes context references、手动压缩合并成一套上下文管理；新增 context 文件列表、大小/占比和移除入口 | 发送带附件/批注任务后检查 Hermes prompt；`GET /api/tasks/:id/context`；文件引用点击预览 |
+| 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
+| 工具与 Toolsets：web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code | 技能页 > 工具集、过程资源、设置 > 运行环境诊断 | 部分覆盖。Toolsets 已进入技能页；工具级策略、工具使用统计和失败诊断还缺 | 把 Toolsets 做成技能页的一级能力：分类、启停、凭据状态、内置工具列表、使用统计、失败原因；与 MCP/Skill 同页但语义分清 | Dashboard `/api/tools/toolsets`、启停后 config 检查、任务过程资源工具调用检查 |
+| Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、未来 Skill 市场 | 部分覆盖。清单、启停、上传、文件树、加入下一次任务已接；外部目录、Hub、Agent 自动沉淀未完整 | 技能页继续做分类、搜索、依赖、运行前预载、安装来源和 Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
+| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、MCP 市场、过程资源 | 部分覆盖。安装、测试、启停、工具 include/exclude、Hermes MCP serve 已接；OAuth/远程 MCP/权限说明还缺 | MCP 页升级为外部能力管理：市场分类、图片图标、功能描述、OAuth、远程 HTTP、工具级开关、Hermes MCP server 生产化 | `hermes mcp test`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
+| Cron / Automation：自然语言、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 左侧定时任务页、未来产物区、未来投递设置 | 部分覆盖。真实 Hermes Cron 基础管理已接；周期选择、Skill 分类多选、delivery target、输出产物还需完善 | 定时任务页只管理 Hermes Cron：周期选择器、工作区绑定、Skill 类目多选、运行产物、失败处理和投递渠道 | `test:hermes-cron`、Dashboard cron jobs、`~/.hermes/cron/output`、gateway/tick 运行检查 |
+| Gateway / Messaging / Mobile：长驻 gateway、平台消息、session routing、slash command、cron tick、background maintenance | 本机 gateway、未来 Electron 常驻、未来手机端 | 未完整覆盖。当前只有本机 gateway；移动端和云端中转未实现 | 设计“云端加密中转 + Mac 主机执行”：云端只做账号/设备配对、消息路由和推送；Hermes/files/tools 只在 Mac 执行 | gateway 连接测试、多设备协议设计文档、移动端发任务到 Mac 的端到端 smoke |
+| 媒体与浏览器：Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件预览、图片/文件批注、未来语音入口、未来浏览器过程面板 | 未完整覆盖。文件/图片预览已做；视觉理解、浏览器自动化可视化、TTS/Voice 还未产品化 | 新增语音输入/TTS 输出、图片视觉理解入口、浏览器任务过程可视化；执行仍走 Hermes 工具，不在 Cowork 重写工具 | Browser tool smoke、图片任务 smoke、Voice/TTS 本机权限检查、过程事件展示 |
+| 安全、审批与回滚：危险命令审批、YOLO、smart approval、容器隔离、MCP credential filtering、context scanning、checkpoint/rollback | 审批卡、设置 > 安全/运行环境、文件变更摘要、未来回滚面板 | 部分覆盖。审批卡和澄清卡已接；checkpoint/rollback、allowlist、YOLO 风险、隔离状态仍缺 | 把安全做成一等 UI：审批、永久 allowlist、风险模式、checkpoint 列表、diff 预览、rollback、一键恢复、敏感信息扫描结果 | approval fake/real gateway 测试、checkpoint list/diff/rollback smoke、危险命令审批恢复测试 |
 
 覆盖状态定义：
 
@@ -440,7 +523,7 @@ flowchart TB
 
 可升级空间：
 
-- managed runtime：Cowork 管理 Hermes 安装、版本锁定、升级、回滚和兼容性复测。
+- Kernel Manager：Cowork 管理固定 Hermes Core 的安装、版本锁定、补丁、升级、回滚和兼容性复测。
 - 文件编辑：在授权目录内支持主流文本/Markdown/表格的安全编辑，Office 先走本机应用打开和产物回收。
 
 判断标准：
@@ -495,7 +578,90 @@ flowchart TB
 - 只允许 UI 层做展示分组，不允许 UI 层维护另一份业务真源。
 - 每次修复“某入口不一致”后，把入口和共同真源补回本文档。
 
-## 3.5 工作区产品规划（2026-04-29）
+## 3.5 Hermes 能力释放路线图（2026-05-03）
+
+路线图目标：不再“开发一点写一点”，而是按 Hermes 能力树把 Cowork 从本机 Web 工作台推进到固定内核客户端。每一阶段都必须有后端真源、用户入口、验证方式和文档说明。
+
+### 第一阶段：真实后端能力补齐
+
+目标：把 Cowork 仍然靠私有桥接、半成品入口或 Dashboard 只读代理的能力，补成能真实操作 Hermes 的产品入口。
+
+优先任务：
+
+1. Hermes API Server / Runs API 评估：确认官方 runs、events、stop、session 协议是否能替换 Cowork 现有私有 gateway/bridge 的一部分能力。
+2. Session 全量前端化：全文浏览、搜索、删除、重命名、来源平台、模型、工具调用历史、继续对话和任务映射。
+3. Logs / Analytics 前端化：只展示用户能处理的信息，例如失败原因、模型消耗、工具失败率、最近异常；原始日志进入诊断折叠。
+4. Skills / MCP / Toolsets 统一能力中心：技能页承担 Skill、MCP、Hermes 内置工具集三类能力；设置页只放配置和授权。
+5. Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target、失败恢复。
+
+阶段验收：
+
+- 任一能力都能指向 Hermes 官方能力、Cowork API、前端入口和测试命令。
+- 不再新增只靠前端静态状态支撑的 Hermes 能力。
+- Dashboard/API/Gateway 不可用时，界面只显示用户可操作的下一步。
+
+### 第二阶段：文件、上下文、批注、产物、回滚完整产品化
+
+目标：把“文件作为 Agent 工作材料”做扎实。用户要能把主流文件交给 Hermes，也能看到文件如何进入上下文、产物在哪里、出错后如何恢复。
+
+优先任务：
+
+1. Context 系统补齐：context files、context references、附件、批注、工作区文件和压缩策略统一展示。
+2. 文件批注升级：PDF 绑定页码和文字选区；HTML 绑定 DOM 选区；Word 绑定段落/页；Excel 绑定工作表和单元格范围；PPT 绑定幻灯片和区域。
+3. 产物体系升级：Hermes 输出文档、图片、表格、代码、压缩包时都以产物卡展示，并可预览、本机打开、Finder 定位、加入下一轮上下文。
+4. Checkpoint / Rollback：展示每轮文件变更、checkpoint 列表、diff 预览、单文件回滚和整轮回滚。
+5. 文件编辑第一版：只在授权目录内编辑，先做文本/Markdown/CSV，Office 编辑优先通过本机应用和产物回收。
+
+阶段验收：
+
+- 用户能清楚知道“哪些文件进入了上下文、占多少、能否移除、是否已压缩”。
+- 文件批注能进入 Hermes 实际 prompt，并在对话中保留编号和引用。
+- 任一可写文件任务都有 checkpoint 或备份策略。
+
+### 第三阶段：Electron 客户端、Kernel Manager、固定 Hermes 内核目录
+
+目标：从本机 Web 工作台升级为可安装 Mac 客户端，把当前 Hermes 版本作为 Cowork 固定内核一起管理。
+
+优先任务：
+
+1. Electron 客户端壳：复用现有 React/Vite UI 和 Node Adapter，增加窗口、菜单、托盘、系统通知、启动项。
+2. Kernel Manager：管理 Hermes Core 固定目录、Python venv、环境变量、配置备份、启动/停止、健康检查、兼容性复测。
+3. 内核目录融合：把当前 Hermes 版本以独立目录纳入 Cowork 仓库或安装包，保留 MIT license、upstream commit、补丁记录和升级复测脚本。
+4. 数据存储升级：把 `data/state.json` 迁移到 SQLite，支持多窗口、历史检索和更稳定的任务/文件索引。
+5. 更新策略：Cowork 优先更新自己的客户端和 Kernel Manager；Hermes Core 只按固定内核策略吸收补丁。
+
+阶段验收：
+
+- 用户可以在多台 Mac 上安装 Cowork，不需要手工安装 Hermes。
+- Hermes Core 版本、补丁、配置、复测结果在设置页可解释。
+- 升级失败不会破坏当前可用 Hermes 内核。
+
+### 第四阶段：语音、移动端、云端加密中转
+
+目标：让 Cowork 从 Mac 本机工作台扩展到多入口工作流，但 Agent 执行仍保持在用户 Mac。
+
+优先任务：
+
+1. 语音输入与 TTS 输出：调用 Hermes Voice/TTS 工具，本机麦克风/扬声器权限由客户端管理。
+2. 图片视觉理解和浏览器过程可视化：把 Vision、Browser Automation、Image Generation 的过程和产物做成可读卡片。
+3. 手机端入口：手机只发送任务、查看状态、确认审批、接收结果，不直接访问本机文件。
+4. 云端加密中转：只做设备配对、消息路由、推送和离线提示；不跑 Agent，不保存工作区文件，不保存明文任务内容。
+5. 多通道任务投递：Cron delivery target、飞书/邮件/手机推送逐步合并到统一“投递渠道”设置。
+
+阶段验收：
+
+- 手机端发起任务后，Mac Hermes Core 执行，Cowork 能回传状态、审批和产物摘要。
+- 云端断开时，本机 Cowork 仍可独立工作。
+- 语音、视觉、浏览器自动化都能回到对话区和右侧资源体系，而不是新开孤立页面。
+
+### 暂缓项
+
+- 不重写 Hermes Agent loop。
+- 不在云端运行 Hermes Agent。
+- 不做面向大众用户的通用 SaaS 多租户后台。
+- 不把 upstream Hermes 自动更新作为默认策略。
+
+## 3.6 工作区产品规划（2026-04-29）
 
 工作区的新定义：工作区不是一个筛选器，也不是一个普通项目卡片，而是用户授权给 Hermes 的本机文件夹，以及围绕这个文件夹产生的任务会话、文件、产物和上下文。左侧栏的工作区入口必须像目录一样存在；点击工作区进入文件管理页，点击工作区下的工作会话进入对话页。
 
@@ -561,7 +727,7 @@ flowchart TB
 - 会话可以归档和删除，操作后左侧列表即时更新；工作区文件不会被误删。
 - 刷新页面后仍能恢复工作区列表、当前工作区和活跃会话。
 
-## 3.6 可调三栏布局原则（2026-04-30）
+## 3.7 可调三栏布局原则（2026-04-30）
 
 Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任务对话、右侧工作区/任务上下文。三栏宽度不是一次性写死的视觉参数，而是用户可以持续调节的工作环境偏好。
 
@@ -572,7 +738,7 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 - 文件预览模式复用右侧工作区宽度，拖宽右侧后应优先给预览内容更多空间。
 - 低于窄屏断点时隐藏右侧工作区，避免三栏挤压成不可读状态。
 
-## 3.7 UI 层级与主题化原则（2026-05-01）
+## 3.8 UI 层级与主题化原则（2026-05-01）
 
 当前 UI 进入主题化第一阶段。目标不是局部换色，而是建立全局层级：同一级信息在不同区域必须使用同一套字号、颜色、边框和阴影 token。
 
@@ -796,7 +962,7 @@ HC_EVENT\t
 
 `apps/api/src/hermes_update.ts`
 
-- Hermes 是外部开源 runtime，Cowork 不直接复制或改写 Hermes 源码；Cowork 后端负责做 Adapter 和治理层。
+- Hermes 当前版本会作为 Cowork 固定 Agent 内核管理；Cowork 后端负责做 Kernel Manager、Adapter、配置备份、版本锁定、补丁记录和兼容性复测。
 - 读取本机 Hermes 版本、当前 tag/commit、GitHub 最新 tag、落后提交数、工作树是否有未提交改动。
 - 维护 Cowork 已验证 Hermes 基线 tag，给前端返回“可继续使用 / 升级前需复测 / 暂不建议升级”的兼容性判断。
 - 提供自动复测接口：检查 `hermes version/status`、Cowork 模型 Adapter、MCP Adapter，并通过 `runHermesPythonBridge` 发起一个真实 Hermes 小任务，验证模型、session 和事件桥接链路。
@@ -1206,7 +1372,7 @@ HC_EVENT\t
 
 - Hermes runtime / 更新 API service，已从 `apps/web/src/lib/api.ts` 抽离。
 - 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新和 Hermes session 索引。
-- 后续扩展“后端 managed runtime 安装 / 版本锁定 / 回滚 / 多电脑迁移检查”时，先在这里确认 API 边界，再由 `useHermesRuntimeState.ts` 和 `HermesUpdatePanel.tsx` 消费。
+- 后续扩展“Kernel Manager 安装 / 固定内核版本锁定 / 补丁记录 / 回滚 / 多电脑迁移检查”时，先在这里确认 API 边界，再由 `useHermesRuntimeState.ts` 和 `HermesUpdatePanel.tsx` 消费。
 
 `apps/web/src/features/skills/SkillsView.tsx`
 
@@ -1829,17 +1995,18 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 开发前固定流程：
 
-1. 先判断这次需求覆盖哪一个 Hermes 后端能力：任务、审批、模型、MCP、Skill、Session、上下文、文件、runtime、配置或错误处理。
-2. 回到 `3.2 Hermes 能力覆盖矩阵`，确认这项能力已经有 Cowork 用户入口、Adapter/API、代码边界和漏开发检查点；如果没有，先补矩阵。
-3. 回到 `3.3 开发方案解释区`，用“当前方案 / 为什么这样做 / 可升级空间 / 判断标准”写清产品解释，避免只写给开发者看的实现细节。
-4. 再查 `3.4 多入口一致性契约`，确认同一能力是否已经出现在设置页、输入框、右侧工作区、左侧工作区、技能页或文件预览区。
-5. 开始编码时先改后端 Adapter 和归一化函数，再让多个前端入口消费同一份数据；不要让 UI 自己拼第二套静态清单。
-6. 收尾必须补验证：文档类改动至少跑 `git diff --check`；代码改动至少跑 `npm run -s typecheck`，涉及前端渲染再跑 `npm run -s build` 和对应测试。
+1. 先查 `3.0 Hermes 官网能力基线`，判断这次需求属于哪一类 Hermes 官方能力：入口/runtime、Agent loop、context、model/provider、tools/toolsets、skills、MCP、cron、gateway/mobile、media/browser、security/rollback。
+2. 再查本机 Hermes 代码和文档，确认当前固定内核是否真的有稳定入口；优先看 `/Users/lucas/.hermes/hermes-agent/website/docs`、`hermes_cli`、`tools`、`tui_gateway`、`web`。
+3. 回到 `3.2 Hermes 能力覆盖矩阵`，确认这项能力是否已经有 Cowork 用户入口、当前覆盖状态、下一步产品化动作和验证方式；如果没有，先补矩阵。
+4. 回到 `3.3 开发方案解释区`，用“当前方案 / 为什么这样做 / 可升级空间 / 判断标准”写清产品解释，避免只写给开发者看的实现细节。
+5. 再查 `3.4 多入口一致性契约`，确认同一能力是否已经出现在设置页、输入框、右侧工作区、左侧工作区、技能页或文件预览区。
+6. 开始编码时先改后端 Adapter / Kernel Manager / 归一化函数，再让多个前端入口消费同一份数据；不要让 UI 自己拼第二套静态清单。
+7. 收尾必须补验证：文档类改动至少跑 `git diff --check`；代码改动至少跑 `npm run -s typecheck`，涉及前端渲染再跑 `npm run -s build` 和对应测试。
 
 架构前置：
 
 - 下一阶段不要继续把重功能堆进 `App.tsx` 和 `app.css`；文件预览/编辑、工作区、对话、设置、模型、MCP、Skills 都应逐步拆成 feature 模块。
-- Hermes 不要立即把源码混进 Cowork 主目录，先作为 Cowork 管理的 runtime：负责安装、版本锁定、升级、回滚和兼容性复测。
+- Hermes 当前版本按固定内核治理：可以纳入 Cowork 仓库或安装包的独立 runtime 目录，但必须保留 upstream commit、MIT license、补丁记录、配置备份和兼容性复测；不能直接把 upstream 最新版本覆盖进来。
 
 工程稳定阶段拆分顺序：
 
@@ -1862,33 +2029,35 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 优先级 1：
 
-- 接 Hermes sessions 全文浏览、删除/重命名和双向同步。
-- 支持选择 Hermes profile。
-- 支持选择 model/provider/toolsets/skills。
-- 按工具名/事件类型统计耗时与失败率。
-- 支持 docx/pptx/xlsx/pdf 的高保真预览或转码预览。
+- Hermes API Server / Runs API 能力评估，判断 Cowork 是否应从私有 gateway bridge 逐步迁移到官方 runs/events/stop。
+- Session 全量前端化：全文浏览、搜索、删除、重命名、来源平台、模型、工具调用历史和双向同步。
+- Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
+- Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
+- Logs / Analytics 用户化：只展示失败原因、工具耗时、模型用量、最近异常和下一步动作。
 
 优先级 2：
 
-- 用 SQLite 替代 `data/state.json`。
-- 支持自定义任务标签。
-- 支持批量导出为 zip。
-- 支持上传文件夹并保持目录结构。
+- 模型系统补齐：credential pools、fallback providers、auxiliary providers、provider routing、Provider OAuth。
+- 安全系统补齐：approval modes、永久 allowlist、checkpoint / rollback、YOLO 风险显示、隔离状态。
+- Context 系统补齐：context files、context references、附件、批注、工作区文件和压缩策略统一。
+- 文件能力补齐：docx/pptx/xlsx/pdf 的高保真预览、类型专用批注定位、第一版安全编辑。
+- 数据层升级：用 SQLite 替代 `data/state.json`，支撑长期任务、文件索引和多窗口。
 
 优先级 3：
 
 - 第一版 macOS 客户端优先走 Electron；它可以直接内嵌现有 React/Vite 前端和 Node Adapter，改造成本最低。
 - Tauri 可作为第二阶段优化方向，不建议当前切换。
 - 客户端化后用 Electron 原生文件夹选择和 macOS 安全书签保存授权；Web 本地版先用 Node Adapter 调系统目录选择器。
-- 菜单栏常驻。
-- 系统通知。
-- 自动启动后端 Adapter。
+- Kernel Manager 管理固定 Hermes Core 目录、Python venv、配置备份、启动项、健康检查和兼容性复测。
+- 语音输入、TTS 输出、图片视觉理解、浏览器自动化过程可视化。
+- 手机端通过云端加密中转连接 Mac 主机；云端只做设备配对、消息转发和推送，不执行 Agent。
 
 Hermes runtime 融合顺序：
 
-1. Managed Runtime：Cowork 管理用户机器上的 Hermes 安装、路径、版本、venv、binary、升级、回滚和兼容性复测。
-2. Pinned Hermes：Cowork 管理一个固定兼容版本的 Hermes clone 或 submodule，安装和升级都先在隔离环境验证。
-3. Integrated Client：等 managed runtime 稳定后，再决定是否 fork/vendor Hermes，或者继续保持 managed clone。
+1. 固定内核快照：记录当前 Hermes upstream commit、license、dirty change 和 Cowork 依赖的入口；先冻结可用版本。当前快照已保存到 `baselines/hermes-core/v2026.4.23-927-g58a6171bf`，说明见 `baselines/hermes-core/BASELINE_MANIFEST.md`。
+2. Kernel Manager：Cowork 管理 Hermes Core 路径、venv、binary、配置备份、启动/停止、健康检查、升级前后复测。
+3. 仓库/安装包融合：把固定 Hermes Core 作为独立 runtime 目录、submodule 或安装资源纳入 Cowork；保留补丁记录和回滚策略。
+4. 补丁吸收：后续只按 Cowork 产品需要从 upstream cherry-pick 或手动移植补丁，不默认追随 upstream 主线。
 
 ## 12. 已知限制
 
