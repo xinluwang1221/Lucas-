@@ -243,7 +243,7 @@ flowchart TB
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
 | MCP Server、工具列表、市场、工具级开关 | 设置 > MCP、技能页 Connectors、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
 | Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；运行由 Hermes gateway/tick 负责 | 任务必须写入 Hermes cron；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
-| Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 已支持扫描、查看文件树、上传、启停、加入下一次任务；gateway 场景仍缺 Cowork skill 预载参数 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；真正执行时要确认 Hermes 是否读到了 skill |
+| Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 技能清单和启用状态优先读取 Hermes 官方 Dashboard `/api/skills`，本机扫描负责补充 `SKILL.md` 和子文件预览；上传技能、启停、加入下一次任务已接入 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；启停 Hermes 官方 Skill 必须写回 Hermes，而不是只改 Cowork 本地状态 |
 | Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
 | 工作区、附件、产物、文件预览 | 工作区页、输入框附件、消息文件卡片、右侧预览 | `/api/workspaces`、`/api/artifacts`、`file_preview.ts`、`workspaceApi.ts`、`FilePreviewPanel.tsx` | 已支持目录授权、附件上传、产物识别、文件卡片、右侧预览、本机打开和框选批注 | 拖入文件必须先进入对话框；Office 预览要尽量接近本机打开；预览不能造成布局抖动 |
 | 文件区域批注 | 右侧文件预览、输入框批注 chip、用户消息批注卡片 | `Message.annotations`、`FilePreviewPanel.tsx`、`ChatComposer.tsx`、`promptWithContext()` | 已支持预览区拖拽框选、生成批注编号、可选补充说明、自动识别可读选区文本；无法识别时后端补充文件正文摘录；批注进入输入框并写入 Hermes 实际 prompt | 尚未生成截图裁片；PDF/Office 在浏览器或 Quick Look 无法暴露文本时仍不能精确映射到页码、段落或单元格，后续要做类型专用定位 |
@@ -404,8 +404,8 @@ flowchart TB
 可升级空间：
 
 - 下一步评估 Cron 写入类接口是否也切到官方 Dashboard API；切换前必须确认备份、错误恢复和 UI 提示。
-- 把 Skills 页从本机目录扫描逐步对齐官方 `/api/skills`，只在 Cowork 自定义上传 skill 时保留本地补充源。
-- 把 Connectors/Toolsets 逐步对齐官方 `/api/tools/toolsets`，避免 MCP、工具集和调度页三套来源不一致。
+- Skills 页已对齐官方 `/api/skills`：官方 API 负责技能清单和启用状态，本机扫描只负责文件预览和 Cowork 上传技能补充。
+- 调度页已读取官方 `/api/tools/toolsets`：用于展示 Hermes 当前启用的内置工具集，避免继续用 MCP 列表推断 Toolsets。
 - 写入类能力逐项开放：Cron create/update、Skill toggle、Config update 必须先补 UI、备份、错误恢复和测试。
 
 尚未前端化的 Hermes 官方后台能力：
@@ -831,6 +831,7 @@ HC_EVENT\t
   - `com.hermes-cowork.api.plist`：登录时启动 Hermes Cowork API 后台。
   - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
 - 支持 Hermes Cron 管理：`/api/hermes/cron` 优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，Dashboard 不可用时回退本机 `~/.hermes/cron/jobs.json`；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 Hermes cron，输出读取 `~/.hermes/cron/output/<job_id>/`。
+- 支持 Hermes Skills 官方真源：`/api/skills` 优先读取 Hermes Dashboard `/api/skills`，把官方启用状态合并到 Cowork 技能页；本机扫描 `~/.hermes/skills`、用户 skills、Codex 插件 skills 和上传 skills，用于展示 `SKILL.md` 及子文件。启停由 Hermes 官方 `/api/skills/toggle` 写回，Dashboard 不可用时才保留本地扫描兜底。
 
 ### 前端
 
@@ -1460,7 +1461,7 @@ POST /api/models/fallbacks
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区规划已回正：授权目录必须作为左侧目录树存在，工作区下展示该目录内的工作会话；点击工作区进入文件管理页，跨工作区搜索和归档仍放在搜索/高级页面。
 - 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：job 列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；同时展示 gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 `BackgroundServiceStatus` 或 `HermesMcpRecommendations`，避免把后台服务和 MCP 市场推荐误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
-- 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`；设置 > 运行环境已前端化官方后台状态和启动入口。后续 Cron、Skills、Toolsets 的用户入口应逐步消费这个官方结构化真源，减少配置文件和前端静态清单漂移。
+- 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`；设置 > 运行环境已前端化官方后台状态和启动入口。Cron 和 Skills 已优先消费官方结构化真源，调度页已读取官方 Toolsets，后续继续把写入类能力逐项迁移到官方接口。
 - 账户菜单与设置弹窗：左下角 Lucas 可展开菜单，并打开多分类设置页；通用/MCP/模型/对话流/规则已具备截图中的主要行控件、开关、选择器、空状态和二级添加模型弹窗。
 - MCP 设置页已改为读取 Hermes 的真实 MCP 配置；开关会写回 Hermes `config.yaml` 的 `enabled` 字段。
 - MCP 设置页已从单页堆叠整理为二级 Tab：本地服务、Hermes Server、每日推荐、云端；设置弹窗改成固定高度和内部滚动，避免长内容撑出屏幕。

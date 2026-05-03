@@ -17,6 +17,7 @@ import {
 import { useState, type ReactNode } from 'react'
 import type {
   HermesMcpConfig,
+  HermesToolset,
   Skill,
   Task
 } from '../../lib/api'
@@ -85,18 +86,24 @@ export function SearchTasksView({
 
 export function DispatchView({
   connectors,
+  toolsets,
+  toolsetsError,
   skills,
   onOpenConnectors,
   onOpenMcpSettings
 }: {
   connectors: HermesMcpConfig['servers']
+  toolsets: HermesToolset[]
+  toolsetsError: string | null
   skills: Skill[]
   onOpenConnectors: () => void
   onOpenMcpSettings: () => void
 }) {
   const enabledConnectors = connectors.filter((connector) => connector.enabled)
+  const enabledToolsets = toolsets.filter((toolset) => toolset.enabled)
   const larkSkills = skills.filter((skill) => skill.name.startsWith('lark-') && skill.enabled)
-  const browserConnectors = connectors.filter((connector) => /browser|chrome|playwright|web/i.test(`${connector.name} ${connector.description ?? ''}`))
+  const browserToolsets = enabledToolsets.filter((toolset) => /browser|web|search/i.test(`${toolset.name} ${toolset.label} ${toolset.description}`))
+  const dataToolsets = enabledToolsets.filter((toolset) => /file|filesystem|csv|sql|spreadsheet|document|pdf|vision/i.test(`${toolset.name} ${toolset.label} ${toolset.description} ${toolset.tools.join(' ')}`))
 
   return (
     <section className="product-page">
@@ -116,8 +123,8 @@ export function DispatchView({
           icon={<Globe2 size={18} />}
           title="网页与浏览器"
           detail="用于网页调研、读取页面、浏览器自动化和网页表单操作。"
-          count={browserConnectors.length}
-          status={browserConnectors.length ? '已接入' : '待接入'}
+          count={browserToolsets.length}
+          status={browserToolsets.length ? '已接入' : '待接入'}
         />
         <DispatchCapabilityCard
           icon={<MessageSquarePlus size={18} />}
@@ -130,17 +137,25 @@ export function DispatchView({
           icon={<Database size={18} />}
           title="数据与文件"
           detail="CSV、SQLite、Excel、PDF、视觉理解等本机工作能力。"
-          count={enabledConnectors.length}
-          status={enabledConnectors.length ? '可用' : '待配置'}
+          count={dataToolsets.length}
+          status={dataToolsets.length ? '可用' : '待配置'}
         />
       </div>
 
       <div className="dispatch-connector-strip">
         <div>
-          <strong>当前可调用连接器</strong>
-          <span>{enabledConnectors.length ? enabledConnectors.map((connector) => connector.name).join('、') : '暂无启用连接器'}</span>
+          <strong>Hermes 当前启用工具集</strong>
+          <span>
+            {toolsetsError
+              ? '暂时无法读取 Hermes 官方工具集'
+              : enabledToolsets.length
+                ? enabledToolsets.map((toolset) => toolset.name).join('、')
+                : '暂无启用工具集'}
+          </span>
         </div>
-        <button className="settings-link-button" onClick={onOpenMcpSettings}>打开 MCP 管理</button>
+        <button className="settings-link-button" onClick={onOpenMcpSettings}>
+          MCP 服务 {enabledConnectors.length}
+        </button>
       </div>
     </section>
   )

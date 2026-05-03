@@ -1473,6 +1473,11 @@
   background: var(--accent-soft);
 }
 
+.skill-icon.hermes {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .skill-icon.user,
 .skill-icon.uploaded {
   color: var(--violet);

@@ -1,6 +1,7 @@
 import type { Skill } from '../../lib/api'
 
 export function sourceLabel(source: Skill['source']) {
+  if (source === 'hermes') return 'Hermes'
   if (source === 'plugin') return '插件'
   if (source === 'system') return '系统'
   if (source === 'uploaded') return '上传'

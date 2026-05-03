@@ -34,7 +34,7 @@ import {
   setHermesDefaultModel,
   setHermesFallbackProviders
 } from './models.js'
-import { installUploadedSkill, listLocalSkills, listSkillFiles, readSkillFile } from './skills.js'
+import { installUploadedSkill, listLocalSkills, listSkillFiles, listSkills, readSkillFile, toggleHermesDashboardSkill } from './skills.js'
 import { ensureInsideWorkspace, store } from './store.js'
 import { AppState, Artifact, ExecutionActivity, ExecutionEvent, ExecutionView, HermesContextSnapshot, HermesModelOverview, HermesReasoningEffort, MessageAnnotation, MessageAttachment, ModelOption, ModelSettings, Task, Workspace } from './types.js'
 
@@ -823,8 +823,12 @@ app.get('/api/state', (_req, res) => {
   })
 })
 
-app.get('/api/skills', (_req, res) => {
-  res.json(listLocalSkills(store.snapshot.skillSettings))
+app.get('/api/skills', async (_req, res) => {
+  try {
+    res.json(await listSkills(store.snapshot.skillSettings))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.get('/api/skills/:skillId/files', (req, res) => {
@@ -855,23 +859,32 @@ app.get('/api/skills/:skillId/files/content', (req, res) => {
   }
 })
 
-app.post('/api/skills/:skillId/toggle', (req, res) => {
+app.post('/api/skills/:skillId/toggle', async (req, res) => {
   const { enabled } = req.body as { enabled?: boolean }
   const skillId = req.params.skillId
-  const skill = listLocalSkills(store.snapshot.skillSettings).find((item) => item.id === skillId)
-  if (!skill) {
-    res.status(404).json({ error: 'skill not found' })
-    return
-  }
-
-  store.update((state) => {
-    state.skillSettings[skillId] = {
-      enabled: Boolean(enabled),
-      updatedAt: new Date().toISOString()
+  try {
+    const skill = (await listSkills(store.snapshot.skillSettings)).find((item) => item.id === skillId)
+    if (!skill) {
+      res.status(404).json({ error: 'skill not found' })
+      return
     }
-  })
 
-  res.json({ ok: true, skill: { ...skill, enabled: Boolean(enabled) } })
+    const nextEnabled = Boolean(enabled)
+    if (skill.managedByHermes) {
+      await toggleHermesDashboardSkill(skill.name, nextEnabled)
+    }
+
+    store.update((state) => {
+      state.skillSettings[skillId] = {
+        enabled: nextEnabled,
+        updatedAt: new Date().toISOString()
+      }
+    })
+
+    res.json({ ok: true, skill: { ...skill, enabled: nextEnabled } })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.post('/api/skills/upload', upload.single('skill'), (req, res) => {

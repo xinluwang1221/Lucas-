@@ -19,6 +19,7 @@ import {
 } from './features/layout/SecondaryViews'
 import { ScheduledTasksView, useScheduledState } from './features/scheduled'
 import { usePanelLayout } from './features/layout/usePanelLayout'
+import { useHermesToolsets } from './features/layout/useHermesToolsets'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
 import { useFilePreview } from './features/file-preview/useFilePreview'
 import { ChatComposer } from './features/chat/ChatComposer'
@@ -392,6 +393,11 @@ function App() {
     handleOpenSkill,
     handleSelectSkillFile
   } = useSkillsState()
+  const {
+    toolsets,
+    toolsetsError,
+    refreshToolsets
+  } = useHermesToolsets()
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const {
     models,
@@ -946,7 +952,10 @@ function App() {
           void refreshHermesMcp()
         }}
         onOpenScheduled={() => setViewMode('scheduled')}
-        onOpenDispatch={() => setViewMode('dispatch')}
+        onOpenDispatch={() => {
+          setViewMode('dispatch')
+          void refreshToolsets()
+        }}
         onThemeChange={setTheme}
         onOpenSettings={() => {
           setSettingsOpen(true)
@@ -1065,6 +1074,8 @@ function App() {
         ) : viewMode === 'dispatch' ? (
           <DispatchView
             connectors={hermesMcp?.servers ?? []}
+            toolsets={toolsets}
+            toolsetsError={toolsetsError}
             skills={skills}
             onOpenConnectors={() => {
               setCustomizeTab('connectors')

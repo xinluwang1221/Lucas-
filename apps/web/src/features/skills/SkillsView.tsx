@@ -52,6 +52,10 @@ export function SkillsView({
   const disabledCount = Math.max(0, skills.length - enabledCount)
   const sections = [
     {
+      title: 'Hermes 官方',
+      skills: activeSkills.filter((skill) => skill.source === 'hermes')
+    },
+    {
       title: '插件与系统',
       skills: activeSkills.filter((skill) => skill.source === 'plugin' || skill.source === 'system')
     },

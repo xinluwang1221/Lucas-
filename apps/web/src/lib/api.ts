@@ -275,10 +275,22 @@ export type Skill = {
   name: string
   description: string
   path: string
-  source: 'user' | 'system' | 'plugin' | 'uploaded'
+  source: 'hermes' | 'user' | 'system' | 'plugin' | 'uploaded'
+  category?: string
+  managedByHermes?: boolean
   enabled: boolean
   installed: true
   updatedAt: string
+}
+
+export type HermesToolset = {
+  name: string
+  label: string
+  description: string
+  enabled: boolean
+  available?: boolean
+  configured: boolean
+  tools: string[]
 }
 
 export type SkillFile = {
