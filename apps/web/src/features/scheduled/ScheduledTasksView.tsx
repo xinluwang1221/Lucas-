@@ -130,6 +130,13 @@ export function ScheduledTasksView({
                   ? 'Hermes 后台已运行，启用的定时任务会按周期自动执行。'
                   : '当前只会保存任务，不会自动执行。启动 Hermes 后台后，启用的任务会按周期运行。'}
               </span>
+              {cronState && (
+                <small>
+                  {cronState.source === 'official-dashboard'
+                    ? '任务列表来自 Hermes 官方后台。'
+                    : 'Hermes 官方后台暂不可读，当前显示本机保存的任务。'}
+                </small>
+              )}
             </div>
             <span className={schedulerRunning ? 'status-pill ok' : 'status-pill warn'}>
               {schedulerRunning ? '正常' : '未开启'}

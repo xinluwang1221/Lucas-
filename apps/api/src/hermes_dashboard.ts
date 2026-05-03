@@ -95,9 +95,15 @@ export async function readHermesDashboardAdapterStatus(options: { start?: boolea
 
 export async function requestHermesDashboardJson(
   apiPath: string,
-  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  options: { start?: boolean } = {}
 ): Promise<HermesDashboardProxyResult> {
-  const ready = await ensureHermesDashboard()
+  const ready: { status?: Record<string, unknown>; token?: string; error?: string } = options.start === false
+    ? await probeHermesDashboard(hermesDashboardBaseUrl())
+    : await ensureHermesDashboard()
+  if (!ready.status) {
+    throw new Error(ready.error || 'Hermes Dashboard 未启动。')
+  }
   return requestWithToken(apiPath, init, ready.token, true)
 }
 

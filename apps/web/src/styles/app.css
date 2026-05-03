@@ -424,6 +424,12 @@
   line-height: 1.55;
 }
 
+.scheduled-health-card small {
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

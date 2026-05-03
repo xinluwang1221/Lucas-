@@ -9,6 +9,7 @@ async function main() {
   fs.mkdirSync(workspaceDir, { recursive: true })
   const resolvedWorkspaceDir = fs.realpathSync(workspaceDir)
   process.env.HERMES_HOME = path.join(testDir, 'hermes-home')
+  process.env.HERMES_COWORK_CRON_SOURCE = 'local'
 
   const {
     createHermesCronJob,
@@ -23,6 +24,7 @@ async function main() {
   try {
     let state = await readHermesCronState()
     assert.equal(state.jobs.length, 0)
+    assert.equal(state.source, 'local-config')
 
     state = await createHermesCronJob({
       name: 'Cowork cron test',

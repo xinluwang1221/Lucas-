@@ -611,6 +611,8 @@ export type HermesCronJob = {
 
 export type HermesCronState = {
   jobs: HermesCronJob[]
+  source: 'official-dashboard' | 'local-config'
+  sourceError?: string
   scheduler: {
     running: boolean
     statusText: string

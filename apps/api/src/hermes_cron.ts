@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { requestHermesDashboardJson } from './hermes_dashboard.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
 
 const execFileAsync = promisify(execFile)
@@ -78,6 +79,8 @@ export type HermesCronSchedulerStatus = {
 
 export type HermesCronState = {
   jobs: HermesCronJob[]
+  source: 'official-dashboard' | 'local-config'
+  sourceError?: string
   scheduler: HermesCronSchedulerStatus
   paths: {
     hermesHome: string
@@ -107,9 +110,16 @@ type RawCronJob = Record<string, unknown>
 
 export async function readHermesCronState(): Promise<HermesCronState> {
   const paths = cronPaths()
-  const [jobs, scheduler] = await Promise.all([readCronJobs(paths.outputDir), readCronSchedulerStatus()])
+  const [officialJobs, localJobs, scheduler] = await Promise.all([
+    readOfficialDashboardCronJobs(paths.outputDir),
+    readCronJobs(paths.outputDir),
+    readCronSchedulerStatus()
+  ])
+  const usingOfficialJobs = officialJobs.ok
   return {
-    jobs,
+    jobs: usingOfficialJobs ? officialJobs.jobs : localJobs,
+    source: usingOfficialJobs ? 'official-dashboard' : 'local-config',
+    sourceError: usingOfficialJobs ? undefined : officialJobs.error,
     scheduler,
     paths: {
       hermesHome: paths.hermesHome,
@@ -175,6 +185,30 @@ async function readCronJobs(outputDir: string): Promise<HermesCronJob[]> {
   if (!fs.existsSync(paths.jobsFile)) return []
   const raw = JSON.parse(fs.readFileSync(paths.jobsFile, 'utf8')) as { jobs?: RawCronJob[] }
   return (raw.jobs ?? []).map((job) => normalizeCronJob(job, outputDir))
+}
+
+type OfficialCronJobsResult =
+  | { ok: true; jobs: HermesCronJob[] }
+  | { ok: false; error: string }
+
+async function readOfficialDashboardCronJobs(outputDir: string): Promise<OfficialCronJobsResult> {
+  if (cronSourceMode() === 'local') {
+    return { ok: false, error: '已配置为只读取本机 Cron 配置。' }
+  }
+  try {
+    const result = await requestHermesDashboardJson('/api/cron/jobs', {}, { start: false })
+    if (!result.ok) {
+      return { ok: false, error: dashboardProxyError(result.body) || `Hermes 官方定时任务接口返回 ${result.status}` }
+    }
+    const rawJobs = rawCronJobsFromPayload(result.body)
+    if (!rawJobs) return { ok: false, error: 'Hermes 官方定时任务接口返回了无法识别的数据。' }
+    return {
+      ok: true,
+      jobs: rawJobs.map((job) => normalizeCronJob(job, outputDir))
+    }
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) }
+  }
 }
 
 function normalizeCronJob(job: RawCronJob, outputDir: string): HermesCronJob {
@@ -378,4 +412,27 @@ function numberValue(value: unknown) {
 
 function booleanValue(value: unknown, fallback: boolean) {
   return typeof value === 'boolean' ? value : fallback
+}
+
+function rawCronJobsFromPayload(payload: unknown): RawCronJob[] | null {
+  if (Array.isArray(payload)) return payload.filter(isRecord)
+  if (isRecord(payload) && Array.isArray(payload.jobs)) return payload.jobs.filter(isRecord)
+  return null
+}
+
+function dashboardProxyError(payload: unknown) {
+  if (!isRecord(payload)) return ''
+  return stringValue(payload.detail) || stringValue(payload.error) || stringValue(payload.message)
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isRecord(value: unknown): value is RawCronJob {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function cronSourceMode() {
+  return (process.env.HERMES_COWORK_CRON_SOURCE || 'auto').trim().toLowerCase()
 }

@@ -242,7 +242,7 @@ flowchart TB
 | 人工审批、命令确认、interrupt | 对话区审批卡、运行中停止/继续入口 | `/api/tasks/:id/approval`、`ApprovalRequestCard.tsx`、`useTaskActions.ts` | 已补审批卡与测试，但仍需持续验证真实 Hermes 事件格式 | Hermes 返回 approval/request 时必须弹卡片；不能只显示一段失败文案；审批后要能恢复任务 |
 | 模型、Provider、Key、Fallback、Reasoning | 输入框模型菜单、设置 > 模型、模型配置弹窗 | `/api/models`、`models.ts`、`modelApi.ts`、`useModelState.ts`、`useModelConfigForm.ts` | 已覆盖中国主流供应商、Key 重填、MiMo 分组、reasoning 设置 | 任一入口保存后另一个入口必须刷新；401 必须给重填 Key；本次模型和 Hermes 默认模型不能混淆 |
 | MCP Server、工具列表、市场、工具级开关 | 设置 > MCP、技能页 Connectors、过程资源 | `/api/hermes/mcp`、`mcp.ts`、`mcpApi.ts`、`useMcpState.ts` | 已覆盖安装、测试、删除、启停、工具级 include/exclude、每日推荐 | 已安装服务必须显示说明和图标；市场推荐要分类；工具调用应在过程资源里出现 |
-| Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；运行由 Hermes gateway/tick 负责 | 任务必须写入 `~/.hermes/cron/jobs.json`；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
+| Hermes Cron、定时任务、自动化输出 | 左侧定时任务页、未来任务产物区 | `/api/hermes/cron`、`hermes_cron.ts`、`features/scheduled` | 已覆盖真实 job 列表、新建、编辑、暂停/恢复、排队运行、删除、最近输出；列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；运行由 Hermes gateway/tick 负责 | 任务必须写入 Hermes cron；Cron 运行没有当前对话上下文，prompt 必须自包含；gateway 未运行时要给可处理提示 |
 | Skills、Skill 文件、运行前预载 | 技能页、Skill 详情、输入区预载 Skill | `/api/skills`、`skills.ts`、`SkillsView.tsx`、`SkillDetailModal.tsx` | 已支持扫描、查看文件树、上传、启停、加入下一次任务；gateway 场景仍缺 Cowork skill 预载参数 | 点击 Skill 必须能看到 `SKILL.md` 和子文件；真正执行时要确认 Hermes 是否读到了 skill |
 | Session、上下文用量、压缩 | 右侧上下文与资源、未来对话顶部风险提示 | `/api/tasks/:id/context`、`useTaskContext.ts`、`TaskInspectorCards.tsx` | 已有上下文 snapshot、资源合并、手动压缩入口 | 不展示无效 token 表格；文件大小/占比要帮助用户判断；压缩后当前任务要同步 |
 | 工作区、附件、产物、文件预览 | 工作区页、输入框附件、消息文件卡片、右侧预览 | `/api/workspaces`、`/api/artifacts`、`file_preview.ts`、`workspaceApi.ts`、`FilePreviewPanel.tsx` | 已支持目录授权、附件上传、产物识别、文件卡片、右侧预览、本机打开和框选批注 | 拖入文件必须先进入对话框；Office 预览要尽量接近本机打开；预览不能造成布局抖动 |
@@ -362,7 +362,8 @@ flowchart TB
 当前方案：
 
 - 定时任务页直接管理 Hermes Cron，而不是 Cowork 自己保存一套假任务。
-- 后端 Adapter 通过 Hermes 自己的 `cronjob` 工具函数执行 create/update/pause/resume/run/remove，列表和输出读取 `~/.hermes/cron/jobs.json` 与 `~/.hermes/cron/output/<job_id>/`。
+- 后端 Adapter 读取列表时优先走 Hermes 官方 Dashboard `/api/cron/jobs`，避免 Cowork 自己猜字段；Dashboard 不可用时回退读取 `~/.hermes/cron/jobs.json`。
+- create/update/pause/resume/run/remove 仍通过 Hermes 自己的 `cronjob` 工具函数执行，输出读取 `~/.hermes/cron/output/<job_id>/`。
 - 前端只展示对用户有决策意义的信息：是否自动执行、下次执行时间、绑定工作区、绑定 Skill、最近输出和可操作动作。
 - 定时任务页不展示“页面边界”“下一步”这类开发解释；必要说明合并到自动运行状态卡里。
 - 新建/编辑任务时，执行时间使用“每天 / 每周 / 每月 / 每隔 / 高级”的周期选择器，前端生成 Hermes 能识别的 schedule 字符串，不让普通用户直接填写 `every 1d` 或 cron 表达式。
@@ -402,7 +403,7 @@ flowchart TB
 
 可升级空间：
 
-- 把定时任务页从直接读 `~/.hermes/cron/jobs.json` 逐步迁到官方 `/api/cron/jobs`，同时保留当前实现作为 fallback。
+- 下一步评估 Cron 写入类接口是否也切到官方 Dashboard API；切换前必须确认备份、错误恢复和 UI 提示。
 - 把 Skills 页从本机目录扫描逐步对齐官方 `/api/skills`，只在 Cowork 自定义上传 skill 时保留本地补充源。
 - 把 Connectors/Toolsets 逐步对齐官方 `/api/tools/toolsets`，避免 MCP、工具集和调度页三套来源不一致。
 - 写入类能力逐项开放：Cron create/update、Skill toggle、Config update 必须先补 UI、备份、错误恢复和测试。
@@ -804,7 +805,7 @@ HC_EVENT\t
 
 - 官方 Hermes Dashboard adapter，默认连接 `http://127.0.0.1:9120`，可用 `HERMES_COWORK_DASHBOARD_URL`、`HERMES_COWORK_DASHBOARD_HOST`、`HERMES_COWORK_DASHBOARD_PORT` 覆盖。
 - `readHermesDashboardAdapterStatus()` 只探测或按需启动 `hermes dashboard --no-open`，返回版本、config 版本、gateway 状态、active sessions 和受保护 API 是否可读。
-- `requestHermesDashboardJson()` 从 Dashboard HTML 提取 `window.__HERMES_SESSION_TOKEN__`，并用 `X-Hermes-Session-Token` 代理官方 `/api/*` JSON 接口；token 只缓存于 Cowork 后端内存。
+- `requestHermesDashboardJson()` 从 Dashboard HTML 提取 `window.__HERMES_SESSION_TOKEN__`，并用 `X-Hermes-Session-Token` 代理官方 `/api/*` JSON 接口；token 只缓存于 Cowork 后端内存。读取型调用可以传 `{ start: false }`，避免为了刷新页面状态而悄悄启动 Dashboard。
 - `server.ts` 已开放 `/api/hermes/dashboard`、`/api/hermes/dashboard/start` 和 `/api/hermes/dashboard/official/{status,skills,toolsets,cron/jobs,sessions,config,env,model-info}`。
 - 当前只代理只读接口；后续开放写入类接口前必须补 UI 决策、配置备份、错误恢复和测试，不能直接把 Dashboard 全量权限暴露给前端。
 
@@ -829,7 +830,7 @@ HC_EVENT\t
 - 支持 macOS 常驻后台：设置页启用后写入两个 LaunchAgent：
   - `com.hermes-cowork.api.plist`：登录时启动 Hermes Cowork API 后台。
   - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
-- 支持 Hermes Cron 管理：`/api/hermes/cron` 读取 Hermes 本机 cron job、gateway 状态和输出目录；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 `~/.hermes/cron/jobs.json`，输出读取 `~/.hermes/cron/output/<job_id>/`。
+- 支持 Hermes Cron 管理：`/api/hermes/cron` 优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，Dashboard 不可用时回退本机 `~/.hermes/cron/jobs.json`；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 Hermes cron，输出读取 `~/.hermes/cron/output/<job_id>/`。
 
 ### 前端
 
@@ -1458,7 +1459,7 @@ POST /api/models/fallbacks
 - 备用模型页覆盖 Hermes `fallback_providers`：只列出已配置且不是当前 Provider 的候选，用户开关后写回 Hermes 配置；空状态会提示先去凭据页确认服务是否可用。
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区规划已回正：授权目录必须作为左侧目录树存在，工作区下展示该目录内的工作会话；点击工作区进入文件管理页，跨工作区搜索和归档仍放在搜索/高级页面。
-- 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：读取 `~/.hermes/cron/jobs.json`、gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 `BackgroundServiceStatus` 或 `HermesMcpRecommendations`，避免把后台服务和 MCP 市场推荐误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
+- 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：job 列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；同时展示 gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 `BackgroundServiceStatus` 或 `HermesMcpRecommendations`，避免把后台服务和 MCP 市场推荐误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
 - 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`；设置 > 运行环境已前端化官方后台状态和启动入口。后续 Cron、Skills、Toolsets 的用户入口应逐步消费这个官方结构化真源，减少配置文件和前端静态清单漂移。
 - 账户菜单与设置弹窗：左下角 Lucas 可展开菜单，并打开多分类设置页；通用/MCP/模型/对话流/规则已具备截图中的主要行控件、开关、选择器、空状态和二级添加模型弹窗。
 - MCP 设置页已改为读取 Hermes 的真实 MCP 配置；开关会写回 Hermes `config.yaml` 的 `enabled` 字段。
