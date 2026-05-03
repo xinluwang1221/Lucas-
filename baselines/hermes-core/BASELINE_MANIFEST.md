@@ -4,6 +4,8 @@
 
 这个目录保存 Cowork 当前锁定的 Hermes Agent 代码基线。它用于未来开发出现问题时对照、回档或重新构建固定内核，不作为日常开发目录直接修改。
 
+Cowork 主开发目录已经迁移到 `/Users/lucas/.hermes/hermes-agent/cowork`。这个 `baselines/` 目录仍然只是 Hermes Core 快照，不是 Cowork 运行目录。
+
 ## 当前基线
 
 - 快照目录：`baselines/hermes-core/v2026.4.23-927-g58a6171bf`
@@ -44,4 +46,3 @@
 2. 回档只恢复 Hermes Core 代码，不覆盖 Cowork 用户配置、API Key、工作区文件或会话数据。
 3. 回档后必须重新运行 Cowork 兼容性复测：Hermes 启动、gateway 连接、模型列表、一次真实对话、一次工具调用、一次人工审批。
 4. 如果未来 Cowork 已经实现 Kernel Manager，回档动作应由 Kernel Manager 完成，不再手工执行。
-
