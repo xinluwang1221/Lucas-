@@ -12,6 +12,7 @@ import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPre
 import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
+import { readHermesOfficialApiStatus } from './hermes_official_api.js'
 import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -90,10 +91,11 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/hermes/runtime', async (_req, res) => {
   try {
     const workspacePath = store.snapshot.workspaces[0]?.path ?? process.cwd()
-    const [versionText, statusText, dashboard] = await Promise.all([
+    const [versionText, statusText, dashboard, officialApi] = await Promise.all([
       runHermesCommand(['version']),
       runHermesCommand(['status']),
-      readHermesDashboardAdapterStatus()
+      readHermesDashboardAdapterStatus(),
+      readHermesOfficialApiStatus()
     ])
     const adapter = await readHermesRuntimeAdapterStatus(workspacePath)
 
@@ -109,8 +111,17 @@ app.get('/api/hermes/runtime', async (_req, res) => {
       statusText,
       parsed: parseHermesStatus(statusText),
       dashboard,
+      officialApi,
       updatedAt: new Date().toISOString()
     })
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/official-api', async (_req, res) => {
+  try {
+    res.json(await readHermesOfficialApiStatus())
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }

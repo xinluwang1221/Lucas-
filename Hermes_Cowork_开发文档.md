@@ -136,7 +136,7 @@ Hermes 对接：
 
 | 类别 | Hermes 官方能力 | Cowork 当前状态 | 产品判断 |
 | --- | --- | --- | --- |
-| 入口与运行时 | CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 已有 gateway 优先、bridge 回退、Dashboard adapter；未完整采用官方 Runs/API Server | Cowork 是新的本机客户端入口，不能替代 Agent loop；下一步评估官方 Runs API 是否替换私有 bridge/gateway 部分能力。 |
+| 入口与运行时 | CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 已有 gateway 优先、bridge 回退、Dashboard adapter；已新增官方 API Server / Runs API 源码与运行探测，尚未迁移主通道 | Cowork 是新的本机客户端入口，不能替代 Agent loop；Runs API 先做并行 smoke，确认审批/澄清/上下文事件覆盖后再决定迁移范围。 |
 | Agent Loop | `AIAgent` 负责 prompt、provider、模型调用、工具执行、fallback、history、context、memory | 已把事件归类成正文、过程、审批、澄清、产物；仍有部分事件靠归一化推断 | Cowork 只展示 Agent loop，不重写 Agent loop。过程 UI 必须来自 Hermes 事件或可解释的归一化，不做假步骤。 |
 | Prompt / Context | `SOUL.md`、`MEMORY.md`、`USER.md`、`.hermes.md`、`AGENTS.md`、`CLAUDE.md`、`.cursorrules`、`@file`、`@folder`、`@diff`、`@url` | 工作区、附件、文件批注、上下文资源已接入；压缩和 context files 管理仍不完整 | 工作区不是聊天分类，而是授权上下文边界。附件、文件引用和批注都应落到 Hermes context 能力。 |
 | 模型与 Provider | 主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 已做模型配置、Key 重填、Fallback、reasoning；Credential Pools 和 Auxiliary Providers 还未完整产品化 | 模型页不能只是模型列表，要覆盖 Key 池、备用路线、辅助任务模型、失败修复和思考强度。 |
@@ -161,7 +161,7 @@ Hermes 对接：
 
 仍只在 Hermes 后端存在、Cowork 尚未完整前端化的能力：
 
-- 官方 Runs API / API Server 的完整任务创建、事件、停止和结果协议。
+- 官方 Runs API / API Server 的完整任务创建、事件、停止和结果协议。当前已能通过 `/api/hermes/official-api` 探测本机 Hermes 是否具备 `/v1/runs`、events、stop、jobs、responses、dashboard sessions/logs/toolsets 等能力，但还没有把这些协议作为 Cowork 主任务通道。
 - Session 全量浏览、搜索、删除、重命名、来源平台、模型和工具调用历史。
 - Credential Pools、Auxiliary Providers、Provider OAuth 和更细的 provider routing。
 - 内置工具集的工具级策略、工具失败率、耗时统计和使用量分析。
@@ -324,7 +324,7 @@ flowchart TB
 
 | Hermes 官方能力 | Cowork 用户入口 | 当前覆盖状态 | 下一步产品化动作 | 验证方式 |
 | --- | --- | --- | --- | --- |
-| 入口与运行时：CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 对话区、启动流程、设置 > 运行环境、未来客户端壳 | 部分覆盖。当前 gateway 优先、bridge 回退、Dashboard adapter 可读；官方 API Server / Runs API 尚未成为主通道 | 评估官方 API Server 的 runs/events/stop/session 协议，决定哪些私有 gateway/bridge 能迁移到官方通道；设计 Kernel Manager 启停、健康检查和内核目录管理 | `npm run smoke:hermes-real`、`GET /api/hermes/runtime`、官方 API Server smoke、升级前兼容性复测 |
+| 入口与运行时：CLI、Gateway、API Server、ACP、Batch Runner、Python Library | 对话区、启动流程、设置 > 运行环境、未来客户端壳 | 部分覆盖。当前 gateway 优先、bridge 回退、Dashboard adapter 可读；`/api/hermes/official-api` 已能探测官方 API Server / Runs API 源码和运行状态，但尚未成为主通道 | 先做 official-api adapter 并行 smoke：用 `/v1/runs`、`/v1/runs/{run_id}/events`、`/v1/runs/{run_id}/stop` 复刻创建任务、流式事件、停止任务；确认审批/澄清事件是否足够，再决定迁移范围 | `npm run test:hermes-official-api`、`GET /api/hermes/official-api`、`GET /api/hermes/runtime`、`npm run smoke:hermes-real` |
 | Agent Loop：`AIAgent` 组装 prompt、选择 provider、调用模型、执行工具、fallback、history、context、memory | 主对话流、运行过程、右侧任务拆解、审批卡、澄清卡、产物卡 | 部分覆盖。已做事件归类和 message parts；产品级 plan/todo/reflection 仍依赖 Hermes 暴露程度 | 建立 Hermes 事件语义表：正文、过程、工具、计划、澄清、审批、产物、错误；禁止把工具清单伪装成任务拆解 | fake gateway 事件测试、真实任务观察、`test:task-decomposition`、运行中 UI smoke |
 | Prompt / Context：Context files、context references、`@file`、`@folder`、`@diff`、`@url`、记忆文件 | 工作区、附件、文件批注、右侧上下文与资源、输入框上下文 chip | 部分覆盖。工作区/附件/批注已写入 prompt；context files 管理、references 可视化和压缩策略仍不完整 | 把工作区文件、附件、批注、Hermes context references、手动压缩合并成一套上下文管理；新增 context 文件列表、大小/占比和移除入口 | 发送带附件/批注任务后检查 Hermes prompt；`GET /api/tasks/:id/context`；文件引用点击预览 |
 | 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
@@ -596,6 +596,13 @@ flowchart TB
 4. Skills / MCP / Toolsets 统一能力中心：技能页承担 Skill、MCP、Hermes 内置工具集三类能力；设置页只放配置和授权。
 5. Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target、失败恢复。
 
+已完成的第一刀：
+
+- 新增 `apps/api/src/hermes_official_api.ts`，从本机 Hermes 固定内核目录读取官方 API Server 文档和源码，确认是否具备 Chat Completions、Responses、Runs、Run Events、Run Stop、Jobs、Dashboard Sessions/Logs/Skills/Toolsets、MCP session events 等能力。
+- 新增 `/api/hermes/official-api`，同时探测 `http://127.0.0.1:8642` 的 `/health`、`/health/detailed`、`/v1/models`。这只是能力探测，不会替换当前任务通道。
+- `/api/hermes/runtime` 已把 `officialApi` 一并返回，后续设置页或运行环境页可以直接显示“官方 API Server 是否运行、是否配置 Key、哪些能力可迁移”。
+- 当前判断：不立即把主通道从 `tui_gateway` 切到 Runs API。原因是 Cowork 已依赖审批、澄清、上下文、附件批注、停止任务和 session 恢复等完整链路；Runs API 要先做并行 smoke，确认事件覆盖后再逐项迁移。
+
 阶段验收：
 
 - 任一能力都能指向 Hermes 官方能力、Cowork API、前端入口和测试命令。
@@ -794,6 +801,7 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 │   │   │   ├── hermes.ts
 │   │   │   ├── hermes_bridge.py
 │   │   │   ├── hermes_gateway.ts
+│   │   │   ├── hermes_official_api.ts
 │   │   │   ├── hermes_python.ts
 │   │   │   ├── hermes_runtime.ts
 │   │   │   ├── mcp.ts
@@ -875,6 +883,14 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 - 把 Hermes gateway 的 `message.delta`、`message.complete`、`tool.start`、`tool.complete`、`thinking.delta`、`status.update` 等事件归一成 Cowork 的 `HermesBridgeEvent`。
 - `thinking.delta` / `reasoning.delta` 不直接透传给前端，避免 token 级思考一词一词闪烁；gateway 会聚合成“正在分析问题边界 / 正在规划下一步 / 正在评估工具结果”等可读阶段事件。
 - 从 `message.complete.usage` 合成 `context.updated`，让右侧上下文用量能跟随 gateway 任务更新。
+
+`apps/api/src/hermes_official_api.ts`
+
+- 官方 Hermes API Server 能力探测模块，不是当前任务执行主通道。
+- 读取本机固定内核 `/Users/lucas/.hermes/hermes-agent` 下的 `website/docs/user-guide/features/api-server.md`、`gateway/platforms/api_server.py`、`hermes_cli/web_server.py`、`mcp_serve.py`，判断当前 Hermes 源码是否具备 Responses、Runs、Events、Stop、Jobs、Dashboard Sessions/Logs/Skills/Toolsets、MCP session events 等能力。
+- 探测官方 API Server 默认 `http://127.0.0.1:8642` 的 `/health`、`/health/detailed`、`/v1/models`。可用 `HERMES_COWORK_OFFICIAL_API_URL`、`HERMES_API_SERVER_URL`、`API_SERVER_HOST`、`API_SERVER_PORT`、`HERMES_COWORK_OFFICIAL_API_KEY`、`API_SERVER_KEY` 覆盖。
+- `server.ts` 已开放 `/api/hermes/official-api`，并在 `/api/hermes/runtime` 返回 `officialApi`。
+- 后续如果要把任务创建迁移到官方 Runs API，必须先在本模块旁边新增 official runs adapter 和 smoke test，确认 `approval.request`、`clarify.request`、`message.delta`、`tool.started/completed`、`run.completed/failed` 和 stop 都能覆盖 Cowork 现有语义。
 
 `apps/api/src/hermes_bridge.py`
 
@@ -1959,6 +1975,14 @@ npm run test:hermes-connection
 
 这个测试会启动隔离的 Cowork API 进程和 fake Hermes TUI gateway，验证 `/api/tasks`、`/api/tasks/:taskId/stream`、`clarify.request`、`/api/tasks/:taskId/clarify`、`clarify.respond`、`clarify.resolved`、`approval.request`、`/api/tasks/:taskId/approval`、`approval.respond`、`approval.resolved` 和最终 `message.complete` 的完整链路。测试使用临时 `HERMES_COWORK_DATA_DIR` 和 `HERMES_COWORK_WORKSPACE_DIR`，不会写入用户真实任务记录。
 
+Hermes 官方 API Server 能力探测测试：
+
+```bash
+npm run test:hermes-official-api
+```
+
+这个测试不启动真实 Hermes。它用 fake Hermes 源码目录和 fake API Server 验证 `hermes_official_api.ts` 能识别 Runs、Run Stop、Jobs、Dashboard Sessions、MCP session events，并能向 `/health`、`/health/detailed`、`/v1/models` 发送带 Key 的探测请求。
+
 任务拆解展示测试：
 
 ```bash
@@ -1991,6 +2015,12 @@ curl http://127.0.0.1:8787/api/state
 
 ```bash
 curl http://127.0.0.1:8787/api/hermes/runtime
+```
+
+查看官方 API Server 探测结果：
+
+```bash
+curl http://127.0.0.1:8787/api/hermes/official-api
 ```
 
 ## 11. 后续开发建议
@@ -2031,7 +2061,7 @@ curl http://127.0.0.1:8787/api/hermes/runtime
 
 优先级 1：
 
-- Hermes API Server / Runs API 能力评估，判断 Cowork 是否应从私有 gateway bridge 逐步迁移到官方 runs/events/stop。
+- Hermes API Server / Runs API 并行 smoke：基于 `/api/hermes/official-api` 的探测结果，新增 official runs adapter，验证 `/v1/runs`、events、stop 是否能覆盖 Cowork 当前任务链路；验证前不替换 `tui_gateway` 主通道。
 - Session 全量前端化：全文浏览、搜索、删除、重命名、来源平台、模型、工具调用历史和双向同步。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。

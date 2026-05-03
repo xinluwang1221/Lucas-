@@ -81,6 +81,7 @@ npm run smoke:hermes-real
 
 - 产品判断：先看 `3.1 Cowork 与 Hermes 对应架构图`。这一节包含新手版分层图、术语翻译表和用户操作到 Hermes 后端能力的对应表；再看 `3.2 Hermes 能力覆盖矩阵`、`3.3 开发方案解释区`。
 - 继续开发：先看 `3.4 多入口一致性契约`、`5. 关键文件说明`、`10. 常用开发命令`、`11. 后续开发建议`。
+- 评估 Hermes 官方 API Server / Runs API 时，先看 `apps/api/src/hermes_official_api.ts` 和 `/api/hermes/official-api`，确认本机 Hermes 源码能力和 8642 API Server 运行状态，再决定是否做并行 adapter。
 
 ## 不提交的本机数据
 
