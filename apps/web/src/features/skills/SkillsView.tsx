@@ -85,6 +85,8 @@ export function SkillsView({
   const disabledCount = Math.max(0, skills.length - enabledCount)
   const enabledToolsets = toolsets.filter((toolset) => toolset.enabled)
   const unconfiguredEnabledToolsets = enabledToolsets.filter((toolset) => !toolset.configured)
+  const enabledConnectors = connectors.filter((connector) => connector.enabled)
+  const incompleteConnectors = connectors.filter((connector) => connector.status !== 'configured')
   const filteredToolsets = toolsets.filter((toolset) => {
     if (!normalizedQuery) return true
     return `${toolset.name} ${toolset.label} ${toolset.description} ${toolset.tools.join(' ')}`.toLowerCase().includes(normalizedQuery)
@@ -110,6 +112,44 @@ export function SkillsView({
     : customizeTab === 'toolsets'
       ? '管理 Hermes 内置工具集。这里决定 Hermes 能不能查网页、读写文件、运行命令、反问澄清或执行定时任务。'
       : '管理 Hermes 可调用的 MCP 服务，把本机文件、浏览器、飞书和数据工具连接进任务。'
+  const capabilityItems = [
+    {
+      id: 'skills' as const,
+      title: '工作方法',
+      label: 'Skill',
+      icon: BookOpen,
+      count: enabledCount,
+      total: skills.length,
+      status: enabledCount ? '正常' : '未启用',
+      tone: enabledCount ? 'ready' : 'idle',
+      detail: '影响 Hermes 如何理解任务、拆解步骤和复用固定流程。'
+    },
+    {
+      id: 'connectors' as const,
+      title: '外部服务',
+      label: 'MCP',
+      icon: Plug,
+      count: enabledConnectors.length,
+      total: connectors.length,
+      status: connectors.length === 0 ? '待同步' : incompleteConnectors.length ? `${incompleteConnectors.length} 个需补全` : enabledConnectors.length ? '正常' : '未启用',
+      tone: connectors.length === 0 ? 'idle' : incompleteConnectors.length ? 'warning' : enabledConnectors.length ? 'ready' : 'idle',
+      detail: '把数据库、浏览器、飞书和外部工具连接给 Hermes 使用。'
+    },
+    {
+      id: 'toolsets' as const,
+      title: '内置工具',
+      label: 'Toolsets',
+      icon: Wrench,
+      count: enabledToolsets.length,
+      total: toolsets.length,
+      status: toolsets.length === 0 ? '待同步' : unconfiguredEnabledToolsets.length ? `${unconfiguredEnabledToolsets.length} 个需配置` : enabledToolsets.length ? '正常' : '未启用',
+      tone: toolsets.length === 0 ? 'idle' : unconfiguredEnabledToolsets.length ? 'warning' : enabledToolsets.length ? 'ready' : 'idle',
+      detail: '控制网页、文件、终端、反问、历史搜索和定时任务等基础能力。'
+    }
+  ]
+  const capabilityAction = capabilityItems.find((item) => item.tone === 'warning')
+    ?? capabilityItems.find((item) => item.tone === 'idle')
+    ?? capabilityItems.find((item) => item.id === customizeTab)
 
   return (
     <section className="customize-page">
@@ -127,8 +167,8 @@ export function SkillsView({
           工具集
         </button>
         <div className="customize-plugin-box">
-          <strong>能力边界</strong>
-          <span>Skill 是工作方法；MCP 是外部服务；工具集是 Hermes 内置工具开关。三者都在技能页统一管理。</span>
+          <strong>下一步</strong>
+          <span>{capabilityAction ? abilityActionText(capabilityAction) : '当前能力状态正常，可以继续使用。'}</span>
         </div>
       </aside>
 
@@ -170,6 +210,31 @@ export function SkillsView({
           <h1>{pageTitle}</h1>
           <p>{pageDescription}</p>
         </header>
+
+        <div className="capability-overview-head">
+          <strong>能力中心</strong>
+          <span>Skill、MCP、Toolsets 的真实启用状态。</span>
+        </div>
+        <div className="capability-overview" aria-label="Hermes 能力中心">
+          {capabilityItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.id}
+                className={customizeTab === item.id ? `capability-card ${item.tone} active` : `capability-card ${item.tone}`}
+                onClick={() => onCustomizeTabChange(item.id)}
+              >
+                <span className="capability-icon"><Icon size={18} /></span>
+                <span className="capability-body">
+                  <span className="capability-title">{item.title}<em>{item.label}</em></span>
+                  <strong>{item.total ? item.count : '待同步'}{item.total ? <small> / {item.total}</small> : null}</strong>
+                  <span className="capability-detail">{item.detail}</span>
+                </span>
+                <span className="capability-state">{item.status}</span>
+              </button>
+            )
+          })}
+        </div>
 
         {customizeTab === 'skills' ? (
           <>
@@ -367,6 +432,13 @@ function groupToolsets(toolsets: HermesToolset[]) {
   return order
     .map((title) => ({ title, toolsets: groups.get(title) ?? [] }))
     .filter((section) => section.toolsets.length)
+}
+
+function abilityActionText(item: { id: CustomizeTab; title: string; tone: string; status: string }) {
+  if (item.status === '待同步') return `${item.title}正在同步本机状态，刷新后显示真实可用数量。`
+  if (item.tone === 'warning') return `${item.title}有配置需要处理：${item.status}。点击对应卡片进入管理。`
+  if (item.tone === 'idle') return `${item.title}目前没有启用。需要 Hermes 使用这类能力时，先点击对应卡片启用。`
+  return `正在查看${item.title}。这里管理 Hermes 实际可调用的能力，不放临时前端占位。`
 }
 
 function toolsetGroup(name: string) {

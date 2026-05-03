@@ -1066,7 +1066,7 @@ HC_EVENT\t
 - 工作区第二阶段已落地：后端新增目录树、重命名、重新授权和移除工作区 API；文件管理页接入面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。移除工作区只删除 Cowork 记录和该工作区会话索引，不删除真实文件；`.DS_Store`、`.gitkeep` 等系统占位文件默认不展示。
 - 调度页：根据真实 MCP 服务、Hermes 工具集和已启用 lark skills 汇总网页浏览器、飞书办公、数据与文件三类能力，并跳转到技能页的“工具集”或“MCP 服务”子页。
 - 任务模板页：补充中文办公模板，覆盖文件整理、文档生成、飞书办公、数据分析、网页调研，并支持分类筛选。
-- 技能页：按 Cowork 产品参考图拆成 `技能 / MCP 服务 / 工具集` 三个子页。技能读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；MCP 服务读取真实 Hermes MCP 配置；工具集读取 Hermes Dashboard 官方 `/api/tools/toolsets`，并通过 Cowork 后端受控写回 Hermes `platform_toolsets.cli`。
+- 技能页：按 Cowork 产品参考图拆成 `技能 / MCP 服务 / 工具集` 三个子页。技能读取真实本机 skill，支持搜索、市场/已安装切换、启用/停用、上传 `SKILL.md`；MCP 服务读取真实 Hermes MCP 配置；工具集读取 Hermes Dashboard 官方 `/api/tools/toolsets`，并通过 Cowork 后端受控写回 Hermes `platform_toolsets.cli`。顶部已新增“能力中心”总览，把工作方法、外部服务和内置工具的启用数量、配置风险和下一步入口放在同一层级，避免用户在三套概念之间来回猜。
 - 技能详情弹窗：点击技能卡片后，可查看该 skill 的 `SKILL.md` 和配套子文件内容，并可将该 skill 加入下一次任务的预载技能。
 - 对话区内联执行轨迹：用户消息后展示 Hermes 的“查看详情”，包含思考摘要、状态、工具/搜索/文件操作和完成/失败事件；当前阶段只在外层突出显示最后一条活动，完整过程默认折叠到“查看过程记录”，避免思考、工具和答案挤在一起。
 - 对话区执行轨迹优先消费后端 `executionView.activity`，而不是只在前端从原始 `events` 猜测；旧事件推断逻辑只作为兼容回退。
@@ -1430,7 +1430,7 @@ HC_EVENT\t
 `apps/web/src/features/skills/SkillsView.tsx`
 
 - 技能主页面模块，已从 `App.tsx` 抽离。
-- 负责 `技能 / MCP 服务 / 工具集` 三个子页、技能市场/已安装切换、技能搜索、技能卡片、刷新、上传、MCP 服务摘要和 Hermes Toolsets 管理入口。
+- 负责能力中心总览、`技能 / MCP 服务 / 工具集` 三个子页、技能市场/已安装切换、技能搜索、技能卡片、刷新、上传、MCP 服务摘要和 Hermes Toolsets 管理入口。
 - 后续修复“左侧技能入口层级”“技能市场分类”“MCP 服务和设置入口一致性”“Toolsets 展示与启停”等问题时，优先改这里。
 
 `apps/web/src/features/skills/SkillDetailModal.tsx`
@@ -1672,7 +1672,7 @@ POST /api/models/fallbacks
 - 继承 Hermes CLI 配置与模型路由。
 - 多轮任务继续同一个 Hermes session。
 - 多轮任务默认继续同一个 Hermes session；如果用户在同一任务里切换了底部模型，Cowork 会开启新的 Hermes session，避免旧 session 继续沿用之前的模型和 provider。
-- 技能页：扫描真实本机 skill 并展示在“技能”子页；“MCP 服务”子页读取 Hermes MCP 配置中的真实服务，如 `csv-analyzer`、`sqlite`、`mimo-web-search`；“工具集”子页读取 Hermes 官方 Dashboard Toolsets，用于统一管理 Skill、MCP 和 Hermes 内置工具。
+- 技能页：扫描真实本机 skill 并展示在“技能”子页；“MCP 服务”子页读取 Hermes MCP 配置中的真实服务，如 `csv-analyzer`、`sqlite`、`mimo-web-search`；“工具集”子页读取 Hermes 官方 Dashboard Toolsets，用于统一管理 Skill、MCP 和 Hermes 内置工具。能力中心总览已把三类能力的启用数量、配置风险和跨入口跳转放到技能页顶部。
 - Skill 执行接入：启用的 skill 会进入 Hermes 执行上下文；从 skill 详情点“使用技能”会把该 skill 预载到下一次任务。
 - 模型切换：底部输入框可展开模型菜单，默认项显示 Hermes 当前模型；选择默认项时不传 `--model`，选择指定模型时任务创建和继续对话会携带该模型。
 - 模型设置页已从 SOLO 静态壳改为 Hermes 覆盖页：围绕“默认大脑 / 本次任务模型 / 长期默认模型 / 备用路线 / 模型服务状态”组织信息，并可把候选模型写回 Hermes 默认模型；Provider、Base URL、config/env 路径和凭据状态作为高级信息折叠展示，不再把底层配置项作为主交互。
@@ -2106,7 +2106,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 
 - Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
 - Session 全量前端化：已完成只读列表、全文搜索、搜索来源覆盖、搜索命中展开与消息定位、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除、从原生 session 继续对话，以及官方 session actions 探测。下一步转向 Logs / Analytics 用户化和更多 session 元数据展示，不再临时增加没有后端真源的 session 按钮。
-- Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
+- Skills / MCP / Toolsets 统一技能页能力中心：第一步已完成，技能页顶部能汇总工作方法、外部服务和内置工具的启用状态、配置风险和跨入口跳转。下一步继续补工具集失败统计、MCP 工具级管理前移和 Skill 分类市场。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
 - Logs / Analytics 用户化：前三步已落到设置 > 诊断，能展示模型调用量、Token、预估费用、Top 模型、近期错误、下一步动作、近期 Cowork 任务异常、审批/澄清等待、工具调用、失败率，并能把日志异常按 Hermes session 或时间窗口回链到 Cowork 任务。下一步再补更细的工具耗时分布和可折叠原始诊断。
 

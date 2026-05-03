@@ -1268,6 +1268,143 @@
   font-size: 13px;
 }
 
+.capability-overview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.capability-overview-head strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 780;
+}
+
+.capability-overview-head span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.capability-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.capability-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  min-height: 128px;
+  padding: 15px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+}
+
+.capability-card.active {
+  border-color: var(--success-border);
+  background: linear-gradient(180deg, var(--surface), var(--success-soft));
+}
+
+.capability-card.warning {
+  border-color: rgba(209, 141, 45, 0.28);
+}
+
+.capability-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 10px;
+}
+
+.capability-card.warning .capability-icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.capability-card.idle .capability-icon {
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+}
+
+.capability-body {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.capability-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.capability-title em {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.capability-body strong {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.capability-body small {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.capability-detail {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.capability-state {
+  max-width: 86px;
+  padding: 3px 7px;
+  overflow: hidden;
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid var(--success-border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capability-card.warning .capability-state {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: rgba(209, 141, 45, 0.26);
+}
+
+.capability-card.idle .capability-state {
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+
 .skills-toolbar {
   display: flex;
   align-items: end;
@@ -3544,6 +3681,7 @@
 :root[data-theme-mode="dark"] .idea-grid button,
 :root[data-theme-mode="dark"] .utility-empty,
 :root[data-theme-mode="dark"] .connector-summary div,
+:root[data-theme-mode="dark"] .capability-card,
 :root[data-theme-mode="dark"] .toolset-card,
 :root[data-theme-mode="dark"] .skill-browser,
 :root[data-theme-mode="dark"] .skill-file-content,
@@ -3593,6 +3731,8 @@
 :root[data-theme-mode="dark"] .dispatch-connector-strip,
 :root[data-theme-mode="dark"] .idea-grid button:hover,
 :root[data-theme-mode="dark"] .toolset-status-tabs span,
+:root[data-theme-mode="dark"] .capability-card.idle .capability-icon,
+:root[data-theme-mode="dark"] .capability-card.idle .capability-state,
 :root[data-theme-mode="dark"] .toolset-head span,
 :root[data-theme-mode="dark"] .toolset-meta em,
 :root[data-theme-mode="dark"] .toolset-tools span,
@@ -3816,4 +3956,39 @@
 :root[data-theme-mode="dark"] .hermes-smoke-card.failed .hermes-smoke-head em,
 :root[data-theme-mode="dark"] .hermes-auto-update-card.failed .hermes-auto-update-head em {
   color: var(--danger);
+}
+
+@container skills-main (max-width: 1040px) {
+  .customize-page {
+    grid-template-columns: 1fr;
+    width: min(100% - 32px, 820px);
+    padding-top: 32px;
+  }
+
+  .customize-sidebar {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    padding-top: 0;
+  }
+
+  .customize-plugin-box {
+    flex: 1 1 100%;
+  }
+
+  .capability-overview,
+  .skills-summary,
+  .skill-grid,
+  .toolset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .skills-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .skills-search {
+    width: 100%;
+  }
 }
