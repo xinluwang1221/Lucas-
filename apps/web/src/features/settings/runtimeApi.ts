@@ -4,6 +4,7 @@ import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
   HermesDashboardAdapterStatus,
+  HermesDiagnosticsStatus,
   HermesRuntime,
   HermesSessionDetailResponse,
   HermesSessionsResponse,
@@ -18,6 +19,14 @@ export async function getHermesRuntime(): Promise<HermesRuntime> {
 
 export async function startHermesDashboard(): Promise<HermesDashboardAdapterStatus> {
   return request('/api/hermes/dashboard/start', { method: 'POST' })
+}
+
+export async function getHermesDiagnostics(params: { days?: number; start?: boolean } = {}): Promise<HermesDiagnosticsStatus> {
+  const query = new URLSearchParams()
+  if (params.days) query.set('days', String(params.days))
+  if (params.start) query.set('start', '1')
+  const suffix = query.toString()
+  return request(`/api/hermes/diagnostics${suffix ? `?${suffix}` : ''}`)
 }
 
 export async function getHermesUpdateStatus(): Promise<HermesUpdateStatus> {

@@ -9,6 +9,7 @@ export type SettingsTab =
   | 'conversation'
   | 'external'
   | 'cloud'
+  | 'diagnostics'
   | 'commands'
   | 'rules'
   | 'about'

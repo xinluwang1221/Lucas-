@@ -243,6 +243,163 @@
   gap: 10px;
 }
 
+.diagnostics-summary-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px;
+}
+
+.diagnostics-summary-card strong,
+.diagnostics-summary-card p {
+  display: block;
+}
+
+.diagnostics-summary-card strong {
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 760;
+}
+
+.diagnostics-summary-card p {
+  max-width: 620px;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  line-height: 1.55;
+}
+
+.diagnostics-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 15px 15px;
+}
+
+.diagnostics-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 15px;
+}
+
+.diagnostics-metric-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.diagnostics-metric-card span {
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+}
+
+.diagnostics-metric-card strong {
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 820;
+}
+
+.diagnostics-model-list,
+.diagnostics-log-files,
+.diagnostics-issue-list,
+.diagnostics-next-actions {
+  display: grid;
+  gap: 8px;
+  padding: 0 15px 15px;
+}
+
+.diagnostics-model-list div,
+.diagnostics-log-files div,
+.diagnostics-next-actions div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.diagnostics-model-list strong,
+.diagnostics-log-files strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-caption);
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagnostics-model-list span,
+.diagnostics-log-files span {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+}
+
+.diagnostics-issue {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+}
+
+.diagnostics-issue.error {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+
+.diagnostics-issue span {
+  color: var(--warning);
+  font-size: var(--text-caption);
+  font-weight: 780;
+}
+
+.diagnostics-issue.error span {
+  color: var(--danger);
+}
+
+.diagnostics-issue p {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.diagnostics-next-actions div {
+  justify-content: flex-start;
+  color: var(--ink);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+
+.diagnostics-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+
 .settings-section-copy {
   margin: -2px 0 12px;
   color: var(--ink-soft);
@@ -2704,6 +2861,7 @@
   .model-health-grid,
   .model-ability-grid,
   .model-impact-grid,
+  .diagnostics-metric-grid,
   .hermes-update-grid,
   .hermes-auto-update-summary,
   .hermes-update-checks {
@@ -2771,6 +2929,7 @@
   .model-impact-grid,
   .model-scenario-grid,
   .model-credential-grid,
+  .diagnostics-metric-grid,
   .hermes-update-grid,
   .hermes-auto-update-summary,
   .hermes-update-checks {

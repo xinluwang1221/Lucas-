@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import {
+  getHermesDiagnostics,
   getHermesRuntime,
   getHermesSessions,
   getHermesUpdateStatus,
@@ -10,6 +11,7 @@ import {
 import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
+  HermesDiagnosticsStatus,
   HermesRuntime,
   HermesSessionSummary,
   HermesUpdateStatus
@@ -33,6 +35,9 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
   const [hermesSessions, setHermesSessions] = useState<HermesSessionSummary[]>([])
   const [hermesDashboardStarting, setHermesDashboardStarting] = useState(false)
   const [hermesDashboardError, setHermesDashboardError] = useState<string | null>(null)
+  const [hermesDiagnostics, setHermesDiagnostics] = useState<HermesDiagnosticsStatus | null>(null)
+  const [hermesDiagnosticsLoading, setHermesDiagnosticsLoading] = useState(false)
+  const [hermesDiagnosticsError, setHermesDiagnosticsError] = useState<string | null>(null)
 
   const refreshRuntime = useCallback(async () => {
     try {
@@ -109,6 +114,18 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
     }
   }, [refreshRuntime])
 
+  const refreshHermesDiagnostics = useCallback(async (options: { start?: boolean } = {}) => {
+    setHermesDiagnosticsLoading(true)
+    setHermesDiagnosticsError(null)
+    try {
+      setHermesDiagnostics(await getHermesDiagnostics({ days: 30, start: options.start }))
+    } catch (cause) {
+      setHermesDiagnosticsError(errorMessage(cause))
+    } finally {
+      setHermesDiagnosticsLoading(false)
+    }
+  }, [])
+
   return {
     runtime,
     hermesUpdate,
@@ -122,12 +139,16 @@ export function useHermesRuntimeState({ onRuntimeError }: { onRuntimeError?: (me
     hermesAutoUpdateError,
     hermesDashboardStarting,
     hermesDashboardError,
+    hermesDiagnostics,
+    hermesDiagnosticsLoading,
+    hermesDiagnosticsError,
     hermesSessions,
     refreshRuntime,
     refreshHermesUpdateStatus,
     handleRunHermesCompatibilityTest,
     handleRunHermesAutoUpdate,
     handleStartHermesDashboard,
+    refreshHermesDiagnostics,
     refreshHermesSessions
   }
 }

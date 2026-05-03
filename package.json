@@ -15,6 +15,7 @@
     "test:message-parts": "tsx apps/web/test/message_parts.test.ts",
     "test:hermes-cron": "tsx apps/api/test/hermes_cron.test.ts",
     "test:hermes-dashboard": "tsx apps/api/test/hermes_dashboard_adapter.test.ts",
+    "test:hermes-diagnostics": "tsx apps/api/test/hermes_diagnostics.test.ts",
     "test:hermes-official-api": "tsx apps/api/test/hermes_official_api.test.ts",
     "test:hermes-official-runs": "tsx apps/api/test/hermes_official_runs.test.ts",
     "test:hermes-connection": "tsx apps/api/test/hermes_message_connection.test.ts",

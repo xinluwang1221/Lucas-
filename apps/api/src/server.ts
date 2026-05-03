@@ -10,6 +10,7 @@ import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgro
 import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPreview } from './file_preview.js'
 import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
+import { readHermesDiagnostics } from './hermes_diagnostics.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { readHermesOfficialApiStatus } from './hermes_official_api.js'
 import { deleteHermesSession, normalizeHermesSessionId, readHermesSessionDetailWithOfficial, readHermesSessionsWithOfficial, renameHermesSession, type HermesSessionDetail, type HermesSessionMessage } from './hermes_sessions.js'
@@ -184,6 +185,16 @@ app.get('/api/hermes/dashboard/official/env', async (_req, res) => {
 
 app.get('/api/hermes/dashboard/official/model-info', async (_req, res) => {
   await sendHermesDashboardProxy(res, '/api/model/info')
+})
+
+app.get('/api/hermes/diagnostics', async (req, res) => {
+  try {
+    const startDashboard = ['1', 'true', 'yes'].includes(String(req.query.start ?? '').toLowerCase())
+    const days = Number(req.query.days ?? 30)
+    res.json(await readHermesDiagnostics({ days, startDashboard }))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
 })
 
 app.get('/api/hermes/update-status', async (_req, res) => {

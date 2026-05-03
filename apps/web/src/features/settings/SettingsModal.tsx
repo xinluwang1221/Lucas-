@@ -1,5 +1,6 @@
 import {
   Bot,
+  Activity,
   FileText,
   Globe2,
   Info,
@@ -17,6 +18,7 @@ import type {
   BackgroundServiceStatus,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
+  HermesDiagnosticsStatus,
   HermesMcpConfig,
   HermesMcpRecommendations,
   HermesMcpServeStatus,
@@ -37,6 +39,7 @@ import {
   ConversationSettingsSection,
   GeneralSettingsSection,
   InfoSettingsSection,
+  RuntimeDiagnosticsSettingsSection,
   RulesSettingsSection
 } from './SettingsPages'
 import type { SettingsPrefs, SettingsTab } from './settingsTypes'
@@ -83,10 +86,15 @@ export function SettingsModal({
   mcpServeError,
   hermesDashboardStarting,
   hermesDashboardError,
+  hermesDiagnostics,
+  hermesDiagnosticsLoading,
+  hermesDiagnosticsError,
   onTabChange,
   onClose,
   onRefreshRuntime,
   onStartHermesDashboard,
+  onRefreshHermesDiagnostics,
+  onStartHermesDashboardForDiagnostics,
   onRefreshHermesUpdate,
   onRunHermesCompatibilityTest,
   onRunHermesAutoUpdate,
@@ -157,10 +165,15 @@ export function SettingsModal({
   mcpServeError: string | null
   hermesDashboardStarting: boolean
   hermesDashboardError: string | null
+  hermesDiagnostics: HermesDiagnosticsStatus | null
+  hermesDiagnosticsLoading: boolean
+  hermesDiagnosticsError: string | null
   onTabChange: (tab: SettingsTab) => void
   onClose: () => void
   onRefreshRuntime: () => void
   onStartHermesDashboard: () => void
+  onRefreshHermesDiagnostics: () => void
+  onStartHermesDashboardForDiagnostics: () => void
   onRefreshHermesUpdate: () => void
   onRunHermesCompatibilityTest: () => void
   onRunHermesAutoUpdate: () => void
@@ -202,6 +215,7 @@ export function SettingsModal({
     { id: 'conversation', label: '对话流', icon: <MessageSquarePlus size={15} />, group: 'tools' },
     { id: 'external', label: '外部应用授权', icon: <Shield size={15} />, group: 'tools' },
     { id: 'cloud', label: '运行环境', icon: <CloudIcon />, group: 'tools' },
+    { id: 'diagnostics', label: '诊断', icon: <Activity size={15} />, group: 'tools' },
     { id: 'commands', label: '命令', icon: <Terminal size={15} />, group: 'about' },
     { id: 'rules', label: '规则', icon: <FileText size={15} />, group: 'about' },
     { id: 'about', label: '关于 Hermes Cowork', icon: <Info size={15} />, group: 'about' }
@@ -335,6 +349,15 @@ export function SettingsModal({
             dashboardError={hermesDashboardError}
             onRefreshRuntime={onRefreshRuntime}
             onStartDashboard={onStartHermesDashboard}
+          />
+        )}
+        {tab === 'diagnostics' && (
+          <RuntimeDiagnosticsSettingsSection
+            diagnostics={hermesDiagnostics}
+            loading={hermesDiagnosticsLoading}
+            error={hermesDiagnosticsError}
+            onRefresh={onRefreshHermesDiagnostics}
+            onStartDashboard={onStartHermesDashboardForDiagnostics}
           />
         )}
         {tab === 'commands' && (

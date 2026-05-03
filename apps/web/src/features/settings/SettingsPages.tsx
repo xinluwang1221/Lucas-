@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type {
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
+  HermesDiagnosticsStatus,
   HermesRuntime,
   HermesUpdateStatus
 } from '../../lib/api'
@@ -709,6 +710,114 @@ export function CloudRuntimeSettingsSection({
       </SettingsBlock>
     </SettingsSection>
   )
+}
+
+export function RuntimeDiagnosticsSettingsSection({
+  diagnostics,
+  loading,
+  error,
+  onRefresh,
+  onStartDashboard
+}: {
+  diagnostics: HermesDiagnosticsStatus | null
+  loading: boolean
+  error: string | null
+  onRefresh: () => void
+  onStartDashboard: () => void
+}) {
+  const status = diagnostics?.status ?? 'unavailable'
+  const statusLabel = status === 'ok' ? '正常' : status === 'warn' ? '需要关注' : '未连接'
+  const usage = diagnostics?.usage
+  return (
+    <SettingsSection title="诊断">
+      <SettingsBlock title="运行诊断">
+        <div className="diagnostics-summary-card">
+          <div>
+            <strong>Hermes 后台状态</strong>
+            <p>{diagnostics?.summary ?? '连接 Hermes 官方后台后，这里会显示最近使用、异常和下一步动作。'}</p>
+          </div>
+          <span className={status === 'ok' ? 'status-pill ok' : 'status-pill warn'}>{statusLabel}</span>
+        </div>
+        {error && <p className="runtime-dashboard-error">{error}</p>}
+        <div className="diagnostics-actions">
+          <button className="settings-button" disabled={loading} onClick={onRefresh}>
+            {loading ? '刷新中' : '刷新诊断'}
+          </button>
+          <button className="settings-primary-button" disabled={loading} onClick={onStartDashboard}>
+            启动后台并刷新
+          </button>
+        </div>
+      </SettingsBlock>
+
+      <SettingsBlock title="最近使用">
+        <div className="diagnostics-metric-grid">
+          <MetricCard label="会话" value={formatNumber(usage?.totalSessions)} />
+          <MetricCard label="模型调用" value={formatNumber(usage?.totalApiCalls)} />
+          <MetricCard label="Token" value={formatCompactNumber(usage?.totalTokens)} />
+          <MetricCard label="预估费用" value={formatUsd(usage?.estimatedCostUsd)} />
+        </div>
+        <div className="diagnostics-model-list">
+          {(usage?.topModels.length ? usage.topModels : []).map((model) => (
+            <div key={model.model}>
+              <strong>{model.model}</strong>
+              <span>{formatNumber(model.sessions)} 个会话 · {formatCompactNumber(model.tokens)} tokens</span>
+            </div>
+          ))}
+          {!usage?.topModels.length && <p className="diagnostics-empty">暂无模型使用记录。</p>}
+        </div>
+      </SettingsBlock>
+
+      <SettingsBlock title="近期异常">
+        <div className="diagnostics-log-files">
+          {(diagnostics?.logHealth.files ?? []).map((file) => (
+            <div key={file.id}>
+              <strong>{file.label}</strong>
+              <span>{file.status === 'unavailable' ? '不可读' : `${file.issueCount} 条异常`}</span>
+            </div>
+          ))}
+          {!diagnostics?.logHealth.files.length && <p className="diagnostics-empty">暂无日志状态。</p>}
+        </div>
+        <div className="diagnostics-issue-list">
+          {(diagnostics?.logHealth.recentIssues ?? []).map((issue) => (
+            <div key={issue.id} className={`diagnostics-issue ${issue.level}`}>
+              <span>{issue.level === 'error' ? '错误' : '警告'}</span>
+              <p>{issue.message}</p>
+            </div>
+          ))}
+          {!diagnostics?.logHealth.recentIssues.length && <p className="diagnostics-empty">没有发现近期错误日志。</p>}
+        </div>
+      </SettingsBlock>
+
+      <SettingsBlock title="下一步">
+        <div className="diagnostics-next-actions">
+          {(diagnostics?.nextActions ?? ['先启动 Hermes 官方后台，然后刷新诊断。']).map((action) => (
+            <div key={action}>{action}</div>
+          ))}
+        </div>
+      </SettingsBlock>
+    </SettingsSection>
+  )
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="diagnostics-metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
+function formatNumber(value?: number) {
+  return new Intl.NumberFormat('zh-CN').format(value ?? 0)
+}
+
+function formatCompactNumber(value?: number) {
+  return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value ?? 0)
+}
+
+function formatUsd(value?: number) {
+  return `$${(value ?? 0).toFixed(2)}`
 }
 
 function formatConfigVersion(current?: number, latest?: number) {

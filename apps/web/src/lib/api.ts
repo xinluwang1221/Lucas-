@@ -336,6 +336,53 @@ export type HermesDashboardAdapterStatus = {
   updatedAt: string
 }
 
+export type HermesDiagnosticsStatus = {
+  status: 'ok' | 'warn' | 'unavailable'
+  summary: string
+  source: {
+    dashboard: 'available' | 'unavailable'
+    usage: 'available' | 'unavailable'
+    logs: 'available' | 'unavailable'
+  }
+  usage: {
+    periodDays: number
+    totalSessions: number
+    totalApiCalls: number
+    totalTokens: number
+    inputTokens: number
+    outputTokens: number
+    reasoningTokens: number
+    cacheReadTokens: number
+    estimatedCostUsd: number
+    actualCostUsd: number
+    topModels: Array<{
+      model: string
+      sessions: number
+      apiCalls: number
+      tokens: number
+      estimatedCostUsd: number
+    }>
+  }
+  logHealth: {
+    files: Array<{
+      id: string
+      label: string
+      status: 'ok' | 'warn' | 'unavailable'
+      lineCount: number
+      issueCount: number
+      latestIssue?: string
+    }>
+    recentIssues: Array<{
+      id: string
+      file: string
+      level: 'error' | 'warn'
+      message: string
+    }>
+  }
+  nextActions: string[]
+  updatedAt: string
+}
+
 export type HermesSessionSummary = {
   id: string
   file: string

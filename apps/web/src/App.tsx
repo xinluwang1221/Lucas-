@@ -317,12 +317,16 @@ function App() {
     hermesAutoUpdateError,
     hermesDashboardStarting,
     hermesDashboardError,
+    hermesDiagnostics,
+    hermesDiagnosticsLoading,
+    hermesDiagnosticsError,
     hermesSessions,
     refreshRuntime,
     refreshHermesUpdateStatus,
     handleRunHermesCompatibilityTest,
     handleRunHermesAutoUpdate,
     handleStartHermesDashboard,
+    refreshHermesDiagnostics,
     refreshHermesSessions
   } = useHermesRuntimeState({ onRuntimeError: setError })
   const [mcpMarketplaceOpen, setMcpMarketplaceOpen] = useState(false)
@@ -679,6 +683,11 @@ function App() {
     if (!settingsOpen || settingsTab !== 'models') return
     void refreshModels().catch(() => undefined)
   }, [settingsOpen, settingsTab])
+
+  useEffect(() => {
+    if (!settingsOpen || settingsTab !== 'diagnostics') return
+    void refreshHermesDiagnostics().catch(() => undefined)
+  }, [settingsOpen, settingsTab, refreshHermesDiagnostics])
 
   useEffect(() => {
     if (!modelMenuOpen) return
@@ -1497,10 +1506,17 @@ function App() {
             mcpServeError={mcpServeError}
             hermesDashboardStarting={hermesDashboardStarting}
             hermesDashboardError={hermesDashboardError}
+            hermesDiagnostics={hermesDiagnostics}
+            hermesDiagnosticsLoading={hermesDiagnosticsLoading}
+            hermesDiagnosticsError={hermesDiagnosticsError}
             onTabChange={setSettingsTab}
             onClose={() => setSettingsOpen(false)}
             onRefreshRuntime={() => void refreshRuntime()}
             onStartHermesDashboard={() => void handleStartHermesDashboard()}
+            onRefreshHermesDiagnostics={() => void refreshHermesDiagnostics()}
+            onStartHermesDashboardForDiagnostics={() => {
+              void refreshHermesDiagnostics({ start: true }).then(() => refreshRuntime())
+            }}
             onRefreshHermesUpdate={() => void refreshHermesUpdateStatus()}
             onRunHermesCompatibilityTest={() => void handleRunHermesCompatibilityTest()}
             onRunHermesAutoUpdate={() => void handleRunHermesAutoUpdate()}
