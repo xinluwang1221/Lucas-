@@ -72,12 +72,19 @@
   line-height: 1;
 }
 
-.sessions-toolbar {
+.sessions-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 22px 0 14px auto;
+}
+
+.sessions-search-field,
+.sessions-filter-field {
   display: flex;
   align-items: center;
   gap: 9px;
-  width: min(460px, 100%);
-  margin: 22px 0 14px auto;
   padding: 0 12px;
   color: var(--ink-soft);
   background: var(--panel);
@@ -85,7 +92,16 @@
   border-radius: var(--radius-control);
 }
 
-.sessions-toolbar input {
+.sessions-search-field {
+  width: min(460px, 100%);
+}
+
+.sessions-filter-field {
+  min-width: 150px;
+}
+
+.sessions-search-field input,
+.sessions-filter-field select {
   flex: 1;
   min-width: 0;
   height: 40px;
@@ -93,6 +109,16 @@
   background: transparent;
   border: 0;
   outline: 0;
+}
+
+.sessions-filter-field select {
+  appearance: none;
+  cursor: pointer;
+}
+
+.ghost-button.compact {
+  height: 40px;
+  padding: 0 12px;
 }
 
 .sessions-browser {
@@ -179,7 +205,7 @@
 }
 
 .session-row-body strong,
-.session-row-body span,
+.session-row-body span:not(.session-row-match),
 .session-row-body em {
   min-width: 0;
   overflow: hidden;
@@ -197,6 +223,15 @@
   color: var(--ink-soft);
   font-size: var(--text-caption);
   font-style: normal;
+}
+
+.session-row-body .session-row-match {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--accent-strong);
+  font-size: var(--text-caption);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .session-detail-panel {
@@ -266,6 +301,37 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
+}
+
+.session-search-matches {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  border-radius: var(--radius-control);
+}
+
+.session-search-matches strong {
+  color: var(--ink-strong);
+  font-size: var(--text-caption);
+}
+
+.session-search-matches span {
+  color: var(--ink);
+  font-size: var(--text-caption);
+  line-height: 1.6;
+}
+
+.sessions-inline-error {
+  padding: 10px 12px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--line));
+  border-radius: var(--radius-control);
+  font-size: var(--text-caption);
 }
 
 .session-linked-tasks strong {

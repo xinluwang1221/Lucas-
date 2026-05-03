@@ -20,6 +20,13 @@ export type HermesSessionSummary = {
   linkedTaskIds: string[]
   linkedTaskTitle?: string
   linkedWorkspaceIds: string[]
+  searchMatches?: HermesSessionSearchHit[]
+}
+
+export type HermesSessionSearchHit = {
+  messageId: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  snippet: string
 }
 
 export type HermesSessionMessage = {
@@ -76,12 +83,19 @@ export function readHermesSessions(state: AppState, options: ReadHermesSessionsO
       const fullPath = path.join(sessionsDir, file)
       try {
         const raw = readJsonFile(fullPath)
-        return [toHermesSessionSummary(raw, file, fullPath, linkedTasks)]
+        const summary = toHermesSessionSummary(raw, file, fullPath, linkedTasks)
+        if (!query) return [summary]
+
+        const searchMatches = findSessionSearchMatches(raw, summary.id, query)
+        if (!matchesSessionQuery(summary, query) && !searchMatches.length) return []
+        return [{
+          ...summary,
+          searchMatches
+        }]
       } catch {
         return []
       }
     })
-    .filter((session) => matchesSessionQuery(session, query))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   const safeLimit = Number.isFinite(options.limit) && options.limit && options.limit > 0
@@ -231,7 +245,40 @@ function matchesSessionQuery(session: HermesSessionSummary, query: string | unde
     session.linkedTaskTitle,
     ...session.tools
   ].filter(Boolean).join(' ').toLowerCase()
-  return haystack.includes(query.toLowerCase())
+  return textMatchesQuery(haystack, query)
+}
+
+function findSessionSearchMatches(raw: HermesSessionRaw, sessionId: string, query: string) {
+  return normalizeMessages(raw, sessionId)
+    .flatMap((message) => {
+      const target = [message.content, message.reasoning].filter(Boolean).join('\n')
+      if (!textMatchesQuery(target, query)) return []
+      return [{
+        messageId: message.id,
+        role: message.role,
+        snippet: buildSearchSnippet(target, query)
+      }]
+    })
+    .slice(0, 3)
+}
+
+function textMatchesQuery(value: string, query: string) {
+  const haystack = value.toLowerCase()
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return true
+  return terms.every((term) => haystack.includes(term))
+}
+
+function buildSearchSnippet(value: string, query: string) {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  const firstTerm = query.toLowerCase().split(/\s+/).find(Boolean) ?? query.toLowerCase()
+  const index = normalized.toLowerCase().indexOf(firstTerm)
+  if (index === -1) return truncateText(normalized, 120)
+  const start = Math.max(0, index - 42)
+  const end = Math.min(normalized.length, index + firstTerm.length + 72)
+  const prefix = start > 0 ? '…' : ''
+  const suffix = end < normalized.length ? '…' : ''
+  return `${prefix}${normalized.slice(start, end)}${suffix}`
 }
 
 function normalizeSessionId(value: string) {

@@ -73,6 +73,12 @@ async function main() {
     assert.equal(filtered.sessions.length, 1)
     assert.equal(filtered.sessions[0].model, 'mimo-v2.5-pro')
 
+    const fullTextFiltered = readHermesSessions(state, { sessionsDir, query: '映射 Cowork' })
+    assert.equal(fullTextFiltered.sessions.length, 1)
+    assert.equal(fullTextFiltered.sessions[0].id, '20260503_010203_000001')
+    assert.equal(fullTextFiltered.sessions[0].searchMatches?.length, 1)
+    assert.match(fullTextFiltered.sessions[0].searchMatches?.[0]?.snippet ?? '', /映射 Cowork/)
+
     const detail = readHermesSessionDetail(state, 'session_20260503_010203_000001.json', { sessionsDir })
     assert.ok(detail)
     assert.equal(detail.session.title, '会话能力梳理')

@@ -604,8 +604,8 @@ flowchart TB
 - `/api/hermes/runtime` 已把 `officialApi` 一并返回，后续设置页或运行环境页可以直接显示“官方 API Server 是否运行、是否配置 Key、哪些能力可迁移”。
 - 新增 `apps/api/src/hermes_official_runs.ts` 和 `npm run test:hermes-official-runs`，已经把 `/v1/runs`、`/v1/runs/{run_id}/events`、`/v1/runs/{run_id}/stop` 做成并行适配层，能把官方事件归一为 Cowork 现有 `message.delta`、`tool.started/completed`、`task.completed/failed`、`context.updated`。
 - 当前判断：不立即把主通道从 `tui_gateway` 切到 Runs API。原因是本机 Hermes 当前 Runs API 没有读取 `workdir/cwd`，也没有 `approval.request / approval.respond` 和 `clarify.request / clarify.respond` 协议；Cowork 的授权工作区、危险命令审批、任务反问仍必须保留在 `tui_gateway` 主链路。
-- Session 全量前端化第一步已完成：新增 `apps/api/src/hermes_sessions.ts`，后端只读解析 Hermes 原生 session 文件，并开放列表与详情 API；前端新增“会话”主入口，可搜索、查看消息、模型、来源平台、工具和 Cowork 任务关联。
-- 当前 Session 缺口：删除、重命名、官方 Dashboard session actions、全文搜索索引、跨平台来源筛选、继续对话的双向同步仍未完成；这些必须先确认 Hermes 官方语义，再做写入类入口。
+- Session 全量前端化第二步已完成：`/api/hermes/sessions?q=` 已能扫描 Hermes 原生 session 消息全文并返回命中片段；前端“会话”页改为服务端全文搜索，并增加来源和模型筛选。
+- 当前 Session 缺口：删除、重命名、官方 Dashboard session actions、继续对话的双向同步仍未完成；本机 Hermes 官方 Dashboard 已确认支持 `GET /api/sessions/search` 和 `DELETE /api/sessions/{session_id}`，重命名主要来自 CLI `hermes sessions rename`。写入类入口必须先做备份、确认弹窗和失败恢复。
 
 阶段验收：
 
@@ -1413,9 +1413,9 @@ HC_EVENT\t
 `apps/web/src/features/sessions/SessionsView.tsx`
 
 - Hermes 原生会话页面，已作为左侧“会话”入口接入。
-- 负责本机会话搜索、会话列表、详情消息浏览、模型/来源/工具摘要和 Cowork 关联任务跳转。
+- 负责本机会话全文搜索、来源/模型筛选、会话列表、详情消息浏览、模型/来源/工具摘要和 Cowork 关联任务跳转。
 - 只通过 `/api/hermes/sessions` 与 `/api/hermes/sessions/:sessionId` 消费后端归一化数据；不直接读取本机文件，不提供写入动作。
-- 后续补“删除 / 重命名 / 全文搜索 / 来源筛选 / 继续对话双向同步”时，必须先扩展 `apps/api/src/hermes_sessions.ts` 或接入 Hermes 官方 Dashboard Sessions API，再让本页面消费。
+- 后续补“删除 / 重命名 / 继续对话双向同步”时，必须先扩展 `apps/api/src/hermes_sessions.ts` 或接入 Hermes 官方 Dashboard Sessions API，再让本页面消费。
 
 `apps/web/src/features/skills/SkillsView.tsx`
 

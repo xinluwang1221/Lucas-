@@ -352,6 +352,13 @@ export type HermesSessionSummary = {
   linkedTaskIds: string[]
   linkedTaskTitle?: string
   linkedWorkspaceIds: string[]
+  searchMatches?: HermesSessionSearchHit[]
+}
+
+export type HermesSessionSearchHit = {
+  messageId: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  snippet: string
 }
 
 export type HermesSessionsResponse = {

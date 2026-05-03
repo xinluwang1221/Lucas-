@@ -33,8 +33,12 @@ export async function runHermesAutoUpdate(): Promise<HermesAutoUpdateResult> {
   })
 }
 
-export async function getHermesSessions(): Promise<HermesSessionsResponse> {
-  return request('/api/hermes/sessions')
+export async function getHermesSessions(params: { q?: string; limit?: number } = {}): Promise<HermesSessionsResponse> {
+  const query = new URLSearchParams()
+  if (params.q?.trim()) query.set('q', params.q.trim())
+  if (params.limit) query.set('limit', String(params.limit))
+  const suffix = query.toString()
+  return request(`/api/hermes/sessions${suffix ? `?${suffix}` : ''}`)
 }
 
 export async function getHermesSessionDetail(sessionId: string): Promise<HermesSessionDetailResponse> {

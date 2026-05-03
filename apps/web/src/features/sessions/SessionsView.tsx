@@ -1,8 +1,8 @@
-import { Bot, Clock3, Link2, Loader2, MessageSquareText, RefreshCw, Search, Wrench } from 'lucide-react'
+import { Bot, Clock3, Filter, Link2, Loader2, MessageSquareText, RefreshCw, Search, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { HermesSessionDetailResponse, HermesSessionSummary, Task } from '../../lib/api'
+import type { HermesSessionDetailResponse, HermesSessionSearchHit, HermesSessionSummary, Task } from '../../lib/api'
 import { MarkdownContent } from '../markdown/MarkdownContent'
-import { getHermesSessionDetail } from '../settings/runtimeApi'
+import { getHermesSessionDetail, getHermesSessions } from '../settings/runtimeApi'
 
 export function SessionsView({
   sessions,
@@ -16,28 +16,37 @@ export function SessionsView({
   onOpenTask: (task: Task) => void
 }) {
   const [query, setQuery] = useState('')
+  const [selectedPlatform, setSelectedPlatform] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [searchResult, setSearchResult] = useState<HermesSessionSummary[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchRefreshKey, setSearchRefreshKey] = useState(0)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessions[0]?.id ?? null)
   const [detail, setDetail] = useState<HermesSessionDetailResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
-  const filteredSessions = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    if (!keyword) return sessions
-    return sessions.filter((session) => {
-      const target = [
-        session.title,
-        session.preview,
-        session.id,
-        session.model,
-        session.provider,
-        session.platform,
-        session.linkedTaskTitle,
-        ...session.tools
-      ].filter(Boolean).join(' ').toLowerCase()
-      return target.includes(keyword)
-    })
-  }, [query, sessions])
+  const hasQuery = Boolean(query.trim())
+  const baseSessions = hasQuery ? (searchResult ?? []) : sessions
+
+  const platformOptions = useMemo(
+    () => uniqueOptions(sessions.map((session) => session.platform).filter(Boolean) as string[]),
+    [sessions]
+  )
+  const modelOptions = useMemo(
+    () => uniqueOptions(sessions.map((session) => session.model).filter(Boolean) as string[]),
+    [sessions]
+  )
+
+  const filteredSessions = useMemo(
+    () => baseSessions.filter((session) => {
+      if (selectedPlatform && session.platform !== selectedPlatform) return false
+      if (selectedModel && session.model !== selectedModel) return false
+      return true
+    }),
+    [baseSessions, selectedModel, selectedPlatform]
+  )
 
   const linkedTaskCount = useMemo(
     () => new Set(sessions.flatMap((session) => session.linkedTaskIds)).size,
@@ -45,8 +54,8 @@ export function SessionsView({
   )
 
   const selectedSummary = useMemo(
-    () => sessions.find((session) => session.id === selectedSessionId) ?? null,
-    [selectedSessionId, sessions]
+    () => filteredSessions.find((session) => session.id === selectedSessionId) ?? sessions.find((session) => session.id === selectedSessionId) ?? null,
+    [filteredSessions, selectedSessionId, sessions]
   )
 
   const linkedTasks = useMemo(() => {
@@ -56,9 +65,40 @@ export function SessionsView({
   }, [detail, selectedSummary, tasks])
 
   useEffect(() => {
-    if (selectedSessionId && sessions.some((session) => session.id === selectedSessionId)) return
-    setSelectedSessionId(sessions[0]?.id ?? null)
-  }, [selectedSessionId, sessions])
+    const keyword = query.trim()
+    if (!keyword) {
+      setSearchResult(null)
+      setSearchError(null)
+      setSearchLoading(false)
+      return undefined
+    }
+
+    let alive = true
+    setSearchLoading(true)
+    setSearchError(null)
+    getHermesSessions({ q: keyword, limit: 500 })
+      .then((response) => {
+        if (alive) setSearchResult(response.sessions)
+      })
+      .catch((cause) => {
+        if (alive) {
+          setSearchResult([])
+          setSearchError(cause instanceof Error ? cause.message : String(cause))
+        }
+      })
+      .finally(() => {
+        if (alive) setSearchLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [query, searchRefreshKey])
+
+  useEffect(() => {
+    if (selectedSessionId && filteredSessions.some((session) => session.id === selectedSessionId)) return
+    setSelectedSessionId(filteredSessions[0]?.id ?? null)
+  }, [filteredSessions, selectedSessionId])
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -89,6 +129,20 @@ export function SessionsView({
   }, [selectedSessionId])
 
   const lastUpdated = sessions[0]?.updatedAt
+  const hasFilters = Boolean(query.trim() || selectedPlatform || selectedModel)
+
+  function handleRefresh() {
+    onRefresh()
+    setSearchRefreshKey((value) => value + 1)
+  }
+
+  function clearFilters() {
+    setQuery('')
+    setSelectedPlatform('')
+    setSelectedModel('')
+    setSearchResult(null)
+    setSearchError(null)
+  }
 
   return (
     <section className="sessions-page">
@@ -98,7 +152,7 @@ export function SessionsView({
           <h1>会话</h1>
           <p>浏览 Hermes 保存的真实会话、消息、模型和 Cowork 任务关联。</p>
         </div>
-        <button type="button" className="ghost-button" onClick={onRefresh}>
+        <button type="button" className="ghost-button" onClick={handleRefresh}>
           <RefreshCw size={16} />
           刷新
         </button>
@@ -110,23 +164,56 @@ export function SessionsView({
         <MetricCard label="最近更新" value={lastUpdated ? formatRelativeDate(lastUpdated) : '暂无'} />
       </div>
 
-      <div className="sessions-toolbar">
-        <Search size={16} />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索会话、模型、任务或工具"
-        />
+      <div className="sessions-controls">
+        <label className="sessions-search-field">
+          <Search size={16} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索会话全文、模型、任务或工具"
+          />
+        </label>
+        <label className="sessions-filter-field">
+          <Filter size={14} />
+          <select value={selectedPlatform} onChange={(event) => setSelectedPlatform(event.target.value)}>
+            <option value="">全部来源</option>
+            {platformOptions.map((platform) => (
+              <option key={platform} value={platform}>{sourceLabel(platform)}</option>
+            ))}
+          </select>
+        </label>
+        <label className="sessions-filter-field">
+          <Bot size={14} />
+          <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
+            <option value="">全部模型</option>
+            {modelOptions.map((model) => (
+              <option key={model} value={model}>{model}</option>
+            ))}
+          </select>
+        </label>
+        {hasFilters && (
+          <button type="button" className="ghost-button compact" onClick={clearFilters}>
+            <X size={15} />
+            清除
+          </button>
+        )}
       </div>
 
       <div className="sessions-browser">
         <aside className="sessions-list-panel">
           <div className="sessions-list-head">
             <strong>{filteredSessions.length} 个会话</strong>
-            <span>来自本机 Hermes session 存储</span>
+            <span>
+              {hasQuery ? (searchLoading ? '正在搜索本机 Hermes 消息全文' : '已搜索本机 Hermes 消息全文') : '来自本机 Hermes session 存储'}
+            </span>
           </div>
 
           <div className="sessions-list">
+            {searchError && (
+              <div className="sessions-inline-error">
+                搜索失败：{searchError}
+              </div>
+            )}
             {filteredSessions.map((session) => (
               <button
                 key={session.id}
@@ -140,6 +227,11 @@ export function SessionsView({
                 <span className="session-row-body">
                   <strong>{session.linkedTaskTitle ?? session.title}</strong>
                   <span>{session.preview ?? '暂无消息预览'}</span>
+                  {session.searchMatches?.[0] && (
+                    <span className="session-row-match">
+                      命中：{session.searchMatches[0].snippet}
+                    </span>
+                  )}
                   <em>
                     {formatRelativeDate(session.updatedAt)} · {session.messageCount} 条消息
                     {session.model ? ` · ${session.model}` : ''}
@@ -150,9 +242,9 @@ export function SessionsView({
 
             {!filteredSessions.length && (
               <div className="sessions-empty">
-                <MessageSquareText size={22} />
-                <strong>没有匹配的会话</strong>
-                <span>换一个关键词，或刷新后再看。</span>
+                {searchLoading ? <Loader2 size={22} className="spin" /> : <MessageSquareText size={22} />}
+                <strong>{searchLoading ? '正在搜索会话' : '没有匹配的会话'}</strong>
+                <span>{searchLoading ? '正在读取本机 Hermes session 内容。' : '换一个关键词或清除筛选后再看。'}</span>
               </div>
             )}
           </div>
@@ -181,6 +273,7 @@ export function SessionsView({
             <SessionDetail
               detail={detail}
               linkedTasks={linkedTasks}
+              searchHits={selectedSummary?.searchMatches ?? []}
               onOpenTask={onOpenTask}
             />
           ) : null}
@@ -202,10 +295,12 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function SessionDetail({
   detail,
   linkedTasks,
+  searchHits,
   onOpenTask
 }: {
   detail: HermesSessionDetailResponse
   linkedTasks: Task[]
+  searchHits: HermesSessionSearchHit[]
   onOpenTask: (task: Task) => void
 }) {
   const session = detail.session
@@ -244,6 +339,17 @@ function SessionDetail({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {searchHits.length > 0 && (
+        <div className="session-search-matches">
+          <strong>搜索命中</strong>
+          {searchHits.map((hit) => (
+            <span key={`${hit.messageId}:${hit.snippet}`}>
+              {roleLabel(hit.role)}：{hit.snippet}
+            </span>
+          ))}
         </div>
       )}
 
@@ -291,6 +397,20 @@ function roleLabel(role: string) {
   if (role === 'assistant') return 'Hermes'
   if (role === 'tool') return '工具'
   return '系统'
+}
+
+function sourceLabel(value: string) {
+  if (value === 'cli') return '命令行'
+  if (value === 'gateway') return 'Gateway'
+  if (value === 'api') return 'API'
+  if (value === 'discord') return 'Discord'
+  if (value === 'telegram') return 'Telegram'
+  if (value === 'slack') return 'Slack'
+  return value
+}
+
+function uniqueOptions(values: string[]) {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b))
 }
 
 function formatDateTime(value: string) {
