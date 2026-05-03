@@ -377,6 +377,12 @@ export type HermesDiagnosticsStatus = {
       file: string
       level: 'error' | 'warn'
       message: string
+      createdAt?: string
+      sessionId?: string
+      linkedTaskId?: string
+      linkedTaskTitle?: string
+      linkedTaskStatus?: Task['status']
+      linkReason?: 'session' | 'time-window'
     }>
   }
   taskHealth: {

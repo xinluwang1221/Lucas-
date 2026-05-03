@@ -3,6 +3,9 @@ import { readHermesDiagnostics } from '../src/hermes_diagnostics.js'
 import type { HermesDashboardProxyResult } from '../src/hermes_dashboard.js'
 import type { Task } from '../src/types.js'
 
+const testBaseTime = new Date()
+testBaseTime.setMilliseconds(0)
+
 async function main() {
   const diagnostics = await readHermesDiagnostics({
     days: 7,
@@ -22,6 +25,13 @@ async function main() {
   assert.equal(diagnostics.logHealth.recentIssues.length, 2)
   assert.match(diagnostics.logHealth.recentIssues.map((issue) => issue.message).join('\n'), /模型凭据失败/)
   assert.doesNotMatch(diagnostics.logHealth.recentIssues.map((issue) => issue.message).join('\n'), /Invalid API Key/)
+  const modelIssue = diagnostics.logHealth.recentIssues.find((issue) => /模型凭据失败/.test(issue.message))
+  assert.equal(modelIssue?.linkedTaskId, 'task-search-failed')
+  assert.equal(modelIssue?.linkReason, 'time-window')
+  const approvalIssue = diagnostics.logHealth.recentIssues.find((issue) => /命令审批未完成/.test(issue.message))
+  assert.equal(approvalIssue?.sessionId, 'session-1')
+  assert.equal(approvalIssue?.linkedTaskId, 'task-approval')
+  assert.equal(approvalIssue?.linkReason, 'session')
   assert.equal(diagnostics.taskHealth.recentTasks, 2)
   assert.equal(diagnostics.taskHealth.tasksWithIssues, 2)
   assert.equal(diagnostics.taskHealth.tools[0].name, '网页搜索')
@@ -43,7 +53,8 @@ async function main() {
 }
 
 function fakeTasks(): Task[] {
-  const now = new Date().toISOString()
+  const searchTime = new Date(testBaseTime.getTime() - 90_000).toISOString()
+  const approvalTime = new Date(testBaseTime.getTime() + 90_000).toISOString()
   return [
     {
       id: 'task-search-failed',
@@ -52,14 +63,15 @@ function fakeTasks(): Task[] {
       status: 'failed',
       prompt: '搜索 MCP 文档',
       error: 'web_search timeout',
-      createdAt: now,
-      updatedAt: now,
+      startedAt: searchTime,
+      createdAt: searchTime,
+      updatedAt: searchTime,
       events: [
         {
           id: 'evt-start',
           type: 'tool.started',
           name: 'mimo_web_search',
-          createdAt: now
+          createdAt: searchTime
         },
         {
           id: 'evt-fail',
@@ -68,13 +80,13 @@ function fakeTasks(): Task[] {
           isError: true,
           error: 'timeout',
           elapsedMs: 3200,
-          createdAt: now
+          createdAt: searchTime
         },
         {
           id: 'evt-task-fail',
           type: 'task.failed',
           error: 'web_search timeout',
-          createdAt: now
+          createdAt: searchTime
         }
       ]
     },
@@ -85,14 +97,15 @@ function fakeTasks(): Task[] {
       status: 'running',
       prompt: '整理本地文件',
       hermesSessionId: 'session-1',
-      createdAt: now,
-      updatedAt: now,
+      startedAt: approvalTime,
+      createdAt: approvalTime,
+      updatedAt: approvalTime,
       events: [
         {
           id: 'evt-approval',
           type: 'approval.request',
           command: 'rm -rf tmp',
-          createdAt: now
+          createdAt: approvalTime
         }
       ]
     }
@@ -133,14 +146,14 @@ async function fakeDashboard(apiPath: string): Promise<HermesDashboardProxyResul
     return {
       status: 200,
       ok: true,
-      body: { file: 'errors', lines: ['2026-05-04 09:00:00 ERROR models: Invalid API Key'] }
+      body: { file: 'errors', lines: [`${localLogTimestamp(new Date(testBaseTime.getTime() - 90_000))} ERROR models: Invalid API Key`] }
     }
   }
   if (apiPath.includes('file=agent')) {
     return {
       status: 200,
       ok: true,
-      body: { file: 'agent', lines: ['2026-05-04 09:01:00 ERROR tools: command approval timeout'] }
+      body: { file: 'agent', lines: [`${localLogTimestamp(new Date(testBaseTime.getTime() + 90_000))} ERROR tools: session_id=session-1 command approval timeout`] }
     }
   }
   if (apiPath.includes('file=gateway')) {
@@ -151,6 +164,14 @@ async function fakeDashboard(apiPath: string): Promise<HermesDashboardProxyResul
     }
   }
   return { status: 404, ok: false, body: { error: 'not found' } }
+}
+
+function localLogTimestamp(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  ].join(' ')
 }
 
 main().catch((error) => {

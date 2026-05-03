@@ -42,6 +42,12 @@ export type HermesDiagnosticsStatus = {
       file: string
       level: 'error' | 'warn'
       message: string
+      createdAt?: string
+      sessionId?: string
+      linkedTaskId?: string
+      linkedTaskTitle?: string
+      linkedTaskStatus?: Task['status']
+      linkReason?: 'session' | 'time-window'
     }>
   }
   taskHealth: {
@@ -79,6 +85,7 @@ export type HermesDiagnosticsStatus = {
 }
 
 type DashboardRequester = (apiPath: string) => Promise<HermesDashboardProxyResult>
+type LogIssue = HermesDiagnosticsStatus['logHealth']['recentIssues'][number]
 type ToolStats = {
   name: string
   calls: number
@@ -97,6 +104,7 @@ export async function readHermesDiagnostics(options: {
   tasks?: Task[]
 } = {}): Promise<HermesDiagnosticsStatus> {
   const days = clampInteger(options.days, 1, 90, 30)
+  const tasks = options.tasks ?? []
   const requestDashboard = options.requestDashboard ?? ((apiPath: string) =>
     requestHermesDashboardJson(apiPath, {}, { start: Boolean(options.startDashboard) }))
 
@@ -108,12 +116,12 @@ export async function readHermesDiagnostics(options: {
   ])
 
   const usage = normalizeUsage(usageResult.ok ? usageResult.body : undefined, days)
-  const taskHealth = normalizeTaskHealth(options.tasks ?? [], days)
+  const taskHealth = normalizeTaskHealth(tasks, days)
   const logHealth = normalizeLogs([
     { id: 'errors', label: '错误日志', result: logResults[0] },
     { id: 'agent', label: 'Agent 日志', result: logResults[1] },
     { id: 'gateway', label: 'Gateway 日志', result: logResults[2] }
-  ])
+  ], tasks)
   const dashboardAvailable = usageResult.ok || logResults.some((result) => result.ok)
   const usageAvailable = usageResult.ok
   const logsAvailable = logResults.some((result) => result.ok)
@@ -188,16 +196,17 @@ function normalizeUsage(body: unknown, periodDays: number): HermesDiagnosticsSta
 }
 
 function normalizeLogs(
-  entries: Array<{ id: string; label: string; result: Awaited<ReturnType<typeof readDashboardJson>> }>
+  entries: Array<{ id: string; label: string; result: Awaited<ReturnType<typeof readDashboardJson>> }>,
+  tasks: Task[]
 ): HermesDiagnosticsStatus['logHealth'] {
-  const recentIssues: HermesDiagnosticsStatus['logHealth']['recentIssues'] = []
+  const recentIssues: LogIssue[] = []
   const files = entries.map((entry) => {
     const lines = entry.result.ok && isRecord(entry.result.body) && Array.isArray(entry.result.body.lines)
       ? entry.result.body.lines.filter((line): line is string => typeof line === 'string')
       : []
     const issues = lines
       .map((line) => normalizeIssueLine(entry.id, line))
-      .filter((issue): issue is HermesDiagnosticsStatus['logHealth']['recentIssues'][number] => Boolean(issue))
+      .filter((issue): issue is LogIssue => Boolean(issue))
 
     recentIssues.push(...issues)
     return {
@@ -212,7 +221,10 @@ function normalizeLogs(
 
   return {
     files,
-    recentIssues: dedupeIssues(recentIssues).slice(-6).reverse()
+    recentIssues: linkIssuesToTasks(dedupeIssues(recentIssues), tasks)
+      .sort((a, b) => issueTimestamp(a) - issueTimestamp(b))
+      .slice(-6)
+      .reverse()
   }
 }
 
@@ -288,9 +300,10 @@ function normalizeTaskHealth(tasks: Task[], days: number): HermesDiagnosticsStat
   }
 }
 
-function normalizeIssueLine(file: string, line: string): HermesDiagnosticsStatus['logHealth']['recentIssues'][number] | null {
+function normalizeIssueLine(file: string, line: string): LogIssue | null {
   const level = /\bWARN(?:ING)?\b/i.test(line) ? 'warn' : /\b(ERROR|CRITICAL|Traceback|Exception)\b/i.test(line) ? 'error' : null
   if (!level) return null
+  const metadata = parseLogMetadata(line)
   const rawMessage = line
     .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:,\d+)?\s*/, '')
     .replace(/\s+/g, ' ')
@@ -298,11 +311,36 @@ function normalizeIssueLine(file: string, line: string): HermesDiagnosticsStatus
   const message = describeKnownIssue(file, rawMessage)
   if (!message) return null
   return {
-    id: `${file}:${hashText(message)}`,
+    id: `${file}:${hashText(`${message}:${metadata.createdAt ?? ''}:${metadata.sessionId ?? ''}`)}`,
     file,
     level,
-    message
+    message,
+    createdAt: metadata.createdAt,
+    sessionId: metadata.sessionId
   }
+}
+
+function parseLogMetadata(line: string) {
+  return {
+    createdAt: parseLogTimestamp(line),
+    sessionId: parseLogSessionId(line)
+  }
+}
+
+function parseLogTimestamp(line: string) {
+  const match = line.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:[,.](\d{1,6}))?/)
+  if (!match) return undefined
+  const [, date, time, fraction = '0'] = match
+  const milliseconds = fraction.slice(0, 3).padEnd(3, '0')
+  const parsed = new Date(`${date}T${time}.${milliseconds}`)
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString()
+}
+
+function parseLogSessionId(line: string) {
+  const keyed = line.match(/\b(?:session[_-]?id|sessionId|hermesSessionId)[:=\s]+([A-Za-z0-9][A-Za-z0-9._:-]{1,120})/i)
+  const direct = line.match(/\b(session-[A-Za-z0-9._:-]+)/i)
+  const value = keyed?.[1] ?? direct?.[1]
+  return value?.replace(/[),.;\]]+$/, '')
 }
 
 function describeKnownIssue(file: string, message: string) {
@@ -340,16 +378,66 @@ function describeKnownIssue(file: string, message: string) {
   return trimmed ? `未归类异常：${trimmed}` : `${file} 日志出现未归类异常。`
 }
 
-function dedupeIssues(issues: HermesDiagnosticsStatus['logHealth']['recentIssues']) {
-  const seen = new Set<string>()
-  const result: HermesDiagnosticsStatus['logHealth']['recentIssues'] = []
+function dedupeIssues(issues: LogIssue[]) {
+  const latestByKey = new Map<string, LogIssue>()
   for (const issue of issues) {
-    const key = issue.message
-    if (seen.has(key)) continue
-    seen.add(key)
-    result.push(issue)
+    const key = [issue.message, issue.sessionId ?? ''].join(':')
+    const current = latestByKey.get(key)
+    if (!current || issueTimestamp(issue) >= issueTimestamp(current)) latestByKey.set(key, issue)
   }
-  return result
+  return [...latestByKey.values()]
+}
+
+function linkIssuesToTasks(issues: LogIssue[], tasks: Task[]) {
+  if (!tasks.length) return issues
+  return issues.map((issue) => {
+    const sessionTask = issue.sessionId
+      ? tasks.find((task) => task.hermesSessionId === issue.sessionId)
+      : undefined
+    if (sessionTask) return attachTaskLink(issue, sessionTask, 'session')
+
+    const timeTask = findTaskByLogTime(tasks, issue.createdAt)
+    if (timeTask) return attachTaskLink(issue, timeTask, 'time-window')
+    return issue
+  })
+}
+
+function attachTaskLink(issue: LogIssue, task: Task, linkReason: NonNullable<LogIssue['linkReason']>): LogIssue {
+  return {
+    ...issue,
+    linkedTaskId: task.id,
+    linkedTaskTitle: task.title || task.prompt.slice(0, 42) || task.id,
+    linkedTaskStatus: task.status,
+    linkReason
+  }
+}
+
+function findTaskByLogTime(tasks: Task[], createdAt?: string) {
+  const issueTime = dateTime(createdAt)
+  if (!Number.isFinite(issueTime)) return undefined
+  return tasks
+    .map((task) => ({ task, distance: taskLogDistanceMs(task, issueTime) }))
+    .filter((item): item is { task: Task; distance: number } => item.distance !== undefined)
+    .sort((a, b) => a.distance - b.distance || taskTimestamp(b.task) - taskTimestamp(a.task))[0]?.task
+}
+
+function taskLogDistanceMs(task: Task, issueTime: number) {
+  const start = dateTime(task.startedAt) || dateTime(task.createdAt) || dateTime(task.updatedAt)
+  const end = dateTime(task.completedAt) || dateTime(task.updatedAt) || start
+  if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined
+  const windowStart = (Number.isFinite(start) ? start : end) - 5 * 60 * 1000
+  const windowEnd = (Number.isFinite(end) ? end : start) + 15 * 60 * 1000
+  if (issueTime >= windowStart && issueTime <= windowEnd) {
+    const anchors = [start, end].filter(Number.isFinite)
+    return Math.min(...anchors.map((anchor) => Math.abs(anchor - issueTime)))
+  }
+  const anchors = [start, end, dateTime(task.updatedAt), dateTime(task.createdAt)].filter(Number.isFinite)
+  const distance = Math.min(...anchors.map((anchor) => Math.abs(anchor - issueTime)))
+  return distance <= 15 * 60 * 1000 ? distance : undefined
+}
+
+function issueTimestamp(issue: LogIssue) {
+  return dateTime(issue.createdAt) || 0
 }
 
 function buildSummary(
@@ -402,11 +490,11 @@ function buildNextActions(
 }
 
 function taskTimestamp(task: Task) {
-  return new Date(task.updatedAt || task.completedAt || task.startedAt || task.createdAt).getTime() || 0
+  return dateTime(task.updatedAt || task.completedAt || task.startedAt || task.createdAt) || 0
 }
 
 function isRecentEvent(event: ExecutionEvent, since: number) {
-  const timestamp = new Date(event.createdAt).getTime()
+  const timestamp = dateTime(event.createdAt)
   return !Number.isFinite(timestamp) || timestamp >= since
 }
 
@@ -485,12 +573,18 @@ function taskIssueMessage(event: ExecutionEvent, toolName?: string) {
 }
 
 function hasResolvedBlockingEvent(events: ExecutionEvent[], request: ExecutionEvent, resolvedType: string) {
-  const requestTime = new Date(request.createdAt).getTime()
+  const requestTime = dateTime(request.createdAt)
   return events.some((event) => {
     if (event.type !== resolvedType) return false
-    const eventTime = new Date(event.createdAt).getTime()
+    const eventTime = dateTime(event.createdAt)
     return !Number.isFinite(eventTime) || !Number.isFinite(requestTime) || eventTime >= requestTime
   })
+}
+
+function dateTime(value?: string) {
+  if (!value) return Number.NaN
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : Number.NaN
 }
 
 function clampInteger(value: unknown, min: number, max: number, fallback: number) {

@@ -820,7 +820,18 @@ export function RuntimeDiagnosticsSettingsSection({
           {(diagnostics?.logHealth.recentIssues ?? []).map((issue) => (
             <div key={issue.id} className={`diagnostics-issue ${issue.level}`}>
               <span>{issue.level === 'error' ? '错误' : '警告'}</span>
-              <p>{issue.message}</p>
+              <div>
+                <p>{issue.message}</p>
+                {issue.linkedTaskTitle ? (
+                  <em className="diagnostics-issue-meta">
+                    关联任务：{issue.linkedTaskTitle}
+                    {issue.linkedTaskStatus ? ` · ${formatTaskStatus(issue.linkedTaskStatus)}` : ''}
+                    {issue.linkReason ? ` · ${formatLogLinkReason(issue.linkReason)}` : ''}
+                  </em>
+                ) : issue.sessionId ? (
+                  <em className="diagnostics-issue-meta">Session {issue.sessionId} · 暂未匹配到 Cowork 任务</em>
+                ) : null}
+              </div>
             </div>
           ))}
           {!diagnostics?.logHealth.recentIssues.length && <p className="diagnostics-empty">没有发现近期错误日志。</p>}
@@ -871,6 +882,10 @@ function formatTaskStatus(status: HermesDiagnosticsStatus['taskHealth']['recentT
   if (status === 'failed') return '失败'
   if (status === 'stopped') return '已停止'
   return '等待'
+}
+
+function formatLogLinkReason(reason: NonNullable<HermesDiagnosticsStatus['logHealth']['recentIssues'][number]['linkReason']>) {
+  return reason === 'session' ? '按 Session 关联' : '按时间关联'
 }
 
 function formatConfigVersion(current?: number, latest?: number) {

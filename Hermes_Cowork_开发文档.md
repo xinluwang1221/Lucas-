@@ -615,6 +615,7 @@ flowchart TB
 - 当前 Session 缺口：更多 Dashboard 写入动作仍需随 Hermes upstream 观察。只有当官方 REST 同时覆盖用户确认、备份/回滚、错误恢复和前端可解释状态时，Cowork 才考虑替换现有安全链路。
 - Logs / Analytics 用户化第一步已完成：新增 `apps/api/src/hermes_diagnostics.ts` 和 `/api/hermes/diagnostics`，聚合 Hermes Dashboard `/api/analytics/usage`、`/api/logs?file=errors`、`/api/logs?file=agent`、`/api/logs?file=gateway`，输出用户能看懂的状态、最近使用、近期异常和下一步动作。前端入口落在设置 > 诊断，不放进主工作区；主工作区仍只承载当前任务的步骤、产物和上下文资源。验证点是 `npm run test:hermes-diagnostics`。
 - Logs / Analytics 用户化第二步已完成：`/api/hermes/diagnostics` 继续接入 Cowork 本地任务事件，新增 `taskHealth`，能把最近任务、失败任务、等待人工审批/澄清、工具调用次数、工具失败率和可用时的平均耗时汇总到设置 > 诊断。这里不伪造 Hermes 官方尚未提供的任务关联；如果本地没有 Cowork 任务，页面明确显示“暂无可关联任务”，只展示 Dashboard 日志和使用统计。
+- Logs / Analytics 用户化第三步已完成：`/api/hermes/diagnostics` 会解析 Dashboard 日志中的时间和 Hermes session id，并尽量按 session 或时间窗口回链到 Cowork 任务；设置 > 诊断的近期异常会显示“关联任务”和关联方式。无法匹配时不伪造任务，只保留可操作的异常说明或 session 提示。验证点仍是 `npm run test:hermes-diagnostics`。
 
 阶段验收：
 
@@ -2023,7 +2024,7 @@ Hermes 诊断聚合测试：
 npm run test:hermes-diagnostics
 ```
 
-这个测试不启动真实 Hermes。它用 fake Dashboard 响应验证 `/api/hermes/diagnostics` 的聚合规则：使用统计会被整理成会话、模型调用、Token 和费用；错误日志会被整理成近期异常；本地 Cowork 任务事件会被整理成任务异常、审批等待、工具调用、工具失败率和平均耗时；Dashboard 不可用时只返回用户能执行的下一步动作。
+这个测试不启动真实 Hermes。它用 fake Dashboard 响应验证 `/api/hermes/diagnostics` 的聚合规则：使用统计会被整理成会话、模型调用、Token 和费用；错误日志会被整理成近期异常，并能按 Hermes session 或日志时间回链到 Cowork 任务；本地 Cowork 任务事件会被整理成任务异常、审批等待、工具调用、工具失败率和平均耗时；Dashboard 不可用时只返回用户能执行的下一步动作。
 
 任务拆解展示测试：
 
@@ -2107,7 +2108,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 - Session 全量前端化：已完成只读列表、全文搜索、搜索来源覆盖、搜索命中展开与消息定位、详情消息、来源平台、模型、工具、Cowork 任务映射、Hermes SessionDB 标题重命名、原生会话删除、从原生 session 继续对话，以及官方 session actions 探测。下一步转向 Logs / Analytics 用户化和更多 session 元数据展示，不再临时增加没有后端真源的 session 按钮。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
-- Logs / Analytics 用户化：前两步已落到设置 > 诊断，能展示模型调用量、Token、预估费用、Top 模型、近期错误、下一步动作、近期 Cowork 任务异常、审批/澄清等待、工具调用和失败率。下一步再补按 Hermes 官方 session/log 时间线回链到任务，以及更细的工具耗时分布。
+- Logs / Analytics 用户化：前三步已落到设置 > 诊断，能展示模型调用量、Token、预估费用、Top 模型、近期错误、下一步动作、近期 Cowork 任务异常、审批/澄清等待、工具调用、失败率，并能把日志异常按 Hermes session 或时间窗口回链到 Cowork 任务。下一步再补更细的工具耗时分布和可折叠原始诊断。
 
 优先级 2：
 

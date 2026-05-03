@@ -418,6 +418,12 @@
   color: var(--danger);
 }
 
+.diagnostics-issue > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
 .diagnostics-issue p {
   min-width: 0;
   margin: 0;
@@ -425,6 +431,13 @@
   font-size: var(--text-caption);
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.diagnostics-issue-meta {
+  color: var(--ink-soft);
+  font-size: var(--text-caption);
+  font-style: normal;
+  line-height: 1.45;
 }
 
 .diagnostics-next-actions div {
