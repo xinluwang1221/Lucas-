@@ -11,6 +11,7 @@ import { getBackgroundServiceStatus, installBackgroundServices, uninstallBackgro
 import { quickLookPreviewRoot, readPreviewBody, sendInlineFile, sendQuickLookPreview } from './file_preview.js'
 import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
+import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
@@ -55,6 +56,25 @@ function stopRunningTask(taskId: string) {
   return true
 }
 
+async function sendHermesDashboardProxy(res: Response, apiPath: string) {
+  try {
+    const result = await requestHermesDashboardJson(apiPath)
+    sendProxyResult(res, result)
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+function sendProxyResult(res: Response, result: HermesDashboardProxyResult) {
+  res.status(result.status)
+  if (typeof result.body === 'string') {
+    if (result.contentType) res.type(result.contentType)
+    res.send(result.body)
+    return
+  }
+  res.json(result.body)
+}
+
 app.use(cors({ origin: ['http://127.0.0.1:5173', 'http://localhost:5173'] }))
 app.use(express.json({ limit: '2mb' }))
 app.use('/api/quicklook', express.static(quickLookPreviewRoot, {
@@ -69,9 +89,10 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/hermes/runtime', async (_req, res) => {
   try {
     const workspacePath = store.snapshot.workspaces[0]?.path ?? process.cwd()
-    const [versionText, statusText] = await Promise.all([
+    const [versionText, statusText, dashboard] = await Promise.all([
       runHermesCommand(['version']),
-      runHermesCommand(['status'])
+      runHermesCommand(['status']),
+      readHermesDashboardAdapterStatus()
     ])
     const adapter = await readHermesRuntimeAdapterStatus(workspacePath)
 
@@ -86,11 +107,61 @@ app.get('/api/hermes/runtime', async (_req, res) => {
       versionText,
       statusText,
       parsed: parseHermesStatus(statusText),
+      dashboard,
       updatedAt: new Date().toISOString()
     })
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
+})
+
+app.get('/api/hermes/dashboard', async (req, res) => {
+  try {
+    const start = ['1', 'true', 'yes'].includes(String(req.query.start ?? '').toLowerCase())
+    res.json(await readHermesDashboardAdapterStatus({ start }))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/dashboard/start', async (_req, res) => {
+  try {
+    res.json(await readHermesDashboardAdapterStatus({ start: true }))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/dashboard/official/status', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/status')
+})
+
+app.get('/api/hermes/dashboard/official/skills', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/skills')
+})
+
+app.get('/api/hermes/dashboard/official/toolsets', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/tools/toolsets')
+})
+
+app.get('/api/hermes/dashboard/official/cron/jobs', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/cron/jobs')
+})
+
+app.get('/api/hermes/dashboard/official/sessions', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/sessions')
+})
+
+app.get('/api/hermes/dashboard/official/config', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/config')
+})
+
+app.get('/api/hermes/dashboard/official/env', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/env')
+})
+
+app.get('/api/hermes/dashboard/official/model-info', async (_req, res) => {
+  await sendHermesDashboardProxy(res, '/api/model/info')
 })
 
 app.get('/api/hermes/update-status', async (_req, res) => {
