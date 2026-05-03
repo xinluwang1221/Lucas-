@@ -6,6 +6,7 @@ import {
   Hammer,
   Loader2,
   MessageSquarePlus,
+  MessageSquareText,
   PanelLeftClose,
   Settings,
   User
@@ -15,7 +16,7 @@ import type { Task, Workspace } from '../../lib/api'
 import hermesAgentIcon from '../../assets/hermes-agent-icon.png'
 import { SidebarWorkspaceNode } from '../workspace/SidebarWorkspaceNode'
 
-type SidebarViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
+type SidebarViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills' | 'sessions'
 const THEME_OPTIONS = ['亮色', '暗色', '跟随系统']
 
 function getNextTheme(current: string) {
@@ -52,6 +53,7 @@ export function AppSidebar({
   onReauthorizeWorkspace,
   onRemoveWorkspace,
   onOpenSkills,
+  onOpenSessions,
   onOpenScheduled,
   onOpenDispatch,
   onThemeChange,
@@ -80,6 +82,7 @@ export function AppSidebar({
   onReauthorizeWorkspace: (workspace: Workspace) => void
   onRemoveWorkspace: (workspace: Workspace) => void
   onOpenSkills: () => void
+  onOpenSessions: () => void
   onOpenScheduled: () => void
   onOpenDispatch: () => void
   onThemeChange: (value: string) => void
@@ -177,6 +180,14 @@ export function AppSidebar({
         >
           <Hammer size={17} />
           技能
+        </button>
+
+        <button
+          className={viewMode === 'sessions' ? 'secondary-nav active' : 'secondary-nav'}
+          onClick={onOpenSessions}
+        >
+          <MessageSquareText size={17} />
+          会话
         </button>
 
         <button

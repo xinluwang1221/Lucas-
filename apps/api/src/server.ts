@@ -2,7 +2,6 @@ import cors from 'cors'
 import express from 'express'
 import type { Response } from 'express'
 import fs from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
 import { execFile, spawn } from 'node:child_process'
 import multer from 'multer'
@@ -13,6 +12,7 @@ import { cleanHermesOutput } from './hermes.js'
 import { createHermesCronJob, pauseHermesCronJob, readHermesCronState, removeHermesCronJob, resumeHermesCronJob, triggerHermesCronJob, updateHermesCronJob } from './hermes_cron.js'
 import { readHermesDashboardAdapterStatus, requestHermesDashboardJson, type HermesDashboardProxyResult } from './hermes_dashboard.js'
 import { readHermesOfficialApiStatus } from './hermes_official_api.js'
+import { readHermesSessionDetail, readHermesSessions } from './hermes_sessions.js'
 import { toggleHermesDashboardToolset } from './hermes_toolsets.js'
 import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
@@ -210,9 +210,26 @@ app.post('/api/hermes/update', async (_req, res) => {
   }
 })
 
-app.get('/api/hermes/sessions', (_req, res) => {
+app.get('/api/hermes/sessions', (req, res) => {
   try {
-    res.json(readHermesSessions(store.snapshot))
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined
+    res.json(readHermesSessions(store.snapshot, {
+      query: typeof req.query.q === 'string' ? req.query.q : undefined,
+      limit: Number.isFinite(limit) ? limit : undefined
+    }))
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/sessions/:sessionId', (req, res) => {
+  try {
+    const detail = readHermesSessionDetail(store.snapshot, req.params.sessionId)
+    if (!detail) {
+      res.status(404).json({ error: 'Hermes session not found' })
+      return
+    }
+    res.json(detail)
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
@@ -3505,65 +3522,6 @@ function revealPath(targetPath: string) {
 function openPath(targetPath: string) {
   const child = spawn('open', [targetPath], { stdio: 'ignore', detached: true })
   child.unref()
-}
-
-function readHermesSessions(state: AppState) {
-  const sessionsDir = path.join(os.homedir(), '.hermes', 'sessions')
-  const linkedTasks = new Map<string, Task[]>()
-  for (const task of state.tasks) {
-    if (!task.hermesSessionId) continue
-    linkedTasks.set(task.hermesSessionId, [...(linkedTasks.get(task.hermesSessionId) ?? []), task])
-  }
-
-  if (!fs.existsSync(sessionsDir)) {
-    return {
-      sessionsDir,
-      sessions: [],
-      updatedAt: new Date().toISOString()
-    }
-  }
-
-  const sessions = fs
-    .readdirSync(sessionsDir)
-    .filter((file) => /^session_.+\.json$/.test(file))
-    .flatMap((file) => {
-      const fullPath = path.join(sessionsDir, file)
-      try {
-        const raw = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as Record<string, unknown>
-        const sessionId = String(raw.session_id ?? file.replace(/^session_/, '').replace(/\.json$/, ''))
-        const tasks = linkedTasks.get(sessionId) ?? []
-        const stat = fs.statSync(fullPath)
-        return [{
-          id: sessionId,
-          file,
-          model: String(raw.model ?? '') || undefined,
-          platform: String(raw.platform ?? '') || undefined,
-          messageCount: Number(raw.message_count ?? (Array.isArray(raw.messages) ? raw.messages.length : 0)) || 0,
-          startedAt: normalizeHermesDate(raw.session_start) ?? stat.birthtime.toISOString(),
-          updatedAt: normalizeHermesDate(raw.last_updated) ?? stat.mtime.toISOString(),
-          linkedTaskIds: tasks.map((task) => task.id),
-          linkedTaskTitle: tasks[0]?.title,
-          linkedWorkspaceIds: [...new Set(tasks.map((task) => task.workspaceId))]
-        }]
-      } catch {
-        return []
-      }
-    })
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 80)
-
-  return {
-    sessionsDir,
-    sessions,
-    updatedAt: new Date().toISOString()
-  }
-}
-
-function normalizeHermesDate(value: unknown) {
-  if (!value) return undefined
-  const text = String(value)
-  const parsed = new Date(text.endsWith('Z') || /[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`)
-  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined
 }
 
 function normalizeRelativePath(value: string) {

@@ -18,6 +18,7 @@ import {
   TemplateIcon
 } from './features/layout/SecondaryViews'
 import { ScheduledTasksView, useScheduledState } from './features/scheduled'
+import { SessionsView } from './features/sessions'
 import { usePanelLayout } from './features/layout/usePanelLayout'
 import { useHermesToolsets } from './features/layout/useHermesToolsets'
 import { FilePreviewPanel } from './features/file-preview/FilePreviewPanel'
@@ -84,7 +85,7 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from 'react'
 
-type ViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills'
+type ViewMode = 'tasks' | 'search' | 'scheduled' | 'projects' | 'dispatch' | 'ideas' | 'skills' | 'sessions'
 
 const examples = [
   {
@@ -954,6 +955,10 @@ function App() {
           void refreshHermesMcp()
           void refreshToolsets()
         }}
+        onOpenSessions={() => {
+          setViewMode('sessions')
+          void refreshHermesSessions()
+        }}
         onOpenScheduled={() => setViewMode('scheduled')}
         onOpenDispatch={() => {
           setViewMode('dispatch')
@@ -1006,6 +1011,17 @@ function App() {
             onOpenTask={(task) => {
               setViewMode('tasks')
               setSelectedTaskId(task.id)
+            }}
+          />
+        ) : viewMode === 'sessions' ? (
+          <SessionsView
+            sessions={hermesSessions}
+            tasks={state.tasks}
+            onRefresh={() => void refreshHermesSessions()}
+            onOpenTask={(task) => {
+              setSelectedWorkspaceId(task.workspaceId)
+              setSelectedTaskId(task.id)
+              setViewMode('tasks')
             }}
           />
         ) : viewMode === 'scheduled' ? (

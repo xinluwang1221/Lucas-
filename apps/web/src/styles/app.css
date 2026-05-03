@@ -6,6 +6,7 @@
 @import './settings.css';
 @import './workspace.css';
 @import './file-preview.css';
+@import './sessions.css';
 
 .empty-copy,
 .muted-copy,

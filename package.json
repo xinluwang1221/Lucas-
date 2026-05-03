@@ -18,6 +18,7 @@
     "test:hermes-official-api": "tsx apps/api/test/hermes_official_api.test.ts",
     "test:hermes-official-runs": "tsx apps/api/test/hermes_official_runs.test.ts",
     "test:hermes-connection": "tsx apps/api/test/hermes_message_connection.test.ts",
+    "test:hermes-sessions": "tsx apps/api/test/hermes_sessions.test.ts",
     "test:task-decomposition": "tsx apps/web/test/task_decomposition.test.ts",
     "smoke:hermes-real": "tsx apps/api/test/hermes_real_gateway_smoke.ts"
   },

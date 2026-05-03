@@ -571,6 +571,7 @@ flowchart TB
 | 产物与文件 | 主结果、右侧产物、工作区文件、附件入口 | `/api/artifacts`、`/api/workspaces/*/files` | 同一套文件预览、Finder 打开、下载逻辑 |
 | 对话附件 | 输入框附件 chip、用户消息附件、右侧上下文文件 | `/api/workspaces/:id/files`、`Message.attachments`、任务创建/继续请求的 `attachments` | 附件先上传到授权工作区，再作为消息附件和 Hermes prompt 文件路径进入任务 |
 | Skills | 技能页、任务输入区预载技能、右侧参考信息 | `/api/skills`、本机 skill 目录 | 同一套 skill 名称、启停和文件查看逻辑 |
+| Hermes 原生会话 | 左侧“会话”入口、任务继续对话、右侧任务上下文 | `~/.hermes/sessions/session_*.json`、`/api/hermes/sessions`、`/api/hermes/sessions/:sessionId` | `apps/api/src/hermes_sessions.ts` 统一读取列表和详情；前端只消费归一化后的 summary/detail，不直接拼 session 文件 |
 
 开发检查清单：
 
@@ -603,6 +604,8 @@ flowchart TB
 - `/api/hermes/runtime` 已把 `officialApi` 一并返回，后续设置页或运行环境页可以直接显示“官方 API Server 是否运行、是否配置 Key、哪些能力可迁移”。
 - 新增 `apps/api/src/hermes_official_runs.ts` 和 `npm run test:hermes-official-runs`，已经把 `/v1/runs`、`/v1/runs/{run_id}/events`、`/v1/runs/{run_id}/stop` 做成并行适配层，能把官方事件归一为 Cowork 现有 `message.delta`、`tool.started/completed`、`task.completed/failed`、`context.updated`。
 - 当前判断：不立即把主通道从 `tui_gateway` 切到 Runs API。原因是本机 Hermes 当前 Runs API 没有读取 `workdir/cwd`，也没有 `approval.request / approval.respond` 和 `clarify.request / clarify.respond` 协议；Cowork 的授权工作区、危险命令审批、任务反问仍必须保留在 `tui_gateway` 主链路。
+- Session 全量前端化第一步已完成：新增 `apps/api/src/hermes_sessions.ts`，后端只读解析 Hermes 原生 session 文件，并开放列表与详情 API；前端新增“会话”主入口，可搜索、查看消息、模型、来源平台、工具和 Cowork 任务关联。
+- 当前 Session 缺口：删除、重命名、官方 Dashboard session actions、全文搜索索引、跨平台来源筛选、继续对话的双向同步仍未完成；这些必须先确认 Hermes 官方语义，再做写入类入口。
 
 阶段验收：
 
@@ -859,8 +862,15 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 - 维护运行中任务句柄 `HermesRuntimeHandle`，而不是直接假设每个任务都是一个子进程；停止任务时调用 handle 的 `stop()`。
 - 派生 `executionView`。
 - 提供工作区文件列表、预览、Finder 定位。
-- 提供 `/api/hermes/sessions` 只读索引：扫描 `~/.hermes/sessions/session_*.json`，只返回 session 元数据、模型、消息数、更新时间和 Cowork 任务关联，不返回原始消息正文。
+- 提供 `/api/hermes/sessions` 和 `/api/hermes/sessions/:sessionId`：扫描 `~/.hermes/sessions/session_*.json`，返回 session 元数据、模型、消息数、更新时间、工具、消息正文和 Cowork 任务关联。
 - 提供 `/api/tasks/:taskId/context` 和 `/api/tasks/:taskId/context/compress`：前者读取当前任务对应 Hermes session 的上下文用量，后者调用 Hermes 原生手动压缩能力并把新 session 状态写回任务事件。
+
+`apps/api/src/hermes_sessions.ts`
+
+- Hermes 原生会话只读 Adapter，已从 `server.ts` 抽离。
+- 负责解析 `~/.hermes/sessions/session_*.json`，归一化 session id、标题、预览、模型、provider、platform、base URL、工具、消息数、更新时间、消息正文和 Cowork 任务关联。
+- 对外提供 `readHermesSessions()`、`readHermesSessionDetail()` 和 `resolveHermesSessionsDir()`；测试可通过 `sessionsDir` 参数或 `HERMES_COWORK_SESSIONS_DIR` 指向临时目录。
+- 当前只做只读，不做删除/重命名，避免前端在没有确认 Hermes 官方 session 写入语义时误删原生历史。
 
 `apps/api/src/file_preview.ts`
 
@@ -1397,8 +1407,15 @@ HC_EVENT\t
 `apps/web/src/features/settings/runtimeApi.ts`
 
 - Hermes runtime / 更新 API service，已从 `apps/web/src/lib/api.ts` 抽离。
-- 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新和 Hermes session 索引。
+- 负责读取 Hermes runtime、更新状态、兼容性复测、自动更新、Hermes session 索引和 session 详情。
 - 后续扩展“Kernel Manager 安装 / 固定内核版本锁定 / 补丁记录 / 回滚 / 多电脑迁移检查”时，先在这里确认 API 边界，再由 `useHermesRuntimeState.ts` 和 `HermesUpdatePanel.tsx` 消费。
+
+`apps/web/src/features/sessions/SessionsView.tsx`
+
+- Hermes 原生会话页面，已作为左侧“会话”入口接入。
+- 负责本机会话搜索、会话列表、详情消息浏览、模型/来源/工具摘要和 Cowork 关联任务跳转。
+- 只通过 `/api/hermes/sessions` 与 `/api/hermes/sessions/:sessionId` 消费后端归一化数据；不直接读取本机文件，不提供写入动作。
+- 后续补“删除 / 重命名 / 全文搜索 / 来源筛选 / 继续对话双向同步”时，必须先扩展 `apps/api/src/hermes_sessions.ts` 或接入 Hermes 官方 Dashboard Sessions API，再让本页面消费。
 
 `apps/web/src/features/skills/SkillsView.tsx`
 
@@ -1675,7 +1692,7 @@ POST /api/models/fallbacks
 - 工作区文件页已做第一版：顶部只显示可工作状态和行动入口；主区域展示工作区文件，支持作为上下文、预览、Finder 定位；右侧只在有内容时展示会话和产物。
 - 新建任务首页已按录屏调整为标题 + 任务模板卡片 + 底部输入框。
 - 主任务区已改为“主线答案优先”：完成任务只显示轻量状态条，最终回答保留在对话正文；当前对话保留最后一次用户提问和最终回复，其余历史折叠；失败/停止任务提供重试和继续入口。
-- Hermes Session 覆盖已推进：后端读取 `~/.hermes/sessions` 原生 session 元数据；前端在主结果卡和右侧 Session 卡展示原生消息数、模型、更新时间和 Cowork 任务关联状态。
+- Hermes Session 覆盖继续推进：后端已拆出 `apps/api/src/hermes_sessions.ts`，只读解析 `~/.hermes/sessions` 原生 session 元数据和消息详情；前端新增左侧“会话”入口，可搜索、浏览消息、查看模型/来源/工具和打开关联 Cowork 任务。
 - Hermes 上下文覆盖已接入：后端通过 Hermes `context_compressor` 和 session 数据返回上下文用量，前端已把上下文管理与过程资源合并成“上下文与资源”；文件按工作区索引匹配大小并计算文件占比，网页、工具、Skill 按任务 events 派生，任务运行结束后仍可调用 Hermes 原生 `/compress` 手动压缩当前 session。
 - 右侧工作区已按用户掌控感重新收敛为三块默认信息：任务拆解、任务产出物、上下文与资源；任务拆解只展示产品级结构化计划，最多展示 3-6 个与用户目标直接相关的步骤。Hermes 返回的工具级 todo/执行清单放入对话区过程流；工具/网站/文件放入上下文与资源或过程记录，Skill 作为常驻资源保留，Hermes Session、运行时、阈值、原始日志等退入后台诊断或按需动作，不作为默认静态信息铺开。
 - Web 版布局已支持侧栏收起：顶部右侧按钮、右侧“工作区”标题图标都可隐藏/恢复任务上下文面板，主对话区会真实扩宽；左侧导航也可收起并通过左上角按钮恢复；点击产物或工作区文件预览时会自动展开右侧文件详情。
@@ -2070,7 +2087,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 优先级 1：
 
 - Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
-- Session 全量前端化：全文浏览、搜索、删除、重命名、来源平台、模型、工具调用历史和双向同步。
+- Session 全量前端化：第一步已完成只读列表、搜索、详情消息、来源平台、模型、工具和 Cowork 任务映射；下一步补删除、重命名、官方 session actions、全文搜索索引和继续对话双向同步。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。
 - Logs / Analytics 用户化：只展示失败原因、工具耗时、模型用量、最近异常和下一步动作。

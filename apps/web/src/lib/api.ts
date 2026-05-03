@@ -338,8 +338,14 @@ export type HermesDashboardAdapterStatus = {
 export type HermesSessionSummary = {
   id: string
   file: string
+  filePath: string
+  title: string
+  preview?: string
   model?: string
+  provider?: string
   platform?: string
+  baseUrl?: string
+  tools: string[]
   messageCount: number
   startedAt: string
   updatedAt: string
@@ -351,6 +357,24 @@ export type HermesSessionSummary = {
 export type HermesSessionsResponse = {
   sessionsDir: string
   sessions: HermesSessionSummary[]
+  total: number
+  query?: string
+  updatedAt: string
+}
+
+export type HermesSessionMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  reasoning?: string
+  finishReason?: string
+  createdAt?: string
+}
+
+export type HermesSessionDetailResponse = {
+  sessionsDir: string
+  session: HermesSessionSummary
+  messages: HermesSessionMessage[]
   updatedAt: string
 }
 

@@ -4,6 +4,7 @@ import type {
   HermesCompatibilityTestResult,
   HermesDashboardAdapterStatus,
   HermesRuntime,
+  HermesSessionDetailResponse,
   HermesSessionsResponse,
   HermesUpdateStatus
 } from '../../lib/api'
@@ -34,4 +35,8 @@ export async function runHermesAutoUpdate(): Promise<HermesAutoUpdateResult> {
 
 export async function getHermesSessions(): Promise<HermesSessionsResponse> {
   return request('/api/hermes/sessions')
+}
+
+export async function getHermesSessionDetail(sessionId: string): Promise<HermesSessionDetailResponse> {
+  return request(`/api/hermes/sessions/${encodeURIComponent(sessionId)}`)
 }
