@@ -601,7 +601,8 @@ flowchart TB
 - 新增 `apps/api/src/hermes_official_api.ts`，从本机 Hermes 固定内核目录读取官方 API Server 文档和源码，确认是否具备 Chat Completions、Responses、Runs、Run Events、Run Stop、Jobs、Dashboard Sessions/Logs/Skills/Toolsets、MCP session events 等能力。
 - 新增 `/api/hermes/official-api`，同时探测 `http://127.0.0.1:8642` 的 `/health`、`/health/detailed`、`/v1/models`。这只是能力探测，不会替换当前任务通道。
 - `/api/hermes/runtime` 已把 `officialApi` 一并返回，后续设置页或运行环境页可以直接显示“官方 API Server 是否运行、是否配置 Key、哪些能力可迁移”。
-- 当前判断：不立即把主通道从 `tui_gateway` 切到 Runs API。原因是 Cowork 已依赖审批、澄清、上下文、附件批注、停止任务和 session 恢复等完整链路；Runs API 要先做并行 smoke，确认事件覆盖后再逐项迁移。
+- 新增 `apps/api/src/hermes_official_runs.ts` 和 `npm run test:hermes-official-runs`，已经把 `/v1/runs`、`/v1/runs/{run_id}/events`、`/v1/runs/{run_id}/stop` 做成并行适配层，能把官方事件归一为 Cowork 现有 `message.delta`、`tool.started/completed`、`task.completed/failed`、`context.updated`。
+- 当前判断：不立即把主通道从 `tui_gateway` 切到 Runs API。原因是本机 Hermes 当前 Runs API 没有读取 `workdir/cwd`，也没有 `approval.request / approval.respond` 和 `clarify.request / clarify.respond` 协议；Cowork 的授权工作区、危险命令审批、任务反问仍必须保留在 `tui_gateway` 主链路。
 
 阶段验收：
 
@@ -890,7 +891,14 @@ Hermes Cowork 的主界面是桌面式三栏：左侧工作区导航、中间任
 - 读取本机固定内核 `/Users/lucas/.hermes/hermes-agent` 下的 `website/docs/user-guide/features/api-server.md`、`gateway/platforms/api_server.py`、`hermes_cli/web_server.py`、`mcp_serve.py`，判断当前 Hermes 源码是否具备 Responses、Runs、Events、Stop、Jobs、Dashboard Sessions/Logs/Skills/Toolsets、MCP session events 等能力。
 - 探测官方 API Server 默认 `http://127.0.0.1:8642` 的 `/health`、`/health/detailed`、`/v1/models`。可用 `HERMES_COWORK_OFFICIAL_API_URL`、`HERMES_API_SERVER_URL`、`API_SERVER_HOST`、`API_SERVER_PORT`、`HERMES_COWORK_OFFICIAL_API_KEY`、`API_SERVER_KEY` 覆盖。
 - `server.ts` 已开放 `/api/hermes/official-api`，并在 `/api/hermes/runtime` 返回 `officialApi`。
-- 后续如果要把任务创建迁移到官方 Runs API，必须先在本模块旁边新增 official runs adapter 和 smoke test，确认 `approval.request`、`clarify.request`、`message.delta`、`tool.started/completed`、`run.completed/failed` 和 stop 都能覆盖 Cowork 现有语义。
+- `apps/api/src/hermes_official_runs.ts` 已经完成并行 adapter 和 fake SSE smoke test。当前确认：Runs API 能覆盖创建任务、文本增量、工具开始/完成、reasoning available、完成/失败和 stop；不能覆盖 Cowork 需要的一等能力：授权工作区绑定、危险命令审批、任务澄清反问。
+
+`apps/api/src/hermes_official_runs.ts`
+
+- 官方 Runs API 并行适配层，不是当前主任务通道。
+- `runHermesOfficialRunsTask()` 会调用 `/v1/runs` 创建任务，再订阅 `/v1/runs/{run_id}/events`，把官方 SSE 事件转成 Cowork 统一事件。
+- `stopHermesOfficialRun()` 会调用 `/v1/runs/{run_id}/stop`，用于验证官方停止能力。
+- `officialRunsCoverage()` 明确记录当前覆盖缺口：官方 Runs API 当前没有可靠工作区绑定、审批、澄清协议，所以不能直接替换 `tui_gateway`。
 
 `apps/api/src/hermes_bridge.py`
 
@@ -2061,7 +2069,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 
 优先级 1：
 
-- Hermes API Server / Runs API 并行 smoke：基于 `/api/hermes/official-api` 的探测结果，新增 official runs adapter，验证 `/v1/runs`、events、stop 是否能覆盖 Cowork 当前任务链路；验证前不替换 `tui_gateway` 主通道。
+- Hermes API Server / Runs API 并行 smoke：adapter 和 fake SSE test 已完成。下一步只在官方 API Server 真实运行时做 real smoke；在 Hermes 补齐 workdir、approval、clarify 前，不替换 `tui_gateway` 主通道。
 - Session 全量前端化：全文浏览、搜索、删除、重命名、来源平台、模型、工具调用历史和双向同步。
 - Skills / MCP / Toolsets 统一技能页能力中心，工具、MCP、Skill 都从这里管理。
 - Cron 表单重做：周期选择、workdir、Skill 分类多选、运行产物、delivery target。

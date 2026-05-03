@@ -153,9 +153,9 @@ function buildDecision(source: HermesOfficialApiSourceStatus, runtime: HermesOff
   const shouldReplaceCurrentGatewayNow = false
   const nextActions = canEvaluateMigration
     ? [
-      '保留 tui_gateway 作为当前主通道，新增 official-api adapter 做并行 smoke。',
-      '用 /v1/runs + /v1/runs/{run_id}/events + /v1/runs/{run_id}/stop 复刻 Cowork 创建任务、流式事件和停止任务。',
-      '确认 Runs API 能否暴露 approval.request / clarify.request；如果不能，审批和澄清继续留在 tui_gateway。'
+      '保留 tui_gateway 作为当前主通道，official runs adapter 只做并行验证。',
+      '在官方 API Server 真实运行时，用 /v1/runs + /v1/runs/{run_id}/events + /v1/runs/{run_id}/stop 做 real smoke。',
+      '当前 Runs API 未覆盖 workdir、approval.request / approval.respond、clarify.request / clarify.respond；这些能力继续留在 tui_gateway。'
     ]
     : [
       '当前 Hermes 源码未完整暴露 Runs/Events/Stop，暂不迁移主通道。',
