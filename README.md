@@ -73,15 +73,22 @@ npm run smoke:hermes-real
 
 ## 开发文档
 
+主入口：
+
 - `Hermes_Cowork_开发文档.md`
 
-仓库只保留这一份主开发文档。阶段定版、架构体检、后续计划和交接信息都合并到这份文档中，避免后续开发时多份文档互相打架。
+附录：
+
+- `docs/hermes-capability-baseline.md`：Hermes 官网能力树、本机固定内核基线、能力覆盖矩阵和长期路线。
+- `docs/product-decisions.md`：产品方案、交互原则、工作区/文件/对话/主题等决策记录。
+- `docs/engineering-reference.md`：目录结构、关键文件、数据结构、API、实现细节、命令和已知限制。
 
 阅读顺序：
 
-- 产品判断：先看 `3.1 Cowork 与 Hermes 对应架构图`。这一节包含新手版分层图、术语翻译表和用户操作到 Hermes 后端能力的对应表；再看 `3.2 Hermes 能力覆盖矩阵`、`3.3 开发方案解释区`。
-- 继续开发：先看 `3.4 多入口一致性契约`、`5. 关键文件说明`、`10. 常用开发命令`、`11. 后续开发建议`。
-- 评估 Hermes 官方 API Server / Runs API 时，先看 `apps/api/src/hermes_official_api.ts` 和 `/api/hermes/official-api`，确认本机 Hermes 源码能力和 8642 API Server 运行状态；再看 `apps/api/src/hermes_official_runs.ts`。当前 Runs API 只作为并行适配层验证，不能替换 `tui_gateway` 主链路，因为还缺工作区绑定、审批和澄清协议。
+- 判断产品方向：先看主文档，再看 `docs/hermes-capability-baseline.md`。
+- 判断交互是否符合既定方案：看 `docs/product-decisions.md`。
+- 继续编码或排查接口：看 `docs/engineering-reference.md`。
+- 评估 Hermes 官方 API Server / Runs API 时，先看 `apps/api/src/hermes_official_api.ts`、`apps/api/src/hermes_official_runs.ts` 和 `/api/hermes/official-api`。当前 Runs API 只作为并行适配层验证，不能直接替换 `tui_gateway` 主链路。
 
 ## 不提交的本机数据
 
