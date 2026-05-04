@@ -8,7 +8,6 @@
     "dev:api": "tsx watch apps/api/src/server.ts",
     "dev:web": "vite --host 127.0.0.1 --port 5173 apps/web",
     "background:api": "tsx apps/api/src/server.ts",
-    "mcp:recommend:ai": "tsx apps/api/src/mcp_recommend_ai.ts",
     "build": "npm run build:web",
     "build:web": "tsc -p apps/web/tsconfig.json && vite build apps/web",
     "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p apps/api/tsconfig.json",

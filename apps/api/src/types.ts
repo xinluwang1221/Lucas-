@@ -310,38 +310,6 @@ export type HermesMcpManualConfigRequest = {
   preset?: string
 }
 
-export type HermesMcpMarketplaceCandidate = {
-  id: string
-  name: string
-  repo: string
-  url: string
-  description: string
-  sourceDescription: string
-  iconUrl: string
-  category: HermesMcpCategoryId
-  categoryLabel: string
-  stars: number
-  language: string
-  updatedAt: string
-  installName: string
-  suggestedCommand: string
-  suggestedArgs: string[]
-  confidence: 'high' | 'medium' | 'low'
-}
-
-export type HermesMcpMarketplaceResponse = {
-  query: string
-  source: 'github'
-  candidates: HermesMcpMarketplaceCandidate[]
-  updatedAt: string
-}
-
-export type HermesMcpInstallRequest = {
-  installName: string
-  suggestedCommand: string
-  suggestedArgs: string[]
-}
-
 export type HermesMcpInstallResult = {
   ok: boolean
   installName: string
@@ -398,43 +366,8 @@ export type HermesMcpServeStatus = {
   updatedAt: string
 }
 
-export type HermesMcpCategoryId =
-  | 'file'
-  | 'browser'
-  | 'data'
-  | 'office'
-  | 'research'
-  | 'vision'
-  | 'memory'
-  | 'dev'
-  | 'automation'
-  | 'other'
-
-export type HermesMcpRecommendationGroup = {
-  id: HermesMcpCategoryId
-  label: string
-  description: string
-  candidates: HermesMcpMarketplaceCandidate[]
-}
-
-export type HermesMcpRecommendations = {
-  generatedAt: string
-  nextRunAt: string
-  sourceSummary: string
-  keywords: string[]
-  blockers: string[]
-  categories: HermesMcpRecommendationGroup[]
-  aiUsed?: boolean
-  aiSummary?: string
-}
-
 export type BackgroundServiceStatus = {
   api: {
-    installed: boolean
-    loaded: boolean
-    plistPath: string
-  }
-  dailyMcp: {
     installed: boolean
     loaded: boolean
     plistPath: string

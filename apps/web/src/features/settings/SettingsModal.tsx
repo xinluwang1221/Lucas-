@@ -15,12 +15,10 @@ import {
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import type {
-  BackgroundServiceStatus,
   HermesAutoUpdateResult,
   HermesCompatibilityTestResult,
   HermesDiagnosticsStatus,
   HermesMcpConfig,
-  HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesModelCatalogProvider,
@@ -75,12 +73,6 @@ export function SettingsModal({
   mcpUpdatingId,
   mcpDeletingId,
   mcpToolUpdatingId,
-  mcpRecommendations,
-  mcpRecommendationsLoading,
-  mcpRecommendationsError,
-  backgroundStatus,
-  backgroundUpdating,
-  backgroundError,
   mcpServeStatus,
   mcpServeUpdating,
   mcpServeError,
@@ -108,10 +100,7 @@ export function SettingsModal({
   onEditMcpServer,
   onSetMcpToolSelection,
   onDeleteMcpServer,
-  onOpenMcpMarketplace,
   onOpenManualMcp,
-  onRefreshMcpRecommendationsWithAi,
-  onToggleBackgroundServices,
   onToggleMcpServe,
   onRefreshMcpServe,
   onSelectModel,
@@ -154,12 +143,6 @@ export function SettingsModal({
   mcpUpdatingId: string | null
   mcpDeletingId: string | null
   mcpToolUpdatingId: string | null
-  mcpRecommendations: HermesMcpRecommendations | null
-  mcpRecommendationsLoading: boolean
-  mcpRecommendationsError: string | null
-  backgroundStatus: BackgroundServiceStatus | null
-  backgroundUpdating: boolean
-  backgroundError: string | null
   mcpServeStatus: HermesMcpServeStatus | null
   mcpServeUpdating: boolean
   mcpServeError: string | null
@@ -187,10 +170,7 @@ export function SettingsModal({
   onEditMcpServer: (server: HermesMcpConfig['servers'][number]) => void
   onSetMcpToolSelection: (serverId: string, mode: 'all' | 'include' | 'exclude', tools: string[]) => void
   onDeleteMcpServer: (serverId: string) => void
-  onOpenMcpMarketplace: () => void
   onOpenManualMcp: () => void
-  onRefreshMcpRecommendationsWithAi: () => void
-  onToggleBackgroundServices: (enabled: boolean) => void
   onToggleMcpServe: (enabled: boolean) => void
   onRefreshMcpServe: () => void
   onSelectModel: (model: ModelOption) => void
@@ -278,12 +258,6 @@ export function SettingsModal({
             mcpUpdatingId={mcpUpdatingId}
             mcpDeletingId={mcpDeletingId}
             mcpToolUpdatingId={mcpToolUpdatingId}
-            mcpRecommendations={mcpRecommendations}
-            mcpRecommendationsLoading={mcpRecommendationsLoading}
-            mcpRecommendationsError={mcpRecommendationsError}
-            backgroundStatus={backgroundStatus}
-            backgroundUpdating={backgroundUpdating}
-            backgroundError={backgroundError}
             mcpServeStatus={mcpServeStatus}
             mcpServeUpdating={mcpServeUpdating}
             mcpServeError={mcpServeError}
@@ -294,10 +268,7 @@ export function SettingsModal({
             onEditMcpServer={onEditMcpServer}
             onSetMcpToolSelection={onSetMcpToolSelection}
             onDeleteMcpServer={onDeleteMcpServer}
-            onOpenMcpMarketplace={onOpenMcpMarketplace}
             onOpenManualMcp={onOpenManualMcp}
-            onRefreshMcpRecommendationsWithAi={onRefreshMcpRecommendationsWithAi}
-            onToggleBackgroundServices={onToggleBackgroundServices}
             onToggleMcpServe={onToggleMcpServe}
             onRefreshMcpServe={onRefreshMcpServe}
           />

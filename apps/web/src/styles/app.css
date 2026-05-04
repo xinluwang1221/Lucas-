@@ -4014,10 +4014,6 @@
 :root[data-theme-mode="dark"] .mcp-tool-empty,
 :root[data-theme-mode="dark"] .mcp-serve-grid div,
 :root[data-theme-mode="dark"] .mcp-serve-logs,
-:root[data-theme-mode="dark"] .mcp-daily-permission,
-:root[data-theme-mode="dark"] .mcp-rec-group,
-:root[data-theme-mode="dark"] .mcp-rec-candidates a,
-:root[data-theme-mode="dark"] .mcp-marketplace-modal,
 :root[data-theme-mode="dark"] .model-table-row,
 :root[data-theme-mode="dark"] .model-table-empty,
 :root[data-theme-mode="dark"] .model-runtime-card,
@@ -4067,12 +4063,6 @@
 :root[data-theme-mode="dark"] .task-summary-card,
 :root[data-theme-mode="dark"] .task-summary-strip span,
 :root[data-theme-mode="dark"] .mcp-tool-list,
-:root[data-theme-mode="dark"] .mcp-rec-summary,
-:root[data-theme-mode="dark"] .mcp-daily-report,
-:root[data-theme-mode="dark"] .mcp-background-status,
-:root[data-theme-mode="dark"] .marketplace-tabs button,
-:root[data-theme-mode="dark"] .marketplace-search,
-:root[data-theme-mode="dark"] .marketplace-command span,
 :root[data-theme-mode="dark"] .model-table-head,
 :root[data-theme-mode="dark"] .model-provider-meta span,
 :root[data-theme-mode="dark"] .model-credential-pill,
@@ -4094,10 +4084,6 @@
 :root[data-theme-mode="dark"] .scheduled-job-item:hover,
 :root[data-theme-mode="dark"] .scheduled-job-item.active,
 :root[data-theme-mode="dark"] .mcp-expand-button:hover,
-:root[data-theme-mode="dark"] .marketplace-item.active,
-:root[data-theme-mode="dark"] .marketplace-item:hover,
-:root[data-theme-mode="dark"] .marketplace-tabs button.active,
-:root[data-theme-mode="dark"] .marketplace-search button,
 :root[data-theme-mode="dark"] .inline-add-control button,
 :root[data-theme-mode="dark"] .sound-list button:hover,
 :root[data-theme-mode="dark"] .cowork-model-select:hover:not(:disabled),
@@ -4128,7 +4114,6 @@
 }
 
 :root[data-theme-mode="dark"] .settings-primary-button,
-:root[data-theme-mode="dark"] .marketplace-install-button,
 :root[data-theme-mode="dark"] .hermes-auto-update-button,
 :root[data-theme-mode="dark"] .context-compress-button {
   color: #ffffff;
@@ -4157,10 +4142,7 @@
 }
 
 :root[data-theme-mode="dark"] .settings-info-banner,
-:root[data-theme-mode="dark"] .mcp-serve-note,
-:root[data-theme-mode="dark"] .mcp-rec-ai,
-:root[data-theme-mode="dark"] .marketplace-daily-report,
-:root[data-theme-mode="dark"] .marketplace-note {
+:root[data-theme-mode="dark"] .mcp-serve-note {
   color: var(--info);
   background: var(--info-soft);
   border-color: var(--info-border);
@@ -4189,7 +4171,6 @@
 :root[data-theme-mode="dark"] .skill-notice,
 :root[data-theme-mode="dark"] .session-state.linked,
 :root[data-theme-mode="dark"] .mcp-test-result.ok > div,
-:root[data-theme-mode="dark"] .mcp-rec-chips span,
 :root[data-theme-mode="dark"] .model-credential-pill.configured,
 :root[data-theme-mode="dark"] .fallback-provider-row.active,
 :root[data-theme-mode="dark"] .model-config-memory,
@@ -4207,8 +4188,6 @@
   border-color: var(--success-border);
 }
 
-:root[data-theme-mode="dark"] .mcp-rec-blockers,
-:root[data-theme-mode="dark"] .marketplace-safety,
 :root[data-theme-mode="dark"] .model-key-repair-panel.attention,
 :root[data-theme-mode="dark"] .model-credential-pill.attention,
 :root[data-theme-mode="dark"] .hermes-update-banner.needs-review,
@@ -4222,8 +4201,7 @@
 
 :root[data-theme-mode="dark"] .mcp-test-result pre,
 :root[data-theme-mode="dark"] .mcp-serve-logs pre,
-:root[data-theme-mode="dark"] .hermes-update-log pre,
-:root[data-theme-mode="dark"] .marketplace-command pre {
+:root[data-theme-mode="dark"] .hermes-update-log pre {
   color: var(--foreground);
   background: var(--surface);
 }
@@ -4267,7 +4245,6 @@
 
 :root[data-theme-mode="dark"] .ready-mark,
 :root[data-theme-mode="dark"] .settings-link-button,
-:root[data-theme-mode="dark"] .marketplace-detail-title a,
 :root[data-theme-mode="dark"] .model-provider-head em,
 :root[data-theme-mode="dark"] .model-key-repair-panel svg,
 :root[data-theme-mode="dark"] .model-config-note,

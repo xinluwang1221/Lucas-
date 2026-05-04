@@ -19,7 +19,7 @@ import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { configureHermesMcpServer, getHermesMcpServeStatus, installHermesMcpServer, readHermesMcpConfig, readHermesMcpRecommendations, refreshHermesMcpRecommendations, refreshHermesMcpRecommendationsWithHermes, removeHermesMcpServer, searchHermesMcpMarketplace, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, startMcpRecommendationScheduler, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
+import { configureHermesMcpServer, getHermesMcpServeStatus, readHermesMcpConfig, removeHermesMcpServer, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
 import {
   configureHermesModel,
   configureHermesReasoning,
@@ -291,38 +291,6 @@ app.get('/api/hermes/mcp', (_req, res) => {
   }
 })
 
-app.get('/api/hermes/mcp/marketplace', async (req, res) => {
-  try {
-    res.json(await searchHermesMcpMarketplace(String(req.query.q ?? '')))
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
-  }
-})
-
-app.get('/api/hermes/mcp/recommendations', (_req, res) => {
-  try {
-    res.json(readHermesMcpRecommendations())
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
-  }
-})
-
-app.post('/api/hermes/mcp/recommendations/refresh', async (_req, res) => {
-  try {
-    res.json(await refreshHermesMcpRecommendations(store.snapshot.tasks))
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
-  }
-})
-
-app.post('/api/hermes/mcp/recommendations/refresh-ai', async (_req, res) => {
-  try {
-    res.json(await refreshHermesMcpRecommendationsWithHermes(store.snapshot.tasks))
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
-  }
-})
-
 app.get('/api/hermes/mcp/serve', (_req, res) => {
   try {
     res.json(getHermesMcpServeStatus())
@@ -421,23 +389,6 @@ app.delete('/api/hermes/cron/:jobId', async (req, res) => {
     res.json(await removeHermesCronJob(req.params.jobId))
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : String(error) })
-  }
-})
-
-app.post('/api/hermes/mcp/install', async (req, res) => {
-  try {
-    const { installName, suggestedCommand, suggestedArgs } = req.body as {
-      installName?: unknown
-      suggestedCommand?: unknown
-      suggestedArgs?: unknown
-    }
-    if (typeof installName !== 'string' || typeof suggestedCommand !== 'string' || !Array.isArray(suggestedArgs)) {
-      res.status(400).json({ error: 'installName, suggestedCommand and suggestedArgs are required' })
-      return
-    }
-    res.status(201).json(await installHermesMcpServer({ installName, suggestedCommand, suggestedArgs }))
-  } catch (error) {
-    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }
 })
 
@@ -3853,5 +3804,3 @@ recoverInterruptedRunningTasks()
 app.listen(port, '127.0.0.1', () => {
   console.log(`Hermes Cowork API listening on http://127.0.0.1:${port}`)
 })
-
-startMcpRecommendationScheduler(() => store.snapshot.tasks)

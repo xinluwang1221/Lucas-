@@ -4,9 +4,6 @@ import type {
   HermesMcpConfig,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
-  HermesMcpMarketplaceCandidate,
-  HermesMcpMarketplaceResponse,
-  HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesMcpToolSelectionRequest,
@@ -16,26 +13,6 @@ import type {
 
 export async function getHermesMcpConfig(): Promise<HermesMcpConfig> {
   return request('/api/hermes/mcp')
-}
-
-export async function searchHermesMcpMarketplace(query: string): Promise<HermesMcpMarketplaceResponse> {
-  return request(`/api/hermes/mcp/marketplace?q=${encodeURIComponent(query)}`)
-}
-
-export async function getHermesMcpRecommendations(): Promise<HermesMcpRecommendations> {
-  return request('/api/hermes/mcp/recommendations')
-}
-
-export async function refreshHermesMcpRecommendations(): Promise<HermesMcpRecommendations> {
-  return request('/api/hermes/mcp/recommendations/refresh', {
-    method: 'POST'
-  })
-}
-
-export async function refreshHermesMcpRecommendationsWithAi(): Promise<HermesMcpRecommendations> {
-  return request('/api/hermes/mcp/recommendations/refresh-ai', {
-    method: 'POST'
-  })
 }
 
 export async function getBackgroundStatus(): Promise<BackgroundServiceStatus> {
@@ -48,18 +25,6 @@ export async function installBackgroundServices(): Promise<BackgroundServiceStat
 
 export async function uninstallBackgroundServices(): Promise<BackgroundServiceStatus> {
   return request('/api/background/uninstall', { method: 'POST' })
-}
-
-export async function installHermesMcpServer(candidate: HermesMcpMarketplaceCandidate): Promise<HermesMcpInstallResult> {
-  return request('/api/hermes/mcp/install', {
-    method: 'POST',
-    headers: jsonHeaders,
-    body: JSON.stringify({
-      installName: candidate.installName,
-      suggestedCommand: candidate.suggestedCommand,
-      suggestedArgs: candidate.suggestedArgs
-    })
-  })
 }
 
 export async function configureHermesMcpServer(config: HermesMcpManualConfigRequest): Promise<HermesMcpInstallResult> {

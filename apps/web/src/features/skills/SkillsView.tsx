@@ -25,7 +25,7 @@ import {
   Wrench
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { HermesMcpConfig, HermesMcpRecommendations, HermesToolset, Skill, SkillHubItem, SkillHubSource } from '../../lib/api'
+import type { HermesMcpConfig, HermesToolset, Skill, SkillHubItem, SkillHubSource } from '../../lib/api'
 import { ConnectorsView as McpConnectorsView } from '../settings/mcp'
 import { shortenSkillPath, sourceLabel } from './skillFormatters'
 import { installSkillFromHub, searchSkillHub } from './skillsApi'
@@ -39,7 +39,6 @@ export function SkillsView({
   query,
   notice,
   connectors,
-  mcpRecommendations,
   toolsets,
   toolsetsError,
   toolsetUpdatingName,
@@ -56,7 +55,7 @@ export function SkillsView({
   onRefreshToolsets,
   onToggleToolset,
   onOpenMcpSettings,
-  onOpenMcpMarketplace
+  onOpenNativeMcpAdd
 }: {
   skills: Skill[]
   customizeTab: CustomizeTab
@@ -64,7 +63,6 @@ export function SkillsView({
   query: string
   notice: string | null
   connectors: HermesMcpConfig['servers']
-  mcpRecommendations?: HermesMcpRecommendations | null
   toolsets: HermesToolset[]
   toolsetsError: string | null
   toolsetUpdatingName: string | null
@@ -81,7 +79,7 @@ export function SkillsView({
   onRefreshToolsets: () => void
   onToggleToolset: (toolset: HermesToolset) => void
   onOpenMcpSettings: () => void
-  onOpenMcpMarketplace: () => void
+  onOpenNativeMcpAdd: () => void
 }) {
   const normalizedQuery = query.trim().toLowerCase()
   const enabledSkills = skills.filter((skill) => skill.enabled)
@@ -255,9 +253,9 @@ export function SkillsView({
                 <RefreshCw size={15} />
                 刷新
               </button>
-              <button className="send-button" onClick={onOpenMcpMarketplace}>
+              <button className="send-button" onClick={onOpenNativeMcpAdd}>
                 <Plus size={16} />
-                从市场添加
+                添加 MCP
               </button>
             </>
           )}
@@ -489,11 +487,10 @@ export function SkillsView({
         ) : (
           <McpConnectorsView
             connectors={connectors}
-            recommendations={mcpRecommendations}
             configPath={mcpConfigPath}
             error={mcpError}
             onOpenSettings={onOpenMcpSettings}
-            onOpenMarketplace={onOpenMcpMarketplace}
+            onOpenNativeAdd={onOpenNativeMcpAdd}
           />
         )}
       </div>

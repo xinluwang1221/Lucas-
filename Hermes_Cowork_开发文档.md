@@ -330,7 +330,7 @@ flowchart TB
 | 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
 | 工具与 Toolsets：web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code | 技能页 > 工具集、过程资源、设置 > 运行环境诊断 | 部分覆盖。Toolsets 已进入技能页；工具级策略、工具使用统计和失败诊断还缺 | 把 Toolsets 做成技能页的一级能力：分类、启停、凭据状态、内置工具列表、使用统计、失败原因；与 MCP/Skill 同页但语义分清 | Dashboard `/api/tools/toolsets`、启停后 config 检查、任务过程资源工具调用检查 |
 | Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、Skills Hub | 部分覆盖。清单、启停、上传、文件树、加入下一次任务、Hermes Skills Hub 浏览/搜索/安装已接；外部目录、Agent 自动沉淀还未完整 | 技能页继续做分类、依赖、运行前预载、安装前风险说明、Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、`/api/skills/hub`、`hermes skills browse/search/install`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
-| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、MCP 市场、过程资源 | 部分覆盖。安装、测试、启停、工具 include/exclude、Hermes MCP serve、技能页 MCP 生态概览已接；OAuth/远程 MCP/权限说明还缺 | MCP 页升级为外部能力管理：市场分类、图片图标、功能描述、OAuth、远程 HTTP、工具级开关、Hermes MCP server 生产化；技能页只放生态入口和状态概览 | `hermes mcp test`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
+| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、过程资源 | 部分覆盖。已取消 Cowork 自建 GitHub 市场和每日推荐；新增、测试、启停、工具 include/exclude、Hermes MCP serve、技能页 MCP 生态概览接入 Hermes 原生命令与配置；OAuth/远程 MCP/权限说明仍需深化 | MCP 页按 Hermes 官方 `mcp add/list/test/configure/login/serve` 继续产品化：补齐 OAuth login、preset 列表、远程 HTTP/SSE 指引、动态工具刷新、工具级权限说明和 Hermes MCP server 生产化 | `hermes mcp add/list/test/configure/login/serve`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
 | Cron / Automation：自然语言、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 左侧定时任务页、未来产物区、未来投递设置 | 部分覆盖。真实 Hermes Cron 基础管理已接；周期选择、Skill 分类多选、delivery target、输出产物还需完善 | 定时任务页只管理 Hermes Cron：周期选择器、工作区绑定、Skill 类目多选、运行产物、失败处理和投递渠道 | `test:hermes-cron`、Dashboard cron jobs、`~/.hermes/cron/output`、gateway/tick 运行检查 |
 | Gateway / Messaging / Mobile：长驻 gateway、平台消息、session routing、slash command、cron tick、background maintenance | 本机 gateway、未来 Electron 常驻、未来手机端 | 未完整覆盖。当前只有本机 gateway；移动端和云端中转未实现 | 设计“云端加密中转 + Mac 主机执行”：云端只做账号/设备配对、消息路由和推送；Hermes/files/tools 只在 Mac 执行 | gateway 连接测试、多设备协议设计文档、移动端发任务到 Mac 的端到端 smoke |
 | 媒体与浏览器：Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件预览、图片/文件批注、未来语音入口、未来浏览器过程面板 | 未完整覆盖。文件/图片预览已做；视觉理解、浏览器自动化可视化、TTS/Voice 还未产品化 | 新增语音输入/TTS 输出、图片视觉理解入口、浏览器任务过程可视化；执行仍走 Hermes 工具，不在 Cowork 重写工具 | Browser tool smoke、图片任务 smoke、Voice/TTS 本机权限检查、过程事件展示 |
@@ -423,7 +423,7 @@ flowchart TB
 
 当前方案：
 
-- MCP 管理覆盖 Hermes `mcp_servers`：本地服务、市场安装、测试、删除、启停、工具级 include/exclude。
+- MCP 管理覆盖 Hermes `mcp_servers` 和官方 `hermes mcp` 命令：本地/远程服务添加、测试、删除、启停、工具级 include/exclude、OAuth/Header/preset 配置和 Hermes MCP Server 诊断。
 - Skills 管理覆盖本机 skill 文件：扫描、上传、启停、查看 `SKILL.md` 和子文件、加入下一次任务。
 
 为什么这样做：
@@ -433,7 +433,7 @@ flowchart TB
 
 可升级空间：
 
-- MCP 市场可以继续用 Hermes 每日推荐扩展，但推荐结果只进入市场，不额外增加复杂用户入口。
+- MCP 不再维护 Cowork 自建 GitHub 市场或每日推荐；能力来源以 Hermes 官方 MCP add/list/test/configure/login/serve 和后续官方生态入口为准。
 - gateway 目前不完整支持 Cowork 自定义 skill 预载时，应保留 bridge 回退或等待 Hermes 增加参数。
 
 判断标准：
@@ -461,7 +461,7 @@ flowchart TB
 
 可升级空间：
 
-- 后续可以把每日 MCP 推荐日报迁移为一个真实 Hermes Cron job，而不是单独 LaunchAgent。
+- 如未来重新需要 MCP 推荐，先验证 Hermes 是否提供原生生态/Hub/API，再决定是否作为真实 Hermes Cron job 生成，不再恢复 Cowork 独立 LaunchAgent。
 - 可以增加输出文件卡片和右侧预览，把 cron 输出纳入任务产物体系。
 - 可以增加 delivery 配置页，把 Feishu/Slack/Email 等投递目标从高级字段变成可配置渠道。
 
@@ -565,7 +565,7 @@ flowchart TB
 | --- | --- | --- | --- |
 | 模型候选与选择 | 对话底部模型菜单、设置 > 模型、本次任务模型列表、长期默认模型列表 | `/api/models`、`~/.hermes/config.yaml`、`readHermesModelCatalog()`、`listModelOptions()` | `modelGroupsForProvider()`、`groupModelOptionsForMenu()` |
 | 模型服务配置与重填 Key | 设置 > 模型、对话底部“重填当前 Key / 模型服务设置” | `/api/models`、`/api/models/configure`、`configureHermesModel()`、`parseHermesAuthList()` | 同一个 `modelPanelOpen` 配置弹窗，入口必须能预选当前 provider 和模型 |
-| MCP 服务 | 技能页 > MCP 服务、设置 > MCP、MCP 市场弹窗 | `/api/hermes/mcp`、Hermes MCP config | 同一套 MCP server 状态、说明、图标和启停逻辑 |
+| MCP 服务 | 技能页 > MCP 服务、设置 > MCP、原生添加弹窗 | `/api/hermes/mcp`、Hermes MCP config、`hermes mcp` 原生命令 | 同一套 MCP server 状态、说明、图标、启停、测试和工具开关逻辑 |
 | 任务运行状态 | 主对话区、右侧任务上下文、左侧工作区会话树 | `/api/state`、任务事件流、Hermes session 元数据 | `Task`、`executionView`、右侧步骤/产物/资源分层 |
 | 上下文用量、过程资源与压缩 | 右侧任务上下文、未来对话框上方风险提示 | `/api/tasks/:taskId/context`、`/api/tasks/:taskId/context/compress`、任务 events、工作区文件索引 | `ContextResourcesCard`，合并展示上下文用量、文件大小/占比、网页、工具和 Skill；不再单独展示来源/阈值/消息数表格 |
 | 产物与文件 | 主结果、右侧产物、工作区文件、附件入口 | `/api/artifacts`、`/api/workspaces/*/files` | 同一套文件预览、Finder 打开、下载逻辑 |
@@ -1031,18 +1031,14 @@ HC_EVENT\t
 - 通过 `hermes mcp test <name>` 测试单个 MCP 服务，返回连接状态、耗时、工具数量和脱敏后的测试输出。
 - 支持启用/禁用写回：只修改指定服务配置块内的 `enabled: true/false`，写入前会生成 `config.yaml.cowork-backup-*` 备份。
 - 支持 GitHub 市场搜索：按关键词搜索 MCP 服务候选，返回仓库信息、星标、语言、推荐 Hermes 安装命令、命令置信度、图片图标和中文功能描述。
-- 支持从市场安装：后端执行 `hermes mcp add <name> --command <cmd> --args ...`，执行前备份 Hermes 配置，成功后自动调用 `hermes mcp test <name>` 并返回测试结果。
-- 支持手动配置 MCP：前端填写名称、连接方式、命令/参数/URL/环境变量，也支持 Hermes `--preset`、HTTP/SSE OAuth 和 Header 认证配置；写入前备份配置，成功后自动测试。
+- 支持 Hermes 原生 MCP 添加：前端填写名称、连接方式、命令/参数/URL/环境变量，也支持 Hermes `--preset`、HTTP/SSE OAuth 和 Header 认证配置；后端优先调用 `hermes mcp add`，必要时受控写入配置，写入前备份，成功后自动测试。
+- 已取消 Cowork 自建 MCP 市场和 GitHub 搜索安装；MCP 能力来源以 Hermes 官方 `mcp add/list/test/configure/login/serve` 为准，后续如有官方 Hub/API 再接入。
 - 支持编辑已安装 MCP：前端复用配置弹窗，服务名锁定，命令/参数/URL/认证方式可修改；环境变量和 Header 值默认不回显，留空时保留原 `env`/`headers`，填写新值时替换对应配置；后端直接更新对应配置块，写入前备份，写入后自动测试。
 - 支持工具级选择：前端在 MCP 详情里根据 `hermes mcp test <name>` 发现的工具列表生成开关；后端写入 `mcp_servers.<name>.tools.include/exclude`，等价覆盖 `hermes mcp configure <name>` 的核心配置能力，写入前备份，配置在新会话生效。
 - 支持删除 MCP：前端删除按钮调用后端，后端备份配置后执行 `hermes mcp remove <name>` 并刷新列表。
 - 支持工具列表展示：`hermes mcp test <name>` 输出中的工具名和说明会解析成结构化列表，在 MCP 详情里展示。
 - 支持 `hermes mcp serve -v` 控制台：后端可启动/停止由 Cowork 管理的 Hermes stdio MCP Server 诊断进程，返回 PID、启动命令、工作目录和最近 stdout/stderr/system 日志；前端 MCP 设置页显示运行状态和日志。注意：这是 stdio MCP Server，外部 MCP Client 通常仍需配置同一条启动命令，而不是连接 HTTP 端口。
-- 支持每日 MCP 推荐：根据最近任务、错误信息和卡点提取需求关键词，搜索 GitHub MCP 候选，并按文件与文档、浏览器自动化、数据分析、办公协作、网页调研、视觉理解、记忆知识库、研发协作、本机自动化等类别分组。后端运行时每天 00:10 后自动刷新一次，也支持前端手动刷新。
-- 支持 Hermes 智能 MCP 推荐：`npm run mcp:recommend:ai` 会调用 Hermes 分析最近任务和卡点，再生成搜索词并刷新推荐库。
-- 支持 macOS 常驻后台：设置页启用后写入两个 LaunchAgent：
-  - `com.hermes-cowork.api.plist`：登录时启动 Hermes Cowork API 后台。
-  - `com.hermes-cowork.daily-mcp-ai.plist`：每天 00:10 调用 Hermes 智能生成 MCP 推荐。
+- 支持 macOS 常驻后台：设置页启用后只写入 `com.hermes-cowork.api.plist`，用于登录时启动 Hermes Cowork API 后台；旧版 `com.hermes-cowork.daily-mcp-ai.plist` 会在安装/卸载后台服务时清理。
 - 支持 Hermes Cron 管理：`/api/hermes/cron` 优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，Dashboard 不可用时回退本机 `~/.hermes/cron/jobs.json`；新增/编辑/暂停/恢复/排队运行/删除都通过 Hermes 自己的 `cronjob` 工具函数落到 Hermes cron，输出读取 `~/.hermes/cron/output/<job_id>/`。
 - 支持 Hermes Skills 官方真源：`/api/skills` 优先读取 Hermes Dashboard `/api/skills`，把官方启用状态合并到 Cowork 技能页；本机扫描 `~/.hermes/skills`、用户 skills、Codex 插件 skills 和上传 skills，用于展示 `SKILL.md` 及子文件。启停由 Hermes 官方 `/api/skills/toggle` 写回，Dashboard 不可用时才保留本地扫描兜底。
 - 支持 Hermes Skills Hub 原生生态：`/api/skills/hub` 直接调用固定 Hermes 内核里的 Skills Hub，读取 official、skills.sh、well-known、GitHub、ClawHub、LobeHub 等来源；`/api/skills/hub/install` 调用 `hermes skills install <identifier> --yes` 安装到 Hermes 本机技能目录。Cowork 技能页只负责展示、筛选、确认和刷新，不维护第二套 Skill 市场数据。
@@ -1061,7 +1057,7 @@ HC_EVENT\t
 - 左侧一级导航已收敛为：新建任务、工作区目录树、技能、定时任务、调度、本机偏好。搜索和模板暂不放主导航，避免和工作区会话树重复。
 - 左侧工作区已经回到目录树结构：工作区行代表授权文件夹，展开后展示该工作区内的工作会话；点击工作区进入文件管理页，点击会话进入对话页。
 - 搜索页：支持搜索任务标题、prompt、错误、Hermes session、执行结果、技能名和标签；当前作为内部能力保留，暂不在左侧主入口展示。
-- 定时任务页：已升级为 Hermes Cron 管理页，展示真实 job 列表、gateway 自动执行状态、下次执行、绑定工作区/Skill、最近输出，并支持新建、编辑、暂停/恢复、排队运行和删除。这个页面只解释“哪些任务会按时间执行”和“自动执行是否开启”；Cowork 后台保活属于系统设置，MCP 推荐日报属于 MCP 设置/市场，不再混在定时任务主页面里。
+- 定时任务页：已升级为 Hermes Cron 管理页，展示真实 job 列表、gateway 自动执行状态、下次执行、绑定工作区/Skill、最近输出，并支持新建、编辑、暂停/恢复、排队运行和删除。这个页面只解释“哪些任务会按时间执行”和“自动执行是否开启”；Cowork 后台保活属于系统设置，MCP 生态能力属于技能页 > MCP 服务，不再混在定时任务主页面里。
 - 工作区页：点击左侧工作区进入，展示该授权目录的文件管理、最近会话、最近产物和可执行入口；项目页/搜索页只作为高级管理和跨工作区检索入口。
 - 工作区第一阶段已落地：左侧工作区以目录树展示，工作区下挂活跃会话；点击工作区进入文件管理页，点击会话进入对话页；“授权文件夹”通过本机 API 调 macOS Finder 选择目录，不再展示手动路径输入表单。
 - 工作区第二阶段已落地：后端新增目录树、重命名、重新授权和移除工作区 API；文件管理页接入面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送。移除工作区只删除 Cowork 记录和该工作区会话索引，不删除真实文件；`.DS_Store`、`.gitkeep` 等系统占位文件默认不展示。
@@ -1088,7 +1084,7 @@ HC_EVENT\t
 - 文件预览布局稳定性已修正：右侧预览打开时会自动保证预览列的最小可用宽度，`app-shell`、中间工作区、右侧 inspector 和预览面板统一锁定在视口高度内滚动，避免外层页面和预览内层同时滚动导致出界、底部抖动或宽度跳动。
 - 右侧任务上下文：默认顺序固定为任务拆解、任务产出物、上下文与资源。任务拆解不能写死固定五步，只能展示产品级计划：少量、面向用户目标、能表达“先做什么、再做什么、交付什么”的步骤。Hermes `todo` 如果只是运行清单（例如读取文件、调用工具、检索资料、整理结果，或超过 6 步的操作流），必须放到对话区过程流，不进入任务拆解。Hermes 未暴露产品级拆解时，任务拆解显示空态，不能再从 thinking/status/tool/artifact/complete 事件推导假步骤。工具调用、网页、文件、Skill 归入“上下文与资源”或过程记录，不污染任务拆解。Plan、ReAct、Reflection、Result 只作为每步后面的中文小标签（计划/行动/校验/结果），不能在顶部铺成静态模式条；表情化 thinking、后台心跳、`The user is`、`reasoning.available`、`Hermes 已返回最终结果` 等原始事件不能作为用户可见步骤或说明。
 - 左下角本机偏好菜单：点击 Lucas 弹出本机菜单，可切换语言展示项、循环切换主题、进入设置弹窗；点击菜单外空白区域会关闭。
-- 设置弹窗：包含本机、通用、外观、MCP、模型、对话流、外部应用授权、运行环境、命令、规则、关于等分类；外观页是主题后台，负责主题模式、强调色、浅色背景/前景、字体、字号、半透明侧栏和字体平滑；运行环境页展示 Cowork 本机后端和 Hermes 官方后台状态；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 每日推荐 / 云端”四个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台、推荐日报和未来云端配置。
+- 设置弹窗：包含本机、通用、外观、MCP、模型、对话流、外部应用授权、运行环境、命令、规则、关于等分类；外观页是主题后台，负责主题模式、强调色、浅色背景/前景、字体、字号、半透明侧栏和字体平滑；运行环境页展示 Cowork 本机后端和 Hermes 官方后台状态；通用、模型、对话流、规则页已按录屏补齐基础控件和本地交互骨架。MCP 页拆成“本地服务 / Hermes Server / 云端”三个二级 Tab，分别承载服务管理、`hermes mcp serve` 控制台和未来云端配置。
 - 关于页新增 Hermes 后台更新区：读取本机 Hermes 版本、GitHub 最新 tag、Cowork 已验证基线、工作树状态和基础检查结果，先做升级风险判断；页面默认只展示升级结论、检查更新、运行复测和自动更新入口，版本路径、基础检查、升级建议、复测明细和命令输出全部收进折叠诊断区，避免后台信息铺满主界面。静态可见信息必须是用户可决策信息：当前无需更新且复测通过时显示“当前很好，无需操作”，本机仓库改动等维护信息只放在诊断详情；旧自动更新失败结果如果被新的成功复测覆盖，不再继续挂红色卡片。
 - 设置弹窗已补响应式与内部滚动规则：桌面下固定弹窗高度、面板独立滚动；窄窗口下侧栏折为顶部网格，模型/MCP/定时任务等卡片栅格自动降列，避免内容撑出屏幕。
 - 界面语言规范：Hermes Cowork 的按钮、标题、状态、表头、空状态和说明文案默认使用简体中文；GitHub、MCP、Hermes、OpenAI 等品牌/协议名、配置键、命令行片段和第三方返回内容可保留原文。
@@ -1358,20 +1354,20 @@ HC_EVENT\t
 `apps/web/src/features/settings/mcp.tsx`
 
 - MCP 设置 feature 模块，已从 `App.tsx` 抽离。
-- 负责“设置 > MCP”的本地服务、Hermes Server、每日推荐、云端四个 Tab，以及 MCP 市场、手动配置/编辑、服务详情、工具开关、MCP 服务摘要。
-- 后续修复“MCP 页面拥挤”“市场分类与推荐日报”“已安装 MCP 说明/图标/工具级开关”“Hermes mcp serve 诊断”等问题时，优先改这里和 `apps/api/src/mcp.ts`，不要在 `App.tsx` 里新增第二套 MCP UI。
+- 负责“设置 > MCP”的本地服务、Hermes Server、云端三个 Tab，以及 Hermes 原生添加/编辑、服务详情、工具开关、MCP 服务摘要。
+- 后续修复“MCP 页面拥挤”“已安装 MCP 说明/图标/工具级开关”“Hermes mcp serve 诊断”“OAuth login/preset 列表”等问题时，优先改这里和 `apps/api/src/mcp.ts`，不要在 `App.tsx` 里新增第二套 MCP UI。
 
 `apps/web/src/features/settings/useMcpState.ts`
 
 - MCP 设置数据和动作 hook，已从 `App.tsx` 抽离。
-- 负责读取 Hermes MCP 配置、测试/启停/删除 MCP、手动新增和编辑、工具级选择、Hermes MCP serve 状态、每日推荐日报、后台服务安装状态。
-- 后续修复“MCP 状态刷新不一致”“市场安装后已安装列表不同步”“serve 状态误报”“推荐日报后台开关异常”等问题时，优先检查这里和 `apps/api/src/mcp.ts`。
+- 负责读取 Hermes MCP 配置、测试/启停/删除 MCP、原生新增和编辑、工具级选择、Hermes MCP serve 状态。
+- 后续修复“MCP 状态刷新不一致”“原生添加后已安装列表不同步”“serve 状态误报”“OAuth/Header/preset 配置异常”等问题时，优先检查这里和 `apps/api/src/mcp.ts`。
 
 `apps/web/src/features/settings/mcpApi.ts`
 
 - MCP 设置 API service，已从 `apps/web/src/lib/api.ts` 抽离。
-- 负责 Hermes MCP 配置读取、市场搜索/安装、推荐日报、后台常驻服务、手动新增/编辑、工具选择、serve 启停、测试、删除和启停写入。
-- 后续扩展“市场分类”“每日推荐权限开关”“云端 MCP”“工具级策略”等能力时，先在这里确认 API 调用边界，再由 `useMcpState.ts` / `mcp.tsx` 消费。
+- 负责 Hermes MCP 配置读取、原生新增/编辑、工具选择、serve 启停、测试、删除和启停写入。
+- 后续扩展“官方 MCP 生态/Hub”“云端 MCP”“工具级策略”等能力时，先在这里确认 API 调用边界，再由 `useMcpState.ts` / `mcp.tsx` 消费。
 
 `apps/web/src/features/settings/SettingsModal.tsx`
 
@@ -1571,15 +1567,10 @@ GET /api/hermes/update-status
 POST /api/hermes/compatibility-test
 POST /api/hermes/update
 GET /api/hermes/mcp
-GET /api/hermes/mcp/marketplace?q=...
-GET /api/hermes/mcp/recommendations
 GET /api/hermes/mcp/serve
 POST /api/hermes/mcp/:serverId/test
 POST /api/hermes/mcp/:serverId/enabled
 POST /api/hermes/mcp/manual
-POST /api/hermes/mcp/install
-POST /api/hermes/mcp/recommendations/refresh
-POST /api/hermes/mcp/recommendations/refresh-ai
 POST /api/hermes/mcp/serve/start
 POST /api/hermes/mcp/serve/stop
 PATCH /api/hermes/mcp/:serverId
@@ -1684,19 +1675,18 @@ POST /api/models/fallbacks
 - 备用模型页覆盖 Hermes `fallback_providers`：只列出已配置且不是当前 Provider 的候选，用户开关后写回 Hermes 配置；空状态会提示先去凭据页确认服务是否可用。
 - 右侧参考信息已从静态展示改为任务派生信息。
 - 左侧工作区规划已回正：授权目录必须作为左侧目录树存在，工作区下展示该目录内的工作会话；点击工作区进入文件管理页，跨工作区搜索和归档仍放在搜索/高级页面。
-- 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：job 列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；同时展示 gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 `BackgroundServiceStatus` 或 `HermesMcpRecommendations`，避免把后台服务和 MCP 市场推荐误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
+- 定时任务页不再是静态占位，已升级为 Hermes Cron 真实管理入口：job 列表优先读取 Hermes 官方 Dashboard `/api/cron/jobs`，不可用时回退本机配置；同时展示 gateway 状态和输出目录，支持 job 新建、编辑、暂停/恢复、排队运行和删除。页面边界已收敛为 Hermes Cron 本身，不再展示 Cowork 后台服务或 MCP 推荐数据，避免把系统维护项误认为用户创建的定时任务。调度页不再是静态占位，已根据 MCP/skills 派生当前可调用能力。
 - 官方 Dashboard adapter 第一阶段已接入：Cowork 后端可启动/探测 `hermes dashboard --no-open`，读取本机会话 token，并代理官方只读接口 `status / skills / toolsets / cron jobs / sessions / config / env / model info`；设置 > 运行环境已前端化官方后台状态和启动入口。Cron 和 Skills 已优先消费官方结构化真源，调度页已读取官方 Toolsets，后续继续把写入类能力逐项迁移到官方接口。
 - 账户菜单与设置弹窗：左下角 Lucas 可展开菜单，并打开多分类设置页；通用/MCP/模型/对话流/规则已具备截图中的主要行控件、开关、选择器、空状态和二级添加模型弹窗。
 - MCP 设置页已改为读取 Hermes 的真实 MCP 配置；开关会写回 Hermes `config.yaml` 的 `enabled` 字段。
-- MCP 设置页已从单页堆叠整理为二级 Tab：本地服务、Hermes Server、每日推荐、云端；设置弹窗改成固定高度和内部滚动，避免长内容撑出屏幕。
+- MCP 设置页已从单页堆叠整理为二级 Tab：本地服务、Hermes Server、云端；设置弹窗改成固定高度和内部滚动，避免长内容撑出屏幕。
 - MCP 服务行支持展开查看启动参数、环境变量名、工具选择模式，并可点击“测试”调用 Hermes 原生命令验证连接和工具发现。
 - MCP 详情支持工具级开关：测试发现工具后，可逐个启用/停用并写回 Hermes `tools.include`；全部启用时会移除工具筛选配置。
 - MCP 设置页新增 “Hermes 作为 MCP Server” 控制台：覆盖 `hermes mcp serve -v` 的启动、停止、状态和最近日志查看。
-- MCP 添加入口已拆成“从市场添加 / 手动配置”；“从市场添加”已接入 GitHub 搜索和市场弹窗，支持把带有明确启动命令的候选安装到 Hermes，安装后自动刷新列表并展示测试结果。
+- MCP 添加入口已收敛为 Hermes 原生添加：支持 stdio、HTTP/SSE、preset、OAuth、Header、环境变量和参数，安装后自动刷新列表并展示测试结果。
 - MCP 服务行支持编辑和删除；编辑会自动备份 Hermes 配置，保留隐藏环境变量，保存后自动测试；展开详情后，测试结果会展示发现的工具列表。
 - MCP 手动配置已补齐 Hermes `mcp add` 的高级入口：可填写 preset，可为 HTTP/SSE 服务选择无认证、OAuth 或 Header；已安装服务详情会展示认证方式和 Header 名称，但不读取 Header 值。
-- MCP 设置页新增“每日 MCP 推荐日报”：只展示日报摘要、手动生成入口和后台权限开关；推荐的 MCP 候选统一进入 MCP 市场展示。
-- MCP 市场新增“每日推荐 / 搜索市场”切换；每日推荐内容来自推荐日报，搜索市场仍走 GitHub 搜索。
+- MCP 非原生市场、GitHub 搜索安装、每日推荐日报和独立推荐 LaunchAgent 已取消；后续只接 Hermes 官方 MCP 生态能力，不再维护第二套 Cowork 市场数据。
 - 左侧任务区已从“最近任务”风格升级为“工作区目录 + 会话”结构；最近任务不再作为侧栏重复区，工作区会话树承担主要会话入口。
 - 左侧栏工作区已经改为工作区目录行：点击进入文件管理页，行内菜单承载打开目录、重命名、重新授权和移除工作区。
 - 工作区管理第二阶段已补齐：后端支持工作区目录树读取、重命名、重新授权和移除；前端文件管理页支持面包屑、当前目录搜索、文件夹进入、文件预览、Finder 定位和作为上下文发送，并隐藏 `.DS_Store`、`.gitkeep` 等无决策价值文件。

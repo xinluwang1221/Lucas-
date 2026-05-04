@@ -5,26 +5,18 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { dataDir, hermesAgentDir, hermesBin } from './paths.js'
 import {
   HermesMcpConfig,
-  HermesMcpCategoryId,
-  HermesMcpInstallRequest,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
-  HermesMcpMarketplaceCandidate,
-  HermesMcpMarketplaceResponse,
-  HermesMcpRecommendationGroup,
-  HermesMcpRecommendations,
   HermesMcpServer,
   HermesMcpServeLogEntry,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesMcpToolSelectionRequest,
   HermesMcpToolSelectionResult,
-  HermesMcpUpdateResult,
-  Task
+  HermesMcpUpdateResult
 } from './types.js'
 
 const hermesConfigPath = '/Users/lucas/.hermes/config.yaml'
-const recommendationsPath = path.join(dataDir, 'mcp-recommendations.json')
 const serveCommand = [hermesBin, 'mcp', 'serve', '-v']
 let mcpServeProcess: ChildProcessWithoutNullStreams | null = null
 let mcpServeStartedAt: string | undefined
@@ -43,34 +35,6 @@ type RawMcpServer = {
   enabled?: boolean
   includeTools?: string[]
   excludeTools?: string[]
-}
-
-type GitHubRepo = {
-  id: number
-  name: string
-  full_name: string
-  html_url: string
-  description?: string | null
-  stargazers_count?: number
-  language?: string | null
-  updated_at?: string
-  topics?: string[]
-  owner?: {
-    avatar_url?: string
-  }
-}
-
-const mcpCategories: Record<HermesMcpCategoryId, { label: string; description: string }> = {
-  file: { label: '文件与文档', description: '文件管理、目录检索、文档读取、格式转换。' },
-  browser: { label: '浏览器自动化', description: '网页操作、截图、表单填写、前端测试。' },
-  data: { label: '数据分析', description: 'CSV、Excel、数据库和业务分析。' },
-  office: { label: '办公协作', description: '飞书、邮件、日历、审批、云文档等工作流。' },
-  research: { label: '网页调研', description: '搜索、抓取、网页阅读、来源整理。' },
-  vision: { label: '视觉理解', description: '图片、截图、OCR、视觉素材识别。' },
-  memory: { label: '记忆知识库', description: '长期记忆、知识库、向量检索和上下文管理。' },
-  dev: { label: '研发协作', description: 'GitHub、代码仓库、Issue、CI 和开发工具。' },
-  automation: { label: '本机自动化', description: 'macOS、快捷指令、终端命令和系统工具。' },
-  other: { label: '其他扩展', description: '尚未明确分类，但可能有用的 MCP 能力。' }
 }
 
 export function readHermesMcpConfig(): HermesMcpConfig {
@@ -109,58 +73,6 @@ export function setHermesMcpServerEnabled(serverId: string, enabled: boolean): H
   backupHermesConfig(raw)
   fs.writeFileSync(hermesConfigPath, nextLines.join('\n'), 'utf8')
   return readHermesMcpConfig()
-}
-
-export function installHermesMcpServer(request: HermesMcpInstallRequest): Promise<HermesMcpInstallResult> {
-  const installName = normalizeServerId(request.installName)
-  const command = normalizeCommandName(request.suggestedCommand)
-  const args = normalizeCommandArgs(request.suggestedArgs)
-
-  if (!installName) {
-    return Promise.reject(new Error('MCP 服务名称不合法'))
-  }
-  if (!command) {
-    return Promise.reject(new Error('缺少可执行的启动命令，当前候选需要手动配置'))
-  }
-  if (readHermesMcpConfig().servers.some((server) => server.id === installName)) {
-    return Promise.reject(new Error(`MCP 服务已存在：${installName}`))
-  }
-
-  const raw = fs.readFileSync(hermesConfigPath, 'utf8')
-  const backupPath = backupHermesConfig(raw)
-  const installArgs = ['mcp', 'add', installName, '--command', command]
-  if (args.length) {
-    installArgs.push('--args', ...args)
-  }
-
-  return new Promise((resolve, reject) => {
-    execFile(hermesBin, installArgs, { cwd: hermesAgentDir, timeout: 120000 }, async (error, stdout, stderr) => {
-      const output = redactSecrets(stripAnsi(`${stdout}\n${stderr}`.trim()))
-      if (error) {
-        reject(new Error(redactSecrets(stripAnsi(`${error.message}\n${stderr}`.trim())) || 'Hermes MCP 安装失败'))
-        return
-      }
-
-      const config = readHermesMcpConfig()
-      if (!config.servers.some((server) => server.id === installName)) {
-        reject(new Error('Hermes 命令已完成，但配置中没有发现新增 MCP 服务'))
-        return
-      }
-
-      const testResult = await testHermesMcpServer(installName)
-      resolve({
-        ok: true,
-        installName,
-        command,
-        args,
-        output,
-        backupPath,
-        config,
-        testResult,
-        installedAt: new Date().toISOString()
-      })
-    })
-  })
 }
 
 export function configureHermesMcpServer(request: HermesMcpManualConfigRequest): Promise<HermesMcpInstallResult> {
@@ -637,120 +549,6 @@ export function testHermesMcpServer(serverId: string): Promise<HermesMcpTestResu
   })
 }
 
-export async function searchHermesMcpMarketplace(query = ''): Promise<HermesMcpMarketplaceResponse> {
-  const normalizedQuery = query.trim().slice(0, 80)
-  const searchTerms = normalizedQuery
-    ? `${normalizedQuery} mcp server`
-    : 'mcp server Model Context Protocol'
-  const url = new URL('https://api.github.com/search/repositories')
-  url.searchParams.set('q', `${searchTerms} in:name,description,readme`)
-  url.searchParams.set('sort', 'stars')
-  url.searchParams.set('order', 'desc')
-  url.searchParams.set('per_page', '16')
-
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'Hermes-Cowork'
-    }
-  })
-
-  if (!response.ok) {
-    throw new Error(`GitHub marketplace search failed: ${response.status}`)
-  }
-
-  const body = await response.json() as { items?: GitHubRepo[] }
-  const candidates = (body.items ?? [])
-    .filter((repo) => looksLikeMcpRepo(repo))
-    .map(toMarketplaceCandidate)
-    .slice(0, 12)
-
-  return {
-    query: normalizedQuery,
-    source: 'github',
-    candidates,
-    updatedAt: new Date().toISOString()
-  }
-}
-
-export function readHermesMcpRecommendations(): HermesMcpRecommendations {
-  if (fs.existsSync(recommendationsPath)) {
-    return JSON.parse(fs.readFileSync(recommendationsPath, 'utf8')) as HermesMcpRecommendations
-  }
-  return emptyMcpRecommendations()
-}
-
-export async function refreshHermesMcpRecommendations(tasks: Task[]): Promise<HermesMcpRecommendations> {
-  const signals = buildMcpRecommendationSignals(tasks)
-  return buildMcpRecommendationsFromSignals(signals, false)
-}
-
-export async function refreshHermesMcpRecommendationsWithHermes(tasks: Task[]): Promise<HermesMcpRecommendations> {
-  const ruleSignals = buildMcpRecommendationSignals(tasks)
-  const aiSignals = await buildHermesMcpRecommendationSignals(tasks).catch(() => null)
-  const signals = aiSignals
-    ? {
-        taskCount: ruleSignals.taskCount,
-        keywords: [...new Set([...ruleSignals.keywords, ...aiSignals.keywords])].slice(0, 12),
-        blockers: [...new Set([...ruleSignals.blockers, ...aiSignals.blockers])].slice(0, 12),
-        queries: [...new Set([...aiSignals.queries, ...ruleSignals.queries])].slice(0, 10),
-        aiSummary: aiSignals.summary
-      }
-    : ruleSignals
-  return buildMcpRecommendationsFromSignals(signals, Boolean(aiSignals), aiSignals?.summary)
-}
-
-async function buildMcpRecommendationsFromSignals(
-  signals: ReturnType<typeof buildMcpRecommendationSignals> & { aiSummary?: string },
-  aiUsed: boolean,
-  aiSummary?: string
-) {
-  const queryPlan = [...new Set([...signals.queries, ...defaultMcpRecommendationQueries()])].slice(0, 7)
-  const candidateMap = new Map<string, HermesMcpMarketplaceCandidate>()
-
-  for (const query of queryPlan) {
-    try {
-      const response = await searchHermesMcpMarketplace(query)
-      for (const candidate of response.candidates) {
-        if (!candidateMap.has(candidate.repo)) candidateMap.set(candidate.repo, candidate)
-      }
-    } catch {
-      // Keep recommendations useful even if one GitHub query fails.
-    }
-  }
-
-  const recommendations: HermesMcpRecommendations = {
-    generatedAt: new Date().toISOString(),
-    nextRunAt: nextRecommendationRunAt(),
-    sourceSummary: `分析最近 ${signals.taskCount} 个任务，提取 ${signals.keywords.length} 个需求关键词。`,
-    keywords: signals.keywords,
-    blockers: signals.blockers,
-    categories: groupMcpCandidates([...candidateMap.values()]),
-    aiUsed,
-    aiSummary
-  }
-
-  fs.mkdirSync(dataDir, { recursive: true })
-  fs.writeFileSync(recommendationsPath, JSON.stringify(recommendations, null, 2), 'utf8')
-  return recommendations
-}
-
-export function startMcpRecommendationScheduler(getTasks: () => Task[]) {
-  let running = false
-  setInterval(() => {
-    const now = new Date()
-    if (now.getHours() !== 0 || now.getMinutes() < 10 || now.getMinutes() > 25) return
-    const stamp = now.toISOString().slice(0, 10)
-    const previous = readHermesMcpRecommendations()
-    if (previous.generatedAt?.slice(0, 10) === stamp) return
-    if (running) return
-    running = true
-    void refreshHermesMcpRecommendations(getTasks()).finally(() => {
-      running = false
-    })
-  }, 5 * 60 * 1000)
-}
-
 function normalizeServerId(serverId: string) {
   const safeServerId = serverId.trim()
   return /^[A-Za-z0-9._-]{1,120}$/.test(safeServerId) ? safeServerId : ''
@@ -1021,188 +819,6 @@ function parseToolList(value: string) {
     .slice(0, 80)
 }
 
-function looksLikeMcpRepo(repo: GitHubRepo) {
-  const text = `${repo.name} ${repo.full_name} ${repo.description ?? ''} ${(repo.topics ?? []).join(' ')}`.toLowerCase()
-  return text.includes('mcp') || text.includes('model context protocol')
-}
-
-function classifyMcpText(value: string): HermesMcpCategoryId {
-  const text = value.toLowerCase()
-  if (text.includes('filesystem') || text.includes('file system') || text.includes('drive') || text.includes('pdf') || text.includes('document')) return 'file'
-  if (text.includes('browser') || text.includes('playwright') || text.includes('puppeteer') || text.includes('chrome')) return 'browser'
-  if (text.includes('database') || text.includes('sql') || text.includes('sqlite') || text.includes('postgres') || text.includes('csv') || text.includes('excel') || text.includes('spreadsheet')) return 'data'
-  if (text.includes('lark') || text.includes('feishu') || text.includes('slack') || text.includes('mail') || text.includes('calendar') || text.includes('notion')) return 'office'
-  if (text.includes('search') || text.includes('crawl') || text.includes('scrape') || text.includes('research') || text.includes('web')) return 'research'
-  if (text.includes('vision') || text.includes('image') || text.includes('ocr') || text.includes('screenshot')) return 'vision'
-  if (text.includes('memory') || text.includes('knowledge') || text.includes('vector') || text.includes('rag')) return 'memory'
-  if (text.includes('github') || text.includes('gitlab') || text.includes('git') || text.includes('issue') || text.includes('pull request')) return 'dev'
-  if (text.includes('shortcut') || text.includes('macos') || text.includes('terminal') || text.includes('shell') || text.includes('automation')) return 'automation'
-  return 'other'
-}
-
-function groupMcpCandidates(candidates: HermesMcpMarketplaceCandidate[]): HermesMcpRecommendationGroup[] {
-  return (Object.keys(mcpCategories) as HermesMcpCategoryId[])
-    .map((id) => ({
-      id,
-      label: mcpCategories[id].label,
-      description: mcpCategories[id].description,
-      candidates: candidates
-        .filter((candidate) => candidate.category === id)
-        .sort((left, right) => right.stars - left.stars)
-        .slice(0, 8)
-    }))
-    .filter((group) => group.candidates.length > 0)
-}
-
-function emptyMcpRecommendations(): HermesMcpRecommendations {
-  return {
-    generatedAt: '',
-    nextRunAt: nextRecommendationRunAt(),
-    sourceSummary: '还没有生成每日 MCP 推荐。',
-    keywords: [],
-    blockers: [],
-    categories: []
-  }
-}
-
-function nextRecommendationRunAt() {
-  const next = new Date()
-  next.setHours(24, 10, 0, 0)
-  return next.toISOString()
-}
-
-function defaultMcpRecommendationQueries() {
-  return [
-    'filesystem mcp server',
-    'browser automation mcp server',
-    'data analysis csv excel mcp server',
-    'web search research mcp server',
-    'lark feishu office mcp server'
-  ]
-}
-
-function buildMcpRecommendationSignals(tasks: Task[]) {
-  const since = Date.now() - 36 * 60 * 60 * 1000
-  const recentTasks = tasks.filter((task) => new Date(task.updatedAt || task.createdAt).getTime() >= since)
-  const text = recentTasks
-    .map((task) => [
-      task.title,
-      task.prompt,
-      task.error,
-      task.stderr,
-      ...(task.tags ?? []),
-      ...(task.events ?? []).map((event) => JSON.stringify(event).slice(0, 500))
-    ].filter(Boolean).join(' '))
-    .join('\n')
-    .toLowerCase()
-
-  const keywordRules: Array<[string, RegExp, string]> = [
-    ['文件整理', /文件|目录|folder|file|pdf|word|markdown|doc|整理/, 'filesystem document mcp server'],
-    ['数据分析', /数据|csv|excel|xlsx|表格|sql|sqlite|database|analysis/, 'data analysis csv excel database mcp server'],
-    ['飞书办公', /飞书|lark|feishu|审批|日历|邮件|文档|base|多维表格/, 'lark feishu office mcp server'],
-    ['网页调研', /网页|调研|搜索|github|search|research|crawl|scrape/, 'web search research mcp server'],
-    ['浏览器自动化', /浏览器|点击|页面|截图|playwright|chrome|browser/, 'browser automation playwright mcp server'],
-    ['视觉识别', /图片|截图|ocr|vision|image|识别/, 'vision ocr image mcp server'],
-    ['代码协作', /代码|仓库|issue|pull request|github|gitlab|repo/, 'github repository mcp server'],
-    ['知识库记忆', /记忆|知识库|向量|检索|memory|knowledge|rag/, 'memory knowledge base mcp server']
-  ]
-
-  const matched = keywordRules.filter(([, pattern]) => pattern.test(text))
-  const blockers = extractBlockers(recentTasks)
-
-  return {
-    taskCount: recentTasks.length,
-    keywords: matched.map(([label]) => label),
-    blockers,
-    queries: matched.map(([, , query]) => query)
-  }
-}
-
-async function buildHermesMcpRecommendationSignals(tasks: Task[]) {
-  const recentTasks = tasks
-    .slice()
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-    .slice(0, 16)
-  const compact = recentTasks.map((task) => ({
-    title: task.title,
-    status: task.status,
-    prompt: task.prompt.slice(0, 500),
-    tags: task.tags ?? [],
-    error: task.error ?? '',
-    stderr: task.stderr?.slice(0, 500) ?? '',
-    events: (task.events ?? [])
-      .filter((event) => event.isError || event.type?.toLowerCase().includes('error') || event.type?.toLowerCase().includes('tool'))
-      .slice(-8)
-      .map((event) => ({
-        type: event.type,
-        name: event.name,
-        message: event.message,
-        error: event.error
-      }))
-  }))
-
-  const prompt = [
-    '你是 Hermes Cowork 的本机能力推荐分析器。',
-    '请根据下面的任务记录、失败信息、工具调用和用户需求，判断我还缺哪些 MCP 能力。',
-    '你需要输出严格 JSON，不要输出 Markdown，不要解释。',
-    'JSON 结构：{"summary":"一句中文总结","keywords":["中文需求词"],"blockers":["中文卡点"],"queries":["用于 GitHub 搜索 MCP server 的英文查询词"]}',
-    '要求：queries 每条都包含 mcp server；优先覆盖文件、数据、飞书办公、网页调研、浏览器自动化、视觉、知识库、研发协作。',
-    `任务记录：${JSON.stringify(compact)}`
-  ].join('\n')
-
-  const result = await new Promise<{ stdout: string; stderr: string; exitCode: number | null }>((resolve) => {
-    execFile(
-      hermesBin,
-      ['chat', '--quiet', '--source', 'hermes-cowork-background', '--max-turns', '8', '-q', prompt],
-      { cwd: hermesAgentDir, timeout: 180000 },
-      (error, stdout, stderr) => {
-        resolve({ stdout: stripAnsi(stdout), stderr: stripAnsi(stderr), exitCode: error ? 1 : 0 })
-      }
-    )
-  })
-
-  const parsed = parseHermesJsonObject(result.stdout || result.stderr)
-  return {
-    summary: stringArrayOrEmpty([parsed.summary])[0] ?? '',
-    keywords: stringArrayOrEmpty(parsed.keywords).slice(0, 12),
-    blockers: stringArrayOrEmpty(parsed.blockers).slice(0, 12),
-    queries: stringArrayOrEmpty(parsed.queries)
-      .map((query) => query.toLowerCase().includes('mcp') ? query : `${query} mcp server`)
-      .slice(0, 10)
-  }
-}
-
-function parseHermesJsonObject(value: string) {
-  const cleaned = value.replace(/```json|```/g, '').trim()
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('Hermes 没有返回可解析的 JSON')
-  }
-  return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>
-}
-
-function stringArrayOrEmpty(value: unknown) {
-  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean)
-  if (typeof value === 'string' && value.trim()) return [value.trim()]
-  return []
-}
-
-function extractBlockers(tasks: Task[]) {
-  const blockers = tasks
-    .flatMap((task) => [
-      task.error,
-      task.stderr,
-      ...(task.events ?? [])
-        .filter((event) => event.isError || event.type?.toLowerCase().includes('error'))
-        .map((event) => String(event.error ?? event.message ?? event.type))
-    ])
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.replace(/\s+/g, ' ').trim().slice(0, 120))
-
-  return [...new Set(blockers)].slice(0, 8)
-}
-
 function inferMcpMetadata(name: string, server: RawMcpServer) {
   const haystack = `${name} ${server.command ?? ''} ${server.args.join(' ')} ${server.url ?? ''}`.toLowerCase()
   if (haystack.includes('playwright')) {
@@ -1281,96 +897,6 @@ function inferMcpMetadata(name: string, server: RawMcpServer) {
     description: `${server.command ? `通过 ${server.command} 启动的` : '已配置的'}本机 MCP 服务，为 Hermes 提供扩展工具能力。`,
     iconUrl: makeMcpIconDataUrl(mcpInitials(name), '#4a86ff', '#eef4ff')
   }
-}
-
-function inferMarketplaceMetadata(repo: GitHubRepo, sourceDescription: string, npmPackage = '') {
-  const text = `${repo.name} ${repo.full_name} ${sourceDescription} ${npmPackage} ${(repo.topics ?? []).join(' ')}`.toLowerCase()
-  if (text.includes('filesystem') || text.includes('file system')) {
-    return {
-      description: '文件系统 MCP：让 Hermes 读取、搜索和管理授权目录内的本地文件。',
-      iconUrl: makeMcpIconDataUrl('FS', '#2f7d62', '#e9fff5')
-    }
-  }
-  if (text.includes('browser') || text.includes('playwright') || text.includes('puppeteer')) {
-    return {
-      description: '浏览器 MCP：让 Hermes 操作网页、抓取页面信息、截图并执行自动化测试。',
-      iconUrl: makeMcpIconDataUrl('BR', '#4a86ff', '#eef4ff')
-    }
-  }
-  if (text.includes('database') || text.includes('sql') || text.includes('sqlite') || text.includes('postgres')) {
-    return {
-      description: '数据库 MCP：让 Hermes 连接数据源、读取表结构并执行查询分析。',
-      iconUrl: makeMcpIconDataUrl('DB', '#7a5a32', '#fff3dd')
-    }
-  }
-  if (text.includes('memory') || text.includes('knowledge')) {
-    return {
-      description: '记忆与知识库 MCP：保存长期上下文、检索知识并辅助持续协作。',
-      iconUrl: makeMcpIconDataUrl('KB', '#6d5df3', '#f0edff')
-    }
-  }
-  if (text.includes('slack') || text.includes('lark') || text.includes('feishu') || text.includes('mail')) {
-    return {
-      description: '办公协作 MCP：连接消息、文档、日历或邮件系统，支撑日常工作流。',
-      iconUrl: makeMcpIconDataUrl('OA', '#22b1c8', '#e7fbff')
-    }
-  }
-  if (text.includes('github') || text.includes('gitlab') || text.includes('git')) {
-    return {
-      description: '代码协作 MCP：连接代码仓库、Issue 和变更记录，辅助研发工作。',
-      iconUrl: makeMcpIconDataUrl('GH', '#24292f', '#eef1f4')
-    }
-  }
-  return {
-    description: 'MCP 扩展能力候选：可为 Hermes 增加新的工具连接，安装前需要确认启动命令和权限范围。',
-    iconUrl: makeMcpIconDataUrl(mcpInitials(repo.name), '#4a86ff', '#eef4ff')
-  }
-}
-
-function toMarketplaceCandidate(repo: GitHubRepo): HermesMcpMarketplaceCandidate {
-  const installName = sanitizeInstallName(repo.name)
-  const npmPackage = inferNpmPackage(repo)
-  const confidence = npmPackage ? 'medium' : 'low'
-  const sourceDescription = repo.description ?? 'GitHub 上的 MCP 服务候选项目，需要确认安装命令后再写入 Hermes。'
-  const metadata = inferMarketplaceMetadata(repo, sourceDescription, npmPackage)
-  const category = classifyMcpText(`${repo.name} ${repo.full_name} ${sourceDescription} ${npmPackage} ${(repo.topics ?? []).join(' ')}`)
-  return {
-    id: String(repo.id),
-    name: repo.name,
-    repo: repo.full_name,
-    url: repo.html_url,
-    description: metadata.description,
-    sourceDescription,
-    iconUrl: repo.owner?.avatar_url ?? metadata.iconUrl,
-    category,
-    categoryLabel: mcpCategories[category].label,
-    stars: repo.stargazers_count ?? 0,
-    language: repo.language ?? 'unknown',
-    updatedAt: repo.updated_at ?? '',
-    installName,
-    suggestedCommand: npmPackage ? 'npx' : '',
-    suggestedArgs: npmPackage ? ['-y', npmPackage] : [],
-    confidence
-  }
-}
-
-function inferNpmPackage(repo: GitHubRepo) {
-  const name = repo.name.toLowerCase()
-  if (repo.full_name === 'modelcontextprotocol/servers') return '@modelcontextprotocol/server-filesystem'
-  if (name.startsWith('server-')) return `@modelcontextprotocol/${name}`
-  if (name.startsWith('mcp-server-')) return repo.name
-  if (name.endsWith('-mcp-server')) return repo.name
-  return ''
-}
-
-function sanitizeInstallName(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/^mcp-server-/, '')
-    .replace(/-mcp-server$/, '')
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80) || 'mcp-server'
 }
 
 function mcpInitials(name: string) {

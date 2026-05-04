@@ -1,57 +1,41 @@
 import {
-  Bot,
   CheckCircle2,
   ChevronDown,
-  ExternalLink,
   Info,
   Loader2,
   Play,
   Plug,
   Plus,
   RefreshCw,
-  Search,
-  Shield,
   Square,
   Trash2,
   Wrench,
   XCircle
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
-  installHermesMcpServer,
-  searchHermesMcpMarketplace
-} from './mcpApi'
-import {
-  type BackgroundServiceStatus,
   type HermesMcpConfig,
-  type HermesMcpInstallResult,
   type HermesMcpManualConfigRequest,
-  type HermesMcpMarketplaceCandidate,
-  type HermesMcpRecommendations,
   type HermesMcpServeStatus,
   type HermesMcpTestResult
 } from '../../lib/api'
 
-export type McpScope = 'local' | 'serve' | 'recommendations' | 'cloud'
+export type McpScope = 'local' | 'serve' | 'cloud'
 
 export function ConnectorsView({
   connectors,
-  recommendations,
   configPath,
   error,
   onOpenSettings,
-  onOpenMarketplace
+  onOpenNativeAdd
 }: {
   connectors: HermesMcpConfig['servers']
-  recommendations?: HermesMcpRecommendations | null
   configPath?: string
   error: string | null
   onOpenSettings: () => void
-  onOpenMarketplace?: () => void
+  onOpenNativeAdd: () => void
 }) {
   const enabledCount = connectors.filter((connector) => connector.enabled).length
-  const recommendationCount = recommendations?.categories.reduce((total, category) => total + category.candidates.length, 0) ?? 0
-  const recommendationLabels = recommendations?.categories.filter((category) => category.candidates.length).map((category) => category.label).slice(0, 3) ?? []
 
   return (
     <div className="connectors-panel">
@@ -73,21 +57,17 @@ export function ConnectorsView({
       <div className="mcp-ecosystem-panel">
         <div>
           <span className="section-kicker">Hermes 原生生态</span>
-          <strong>MCP 市场与服务发现</strong>
-          <p>这里聚合 Hermes MCP 配置、市场推荐和工具级能力。安装与测试仍写回 Hermes MCP 配置，不在 Cowork 里维护第二套服务清单。</p>
+          <strong>原生 MCP 管理</strong>
+          <p>这里直接读取 Hermes MCP 配置。新增服务会走 `hermes mcp add`，测试、工具开关和删除也写回 Hermes，不再维护 Cowork 自建市场。</p>
         </div>
         <div className="mcp-ecosystem-grid">
           <span><b>{connectors.length}</b> 本机服务</span>
           <span><b>{enabledCount}</b> 已启用</span>
-          <span><b>{recommendationCount || '待生成'}</b> 市场推荐</span>
+          <span><b>{configPath ? '已连接' : '未连接'}</b> 配置文件</span>
         </div>
-        {recommendationLabels.length ? (
-          <p className="mcp-ecosystem-copy">当前推荐方向：{recommendationLabels.join('、')}。</p>
-        ) : (
-          <p className="mcp-ecosystem-copy">还没有推荐日报时，可以先从市场搜索常用 MCP，或在设置里手动配置。</p>
-        )}
+        <p className="mcp-ecosystem-copy">官方入口包括 preset、stdio command、HTTP/SSE URL、OAuth/Header、env。需要安装新服务时，从这里打开原生添加表单。</p>
         <div className="mcp-ecosystem-actions">
-          <button className="settings-link-button" onClick={onOpenMarketplace}><Plus size={13} /> 从市场添加</button>
+          <button className="settings-link-button" onClick={onOpenNativeAdd}><Plus size={13} /> 添加 MCP</button>
           <button className="settings-link-button" onClick={onOpenSettings}>打开 MCP 管理</button>
         </div>
       </div>
@@ -95,7 +75,7 @@ export function ConnectorsView({
       {error && <div className="settings-error-line">{error}</div>}
 
       <div className="connector-list">
-        {!connectors.length && <p className="muted-copy">暂未读取到 MCP 服务。可以从市场添加，或在设置里手动配置。</p>}
+        {!connectors.length && <p className="muted-copy">暂未读取到 MCP 服务。可以用 Hermes 原生添加表单配置 preset、stdio 或 HTTP/SSE 服务。</p>}
         {connectors.map((connector) => (
           <article className={connector.enabled ? 'connector-card enabled' : 'connector-card'} key={connector.id}>
             <div className="connector-icon">
@@ -134,12 +114,6 @@ export function McpSettingsSection({
   mcpUpdatingId,
   mcpDeletingId,
   mcpToolUpdatingId,
-  mcpRecommendations,
-  mcpRecommendationsLoading,
-  mcpRecommendationsError,
-  backgroundStatus,
-  backgroundUpdating,
-  backgroundError,
   mcpServeStatus,
   mcpServeUpdating,
   mcpServeError,
@@ -150,10 +124,7 @@ export function McpSettingsSection({
   onEditMcpServer,
   onSetMcpToolSelection,
   onDeleteMcpServer,
-  onOpenMcpMarketplace,
   onOpenManualMcp,
-  onRefreshMcpRecommendationsWithAi,
-  onToggleBackgroundServices,
   onToggleMcpServe,
   onRefreshMcpServe
 }: {
@@ -165,12 +136,6 @@ export function McpSettingsSection({
   mcpUpdatingId: string | null
   mcpDeletingId: string | null
   mcpToolUpdatingId: string | null
-  mcpRecommendations: HermesMcpRecommendations | null
-  mcpRecommendationsLoading: boolean
-  mcpRecommendationsError: string | null
-  backgroundStatus: BackgroundServiceStatus | null
-  backgroundUpdating: boolean
-  backgroundError: string | null
   mcpServeStatus: HermesMcpServeStatus | null
   mcpServeUpdating: boolean
   mcpServeError: string | null
@@ -181,10 +146,7 @@ export function McpSettingsSection({
   onEditMcpServer: (server: HermesMcpConfig['servers'][number]) => void
   onSetMcpToolSelection: (serverId: string, mode: 'all' | 'include' | 'exclude', tools: string[]) => void
   onDeleteMcpServer: (serverId: string) => void
-  onOpenMcpMarketplace: () => void
   onOpenManualMcp: () => void
-  onRefreshMcpRecommendationsWithAi: () => void
-  onToggleBackgroundServices: (enabled: boolean) => void
   onToggleMcpServe: (enabled: boolean) => void
   onRefreshMcpServe: () => void
 }) {
@@ -196,7 +158,7 @@ export function McpSettingsSection({
       <h2>MCP</h2>
       <SettingsSubtabs
         value={mcpScope}
-        options={[['local', '本地服务'], ['serve', 'Hermes Server'], ['recommendations', '每日推荐'], ['cloud', '云端']]}
+        options={[['local', '本地服务'], ['serve', 'Hermes Server'], ['cloud', '云端']]}
         onChange={(value) => onMcpScopeChange(value as McpScope)}
       />
 
@@ -215,8 +177,7 @@ export function McpSettingsSection({
               <div className="mcp-add-menu">
                 <button className="dark-mini-button"><Plus size={14} /> 添加 <ChevronDown size={13} /></button>
                 <div className="mcp-add-popover">
-                  <button onClick={onOpenMcpMarketplace}>从市场添加</button>
-                  <button onClick={onOpenManualMcp}>手动配置</button>
+                  <button onClick={onOpenManualMcp}>Hermes 原生添加</button>
                 </div>
               </div>
             </div>
@@ -317,39 +278,6 @@ export function McpSettingsSection({
         </SettingsCard>
       )}
 
-      {mcpScope === 'recommendations' && (
-        <SettingsCard>
-          <div className="settings-card-header">
-            <div>
-              <strong>每日 MCP 推荐日报</strong>
-              <span>每天 00:10 后由 Hermes 复盘当天任务和卡点，推荐内容统一进入 MCP 市场。</span>
-            </div>
-            <div className="settings-card-actions">
-              <button className="dark-mini-button" onClick={onRefreshMcpRecommendationsWithAi} disabled={mcpRecommendationsLoading}>
-                {mcpRecommendationsLoading ? <Loader2 size={13} className="spin" /> : <Bot size={13} />}
-                生成日报
-              </button>
-            </div>
-          </div>
-          {mcpRecommendationsError && <div className="settings-error-line">{mcpRecommendationsError}</div>}
-          <div className="mcp-daily-report">
-            <div>
-              <strong>{mcpRecommendations?.generatedAt ? `日报 ${formatMaybeDate(mcpRecommendations.generatedAt)}` : '暂无推荐日报'}</strong>
-              <span>{mcpRecommendations?.aiSummary || mcpRecommendations?.sourceSummary || '生成后会在这里显示 Hermes 的复盘摘要。'}</span>
-            </div>
-            <button className="settings-link-button" onClick={onOpenMcpMarketplace}>去市场查看推荐</button>
-          </div>
-          <div className="mcp-daily-permission">
-            <div>
-              <strong>允许后台每日生成</strong>
-              <span>开启后，macOS 登录时启动 Hermes Cowork 后台，并在每天 00:10 调用 Hermes 生成推荐日报。</span>
-            </div>
-            <SettingsToggle checked={Boolean(backgroundStatus?.api.loaded && backgroundStatus.dailyMcp.loaded)} disabled={backgroundUpdating} onChange={onToggleBackgroundServices} />
-          </div>
-          {backgroundError && <div className="settings-error-line">{backgroundError}</div>}
-        </SettingsCard>
-      )}
-
       {mcpScope === 'cloud' && (
         <SettingsCard>
           <div className="settings-card-header">
@@ -361,204 +289,6 @@ export function McpSettingsSection({
           <div className="mcp-empty-state">云端 MCP 暂未接入。后续可以在这里管理云端服务、远程凭据和团队共享配置。</div>
         </SettingsCard>
       )}
-    </div>
-  )
-}
-
-export function McpMarketplaceModal({
-  onClose,
-  onInstalled,
-  recommendations
-}: {
-  onClose: () => void
-  onInstalled: (result: HermesMcpInstallResult) => void
-  recommendations: HermesMcpRecommendations | null
-}) {
-  const [query, setQuery] = useState('')
-  const [candidates, setCandidates] = useState<HermesMcpMarketplaceCandidate[]>([])
-  const [selected, setSelected] = useState<HermesMcpMarketplaceCandidate | null>(null)
-  const [marketMode, setMarketMode] = useState<'recommended' | 'search'>(recommendations?.categories.length ? 'recommended' : 'search')
-  const [isLoading, setIsLoading] = useState(false)
-  const [installingId, setInstallingId] = useState<string | null>(null)
-  const [installResult, setInstallResult] = useState<HermesMcpInstallResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const recommendedCandidates = useMemo(
-    () => (recommendations?.categories ?? []).flatMap((group) => group.candidates),
-    [recommendations]
-  )
-  const visibleCandidates = marketMode === 'recommended' ? recommendedCandidates : candidates
-
-  async function runSearch(nextQuery = query) {
-    setIsLoading(true)
-    setError(null)
-    setMarketMode('search')
-    try {
-      const response = await searchHermesMcpMarketplace(nextQuery)
-      setCandidates(response.candidates)
-      setSelected(response.candidates[0] ?? null)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      setCandidates([])
-      setSelected(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function handleInstall(candidate: HermesMcpMarketplaceCandidate) {
-    setInstallingId(candidate.id)
-    setError(null)
-    setInstallResult(null)
-    try {
-      const result = await installHermesMcpServer(candidate)
-      setInstallResult(result)
-      onInstalled(result)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setInstallingId(null)
-    }
-  }
-
-  useEffect(() => {
-    if (recommendedCandidates.length) {
-      setMarketMode('recommended')
-      setSelected(recommendedCandidates[0] ?? null)
-    } else {
-      void runSearch('')
-    }
-  }, [recommendedCandidates.length])
-
-  return (
-    <div className="mcp-marketplace-modal">
-      <div className="marketplace-head">
-        <div>
-          <h2>MCP 市场</h2>
-          <p>推荐内容来自每日 MCP 日报；也可以手动搜索 GitHub 上的 MCP 服务。</p>
-        </div>
-        <button className="settings-close inline" onClick={onClose} aria-label="关闭 MCP 市场">
-          <XCircle size={18} />
-        </button>
-      </div>
-      <div className="marketplace-tabs">
-        <button
-          className={marketMode === 'recommended' ? 'active' : ''}
-          disabled={!recommendedCandidates.length}
-          onClick={() => {
-            setMarketMode('recommended')
-            setSelected(recommendedCandidates[0] ?? null)
-          }}
-        >
-          每日推荐
-        </button>
-        <button
-          className={marketMode === 'search' ? 'active' : ''}
-          onClick={() => {
-            setMarketMode('search')
-            setSelected(candidates[0] ?? null)
-          }}
-        >
-          搜索市场
-        </button>
-      </div>
-      <form
-        className="marketplace-search"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void runSearch()
-        }}
-      >
-        <Search size={15} />
-        <input value={query} placeholder="搜索 GitHub MCP 服务" onChange={(event) => setQuery(event.target.value)} />
-        <button disabled={isLoading}>{isLoading ? <Loader2 size={14} className="spin" /> : '搜索'}</button>
-      </form>
-      {error && <div className="settings-error-line">{error}</div>}
-      <div className="marketplace-body">
-        <div className="marketplace-list">
-          {marketMode === 'recommended' && recommendations?.aiSummary && (
-            <div className="marketplace-daily-report">
-              <strong>推荐日报</strong>
-              <span>{recommendations.aiSummary}</span>
-            </div>
-          )}
-          {isLoading && <div className="mcp-empty-state">正在从 GitHub 搜索 MCP 服务...</div>}
-          {!isLoading && visibleCandidates.length === 0 && !error && (
-            <div className="mcp-empty-state">
-              {marketMode === 'recommended' ? '暂无每日推荐。请先在设置页生成日报。' : '没有找到匹配的 MCP 服务。'}
-            </div>
-          )}
-          {visibleCandidates.map((candidate) => (
-            <button
-              className={selected?.id === candidate.id ? 'marketplace-item active' : 'marketplace-item'}
-              key={candidate.id}
-              onClick={() => setSelected(candidate)}
-            >
-              <McpIcon name={candidate.name} iconUrl={candidate.iconUrl} />
-              <div>
-                <strong>{candidate.name}</strong>
-                <p>{candidate.description}</p>
-                <small>{candidate.categoryLabel} · {candidate.repo} · {languageLabel(candidate.language)} · {candidate.stars} 个星标</small>
-              </div>
-              <Plus size={15} />
-            </button>
-          ))}
-        </div>
-        <div className="marketplace-detail">
-          {selected ? (
-            <>
-              <div className="marketplace-detail-title">
-                <strong>{selected.name}</strong>
-                <a href={selected.url} target="_blank" rel="noreferrer">
-                  查看仓库
-                  <ExternalLink size={13} />
-                </a>
-              </div>
-              <p>{selected.description}</p>
-              <InfoGrid items={[
-                ['配置名', selected.installName],
-                ['语言', languageLabel(selected.language)],
-                ['星标', String(selected.stars)],
-                ['命令置信度', confidenceLabel(selected.confidence)],
-                ['仓库说明', selected.sourceDescription]
-              ]} />
-              <div className="marketplace-command">
-                <span>推荐的 Hermes 命令</span>
-                <pre>{marketplaceCommand(selected)}</pre>
-              </div>
-              <div className="marketplace-safety">
-                <Shield size={15} />
-                <span>安装会写入 Hermes 本机配置，并在写入前自动备份 `config.yaml`。MCP 会在本机执行上面的启动命令。</span>
-              </div>
-              <div className="marketplace-note">
-                安装后会立即调用 Hermes 原生测试，确认连接状态和工具发现结果。
-              </div>
-              {installResult?.installName === selected.installName && (
-                <div className={installResult.testResult?.ok ? 'mcp-test-result ok' : 'mcp-test-result failed'}>
-                  <div>
-                    <strong>{installResult.testResult?.ok ? '安装并测试成功' : '已安装，测试未通过'}</strong>
-                    <span>
-                      {installResult.testResult
-                        ? `${installResult.testResult.elapsedMs}ms${typeof installResult.testResult.toolCount === 'number' ? ` · ${installResult.testResult.toolCount} 个工具` : ''}`
-                        : '等待测试结果'}
-                    </span>
-                  </div>
-                  <pre>{installResult.testResult?.output || installResult.output || 'Hermes 没有返回安装输出。'}</pre>
-                </div>
-              )}
-              <button
-                className="marketplace-install-button"
-                disabled={installingId === selected.id || !selected.suggestedCommand}
-                onClick={() => void handleInstall(selected)}
-              >
-                {installingId === selected.id ? <Loader2 size={15} className="spin" /> : <Plus size={15} />}
-                {selected.suggestedCommand ? '安装到 Hermes' : '需要手动配置'}
-              </button>
-            </>
-          ) : (
-            <div className="mcp-empty-state">选择一个 MCP 服务查看安装建议。</div>
-          )}
-        </div>
-      </div>
     </div>
   )
 }
@@ -722,18 +452,6 @@ export function ManualMcpModal({
       </div>
     </form>
   )
-}
-
-export function formatMaybeDate(value?: string) {
-  if (!value) return '待生成'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '待生成'
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 function SettingsCard({ children }: { children: ReactNode }) {
@@ -1019,23 +737,6 @@ function mcpToolModeLabel(value: string) {
   return value
 }
 
-function marketplaceCommand(candidate: HermesMcpMarketplaceCandidate) {
-  if (!candidate.suggestedCommand) {
-    return `hermes mcp add ${candidate.installName} --command <cmd> --args <args...>`
-  }
-  return `hermes mcp add ${candidate.installName} --command ${candidate.suggestedCommand} --args ${candidate.suggestedArgs.join(' ')}`
-}
-
 function splitShellLike(value: string) {
   return value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((part) => part.replace(/^['"]|['"]$/g, '')) ?? []
-}
-
-function languageLabel(value: string) {
-  return value && value !== 'unknown' ? value : '未知语言'
-}
-
-function confidenceLabel(value: HermesMcpMarketplaceCandidate['confidence']) {
-  if (value === 'high') return '高'
-  if (value === 'medium') return '中'
-  return '低，需要人工确认'
 }

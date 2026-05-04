@@ -49,6 +49,9 @@ function readStoredSettingsPrefs(): SettingsPrefs {
       mcpServers: Array.isArray(parsed.mcpServers) ? parsed.mcpServers : defaultSettingsPrefs.mcpServers,
       rules: Array.isArray(parsed.rules) ? parsed.rules : defaultSettingsPrefs.rules
     }
+    if (!['local', 'serve', 'cloud'].includes(prefs.mcpScope)) {
+      prefs.mcpScope = defaultSettingsPrefs.mcpScope
+    }
     for (const [key, legacyValue] of Object.entries(LEGACY_APPEARANCE_DEFAULTS) as Array<[keyof SettingsPrefs, string]>) {
       if (prefs[key] === legacyValue) {
         prefs[key] = defaultSettingsPrefs[key] as never

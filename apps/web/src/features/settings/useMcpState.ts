@@ -1,27 +1,20 @@
 import { useCallback, useState } from 'react'
 import {
   configureHermesMcpServer,
-  getBackgroundStatus,
   getHermesMcpConfig,
-  getHermesMcpRecommendations,
   getHermesMcpServeStatus,
-  installBackgroundServices,
-  refreshHermesMcpRecommendationsWithAi,
   removeHermesMcpServer,
   setHermesMcpServerEnabled,
   setHermesMcpServerTools,
   startHermesMcpServe,
   stopHermesMcpServe,
   testHermesMcpServer,
-  uninstallBackgroundServices,
   updateHermesMcpServer
 } from './mcpApi'
 import type {
-  BackgroundServiceStatus,
   HermesMcpConfig,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
-  HermesMcpRecommendations,
   HermesMcpServeStatus,
   HermesMcpTestResult
 } from '../../lib/api'
@@ -37,12 +30,6 @@ export function useMcpState() {
   const [mcpServeStatus, setMcpServeStatus] = useState<HermesMcpServeStatus | null>(null)
   const [mcpServeUpdating, setMcpServeUpdating] = useState(false)
   const [mcpServeError, setMcpServeError] = useState<string | null>(null)
-  const [mcpRecommendations, setMcpRecommendations] = useState<HermesMcpRecommendations | null>(null)
-  const [mcpRecommendationsLoading, setMcpRecommendationsLoading] = useState(false)
-  const [mcpRecommendationsError, setMcpRecommendationsError] = useState<string | null>(null)
-  const [backgroundStatus, setBackgroundStatus] = useState<BackgroundServiceStatus | null>(null)
-  const [backgroundUpdating, setBackgroundUpdating] = useState(false)
-  const [backgroundError, setBackgroundError] = useState<string | null>(null)
 
   const refreshHermesMcp = useCallback(async () => {
     setMcpError(null)
@@ -50,36 +37,6 @@ export function useMcpState() {
       setHermesMcp(await getHermesMcpConfig())
     } catch (cause) {
       setMcpError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }, [])
-
-  const refreshMcpRecommendationsState = useCallback(async () => {
-    setMcpRecommendationsError(null)
-    try {
-      setMcpRecommendations(await getHermesMcpRecommendations())
-    } catch (cause) {
-      setMcpRecommendationsError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }, [])
-
-  const handleRefreshMcpRecommendationsWithAi = useCallback(async () => {
-    setMcpRecommendationsLoading(true)
-    setMcpRecommendationsError(null)
-    try {
-      setMcpRecommendations(await refreshHermesMcpRecommendationsWithAi())
-    } catch (cause) {
-      setMcpRecommendationsError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setMcpRecommendationsLoading(false)
-    }
-  }, [])
-
-  const refreshBackgroundStatus = useCallback(async () => {
-    setBackgroundError(null)
-    try {
-      setBackgroundStatus(await getBackgroundStatus())
-    } catch (cause) {
-      setBackgroundError(cause instanceof Error ? cause.message : String(cause))
     }
   }, [])
 
@@ -107,18 +64,6 @@ export function useMcpState() {
     },
     [refreshMcpServeStatus]
   )
-
-  const handleToggleBackgroundServices = useCallback(async (enabled: boolean) => {
-    setBackgroundUpdating(true)
-    setBackgroundError(null)
-    try {
-      setBackgroundStatus(enabled ? await installBackgroundServices() : await uninstallBackgroundServices())
-    } catch (cause) {
-      setBackgroundError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBackgroundUpdating(false)
-    }
-  }, [])
 
   const handleTestMcpServer = useCallback(async (serverId: string) => {
     setMcpTestingId(serverId)
@@ -241,19 +186,9 @@ export function useMcpState() {
     mcpServeStatus,
     mcpServeUpdating,
     mcpServeError,
-    mcpRecommendations,
-    mcpRecommendationsLoading,
-    mcpRecommendationsError,
-    backgroundStatus,
-    backgroundUpdating,
-    backgroundError,
     refreshHermesMcp,
-    refreshMcpRecommendationsState,
-    handleRefreshMcpRecommendationsWithAi,
-    refreshBackgroundStatus,
     refreshMcpServeStatus,
     handleToggleMcpServe,
-    handleToggleBackgroundServices,
     handleTestMcpServer,
     handleMcpInstalled,
     handleToggleMcpServer,

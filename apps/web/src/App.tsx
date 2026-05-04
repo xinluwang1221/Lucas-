@@ -54,10 +54,7 @@ import { SettingsModal } from './features/settings/SettingsModal'
 import { useSettingsPreferences } from './features/settings/useSettingsPreferences'
 import type { SettingsTab } from './features/settings/settingsTypes'
 import { SkillDetailModal, SkillsView, useSkillsState } from './features/skills'
-import {
-  ManualMcpModal as SettingsManualMcpModal,
-  McpMarketplaceModal as SettingsMcpMarketplaceModal
-} from './features/settings/mcp'
+import { ManualMcpModal as SettingsManualMcpModal } from './features/settings/mcp'
 import { TaskFocusPanel } from './features/chat/TaskFocusPanel'
 import { latestAssistantMessageId, latestUserMessageId } from './features/chat/messageUtils'
 import { mergeStreamedTask } from './features/chat/taskState'
@@ -329,7 +326,6 @@ function App() {
     refreshHermesDiagnostics,
     refreshHermesSessions
   } = useHermesRuntimeState({ onRuntimeError: setError })
-  const [mcpMarketplaceOpen, setMcpMarketplaceOpen] = useState(false)
   const [manualMcpOpen, setManualMcpOpen] = useState(false)
   const [editingMcp, setEditingMcp] = useState<HermesMcpConfig['servers'][number] | null>(null)
   const {
@@ -343,19 +339,9 @@ function App() {
     mcpServeStatus,
     mcpServeUpdating,
     mcpServeError,
-    mcpRecommendations,
-    mcpRecommendationsLoading,
-    mcpRecommendationsError,
-    backgroundStatus,
-    backgroundUpdating,
-    backgroundError,
     refreshHermesMcp,
-    refreshMcpRecommendationsState,
-    handleRefreshMcpRecommendationsWithAi,
-    refreshBackgroundStatus,
     refreshMcpServeStatus,
     handleToggleMcpServe,
-    handleToggleBackgroundServices,
     handleTestMcpServer,
     handleMcpInstalled,
     handleToggleMcpServer,
@@ -672,8 +658,6 @@ function App() {
     refreshHermesSessions,
     refreshHermesMcp,
     refreshMcpServeStatus,
-    refreshMcpRecommendationsState,
-    refreshBackgroundStatus,
     refreshCronState,
     refreshSkills,
     refreshModels
@@ -991,7 +975,6 @@ function App() {
             query={skillQuery}
             notice={skillNotice}
             connectors={hermesMcp?.servers ?? []}
-            mcpRecommendations={mcpRecommendations}
             toolsets={toolsets}
             toolsetsError={toolsetsError}
             toolsetUpdatingName={toolsetUpdatingName}
@@ -1011,7 +994,7 @@ function App() {
               setSettingsTab('mcp')
               setSettingsOpen(true)
             }}
-            onOpenMcpMarketplace={() => setMcpMarketplaceOpen(true)}
+            onOpenNativeMcpAdd={() => setManualMcpOpen(true)}
           />
         ) : viewMode === 'search' ? (
           <SearchTasksView
@@ -1496,12 +1479,6 @@ function App() {
             mcpUpdatingId={mcpUpdatingId}
             mcpDeletingId={mcpDeletingId}
             mcpToolUpdatingId={mcpToolUpdatingId}
-            mcpRecommendations={mcpRecommendations}
-            mcpRecommendationsLoading={mcpRecommendationsLoading}
-            mcpRecommendationsError={mcpRecommendationsError}
-            backgroundStatus={backgroundStatus}
-            backgroundUpdating={backgroundUpdating}
-            backgroundError={backgroundError}
             mcpServeStatus={mcpServeStatus}
             mcpServeUpdating={mcpServeUpdating}
             mcpServeError={mcpServeError}
@@ -1531,10 +1508,7 @@ function App() {
             onEditMcpServer={setEditingMcp}
             onSetMcpToolSelection={(serverId, mode, tools) => void handleSetMcpToolSelection(serverId, mode, tools)}
             onDeleteMcpServer={(serverId) => void handleDeleteMcpServer(serverId)}
-            onOpenMcpMarketplace={() => setMcpMarketplaceOpen(true)}
             onOpenManualMcp={() => setManualMcpOpen(true)}
-            onRefreshMcpRecommendationsWithAi={() => void handleRefreshMcpRecommendationsWithAi()}
-            onToggleBackgroundServices={(enabled) => void handleToggleBackgroundServices(enabled)}
             onToggleMcpServe={(enabled) => void handleToggleMcpServe(enabled)}
             onRefreshMcpServe={() => void refreshMcpServeStatus()}
             onSelectModel={(model) => void handleSelectModel(model)}
@@ -1546,16 +1520,6 @@ function App() {
             onRefreshModelCatalog={() => void refreshModelCatalogState()}
             onAddRule={handleAddSettingsRule}
             onOpenAddModel={(providerId, modelId) => openModelConfigPanel(providerId, modelId)}
-          />
-        </div>
-      )}
-
-      {mcpMarketplaceOpen && (
-        <div className="modal-backdrop model-backdrop" onMouseDown={closeOnBackdropMouseDown(() => setMcpMarketplaceOpen(false))}>
-          <SettingsMcpMarketplaceModal
-            onClose={() => setMcpMarketplaceOpen(false)}
-            onInstalled={handleMcpInstalled}
-            recommendations={mcpRecommendations}
           />
         </div>
       )}

@@ -19,11 +19,6 @@ export function getBackgroundServiceStatus(): BackgroundServiceStatus {
       loaded: isLaunchAgentLoaded(apiLabel),
       plistPath: apiPlistPath
     },
-    dailyMcp: {
-      installed: fs.existsSync(dailyPlistPath),
-      loaded: isLaunchAgentLoaded(dailyLabel),
-      plistPath: dailyPlistPath
-    },
     logsDir
   }
 }
@@ -31,18 +26,16 @@ export function getBackgroundServiceStatus(): BackgroundServiceStatus {
 export function installBackgroundServices(): BackgroundServiceStatus {
   fs.mkdirSync(launchAgentsDir, { recursive: true })
   fs.mkdirSync(logsDir, { recursive: true })
+  removeLegacyDailyMcpAgent()
   fs.writeFileSync(apiPlistPath, buildApiPlist(), 'utf8')
-  fs.writeFileSync(dailyPlistPath, buildDailyMcpPlist(), 'utf8')
   loadLaunchAgent(apiPlistPath)
-  loadLaunchAgent(dailyPlistPath)
   return getBackgroundServiceStatus()
 }
 
 export function uninstallBackgroundServices(): BackgroundServiceStatus {
   unloadLaunchAgent(apiPlistPath)
-  unloadLaunchAgent(dailyPlistPath)
+  removeLegacyDailyMcpAgent()
   if (fs.existsSync(apiPlistPath)) fs.unlinkSync(apiPlistPath)
-  if (fs.existsSync(dailyPlistPath)) fs.unlinkSync(dailyPlistPath)
   return getBackgroundServiceStatus()
 }
 
@@ -53,18 +46,6 @@ function buildApiPlist() {
     command: `cd ${shellQuote(rootDir)} && /usr/bin/env npm run background:api`,
     stdout: path.join(logsDir, 'background-api.out.log'),
     stderr: path.join(logsDir, 'background-api.err.log')
-  })
-}
-
-function buildDailyMcpPlist() {
-  return plist(dailyLabel, {
-    runAtLoad: false,
-    keepAlive: false,
-    hour: 0,
-    minute: 10,
-    command: `cd ${shellQuote(rootDir)} && /usr/bin/env npm run mcp:recommend:ai`,
-    stdout: path.join(logsDir, 'daily-mcp-ai.out.log'),
-    stderr: path.join(logsDir, 'daily-mcp-ai.err.log')
   })
 }
 
@@ -119,6 +100,11 @@ function plist(label: string, options: {
 </dict>
 </plist>
 `
+}
+
+function removeLegacyDailyMcpAgent() {
+  unloadLaunchAgent(dailyPlistPath)
+  if (fs.existsSync(dailyPlistPath)) fs.unlinkSync(dailyPlistPath)
 }
 
 function loadLaunchAgent(plistPath: string) {
