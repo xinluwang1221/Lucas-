@@ -15,6 +15,7 @@
 - 技术路线定为 React + TypeScript UI、Node + TypeScript Kernel Manager、本地状态存储、Electron macOS 客户端壳、固定 Hermes Core runtime。
 - 2026-05-03 起，Cowork 主开发目录迁移到 Hermes 本机目录内：`/Users/lucas/.hermes/hermes-agent/cowork`。旧目录 `/Users/lucas/Documents/Codex/2026-04-26/new-chat` 只作为迁移前历史位置，不再作为后续主开发目录。
 - 后续重功能开发必须先完成“官网能力树 -> 本机 Hermes 代码 -> Cowork 覆盖矩阵 -> UI/后端实现”的链路，禁止发现一个问题就临时造一个前端状态。
+- Hermes 能力判断不只看官网叙述；只要当前固定内核的 CLI、源码、Dashboard/API、测试或 release note 中存在并可验证，就纳入 Cowork 的官方能力覆盖范围。官网是入口，本机代码是真相。
 - 本文档有两种读法：产品判断先看“官网能力基线、架构覆盖、能力矩阵、开发方案解释区”；继续编码先看“关键文件说明、测试命令、后续开发建议”。
 
 ## 1. 项目定位
@@ -100,7 +101,7 @@ Hermes 对接：
 
 ## 3.0 Hermes 官网能力基线（2026-05-03）
 
-本节是 Cowork 后续开发的能力基线。每次开发 Hermes 相关能力前，先按这里确认“官网说 Hermes 已经有什么”，再看本机 Hermes 代码是否具备稳定入口，最后才决定 Cowork 要做成什么 UI。
+本节是 Cowork 后续开发的能力基线。每次开发 Hermes 相关能力前，先按这里确认“官网说 Hermes 已经有什么”，再看本机 Hermes 代码、CLI help、Dashboard/API、测试和 release note 是否具备稳定入口，最后才决定 Cowork 要做成什么 UI。实际产品覆盖以“当前固定 Hermes 内核中可执行、可验证的官方能力”为准，不局限于官网当前页面描述。
 
 读取来源：
 
@@ -330,7 +331,7 @@ flowchart TB
 | 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
 | 工具与 Toolsets：web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code | 技能页 > 工具集、过程资源、设置 > 运行环境诊断 | 部分覆盖。Toolsets 已进入技能页；工具级策略、工具使用统计和失败诊断还缺 | 把 Toolsets 做成技能页的一级能力：分类、启停、凭据状态、内置工具列表、使用统计、失败原因；与 MCP/Skill 同页但语义分清 | Dashboard `/api/tools/toolsets`、启停后 config 检查、任务过程资源工具调用检查 |
 | Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、Skills Hub | 部分覆盖。清单、启停、上传、文件树、加入下一次任务、Hermes Skills Hub 浏览/搜索/安装已接；外部目录、Agent 自动沉淀还未完整 | 技能页继续做分类、依赖、运行前预载、安装前风险说明、Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、`/api/skills/hub`、`hermes skills browse/search/install`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
-| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、过程资源 | 部分覆盖。已取消 Cowork 自建 GitHub 市场和每日推荐；新增、测试、启停、工具 include/exclude、Hermes MCP serve、技能页 MCP 生态概览接入 Hermes 原生命令与配置；OAuth/远程 MCP/权限说明仍需深化 | MCP 页按 Hermes 官方 `mcp add/list/test/configure/login/serve` 继续产品化：补齐 OAuth login、preset 列表、远程 HTTP/SSE 指引、动态工具刷新、工具级权限说明和 Hermes MCP server 生产化 | `hermes mcp add/list/test/configure/login/serve`、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
+| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、OAuth、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、过程资源 | 部分覆盖。已取消 Cowork 自建 GitHub 市场和每日推荐；当前固定 Hermes 内核未发现类似 Skills Hub 的 MCP 官方市场，`--preset` 接口位存在但 preset registry 当前为空；新增、测试、启停、工具 include/exclude、Hermes MCP serve、技能页 MCP 生态概览已接入 Hermes 原生命令与配置；OAuth re-login、远程 MCP、sampling/resources/prompts 展示和权限说明仍需深化 | MCP 页按 Hermes 官方 `mcp add/list/test/configure/login/serve` 和本机源码继续产品化：补齐 OAuth login、preset registry 自动探测、远程 HTTP/SSE 指引、动态工具刷新、工具级权限说明、resources/prompts/sampling 可视化和 Hermes MCP server 生产化。只有 Hermes 官方提供 Hub/API/registry 时才新增“官方 MCP 生态”，不恢复 Cowork 自建市场 | `hermes mcp add/list/test/configure/login/serve`、源码 `_MCP_PRESETS`/MCP server capability 检查、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
 | Cron / Automation：自然语言、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 左侧定时任务页、未来产物区、未来投递设置 | 部分覆盖。真实 Hermes Cron 基础管理已接；周期选择、Skill 分类多选、delivery target、输出产物还需完善 | 定时任务页只管理 Hermes Cron：周期选择器、工作区绑定、Skill 类目多选、运行产物、失败处理和投递渠道 | `test:hermes-cron`、Dashboard cron jobs、`~/.hermes/cron/output`、gateway/tick 运行检查 |
 | Gateway / Messaging / Mobile：长驻 gateway、平台消息、session routing、slash command、cron tick、background maintenance | 本机 gateway、未来 Electron 常驻、未来手机端 | 未完整覆盖。当前只有本机 gateway；移动端和云端中转未实现 | 设计“云端加密中转 + Mac 主机执行”：云端只做账号/设备配对、消息路由和推送；Hermes/files/tools 只在 Mac 执行 | gateway 连接测试、多设备协议设计文档、移动端发任务到 Mac 的端到端 smoke |
 | 媒体与浏览器：Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件预览、图片/文件批注、未来语音入口、未来浏览器过程面板 | 未完整覆盖。文件/图片预览已做；视觉理解、浏览器自动化可视化、TTS/Voice 还未产品化 | 新增语音输入/TTS 输出、图片视觉理解入口、浏览器任务过程可视化；执行仍走 Hermes 工具，不在 Cowork 重写工具 | Browser tool smoke、图片任务 smoke、Voice/TTS 本机权限检查、过程事件展示 |
@@ -433,7 +434,7 @@ flowchart TB
 
 可升级空间：
 
-- MCP 不再维护 Cowork 自建 GitHub 市场或每日推荐；能力来源以 Hermes 官方 MCP add/list/test/configure/login/serve 和后续官方生态入口为准。
+- MCP 不再维护 Cowork 自建 GitHub 市场或每日推荐；当前固定 Hermes 内核没有类似 Skills Hub 的 MCP 官方市场。能力来源以 Hermes 官方 MCP add/list/test/configure/login/serve、本机源码中可验证的 preset/OAuth/serve 能力，以及未来官方生态入口为准。
 - gateway 目前不完整支持 Cowork 自定义 skill 预载时，应保留 bridge 回退或等待 Hermes 增加参数。
 
 判断标准：
@@ -2064,7 +2065,7 @@ curl http://127.0.0.1:8787/api/hermes/official-api
 开发前固定流程：
 
 1. 先查 `3.0 Hermes 官网能力基线`，判断这次需求属于哪一类 Hermes 官方能力：入口/runtime、Agent loop、context、model/provider、tools/toolsets、skills、MCP、cron、gateway/mobile、media/browser、security/rollback。
-2. 再查本机 Hermes 代码和文档，确认当前固定内核是否真的有稳定入口；优先看 `/Users/lucas/.hermes/hermes-agent/website/docs`、`hermes_cli`、`tools`、`tui_gateway`、`web`。
+2. 再查本机 Hermes 代码、CLI help、Dashboard/API、测试和 release note，确认当前固定内核是否真的有稳定入口；优先看 `/Users/lucas/.hermes/hermes-agent/website/docs`、`hermes_cli`、`tools`、`tui_gateway`、`web`、`tests` 和 `RELEASE_*.md`。判断标准是“能否在本机固定内核里执行和验证”，不是“官网当前是否写了这句话”。
 3. 回到 `3.2 Hermes 能力覆盖矩阵`，确认这项能力是否已经有 Cowork 用户入口、当前覆盖状态、下一步产品化动作和验证方式；如果没有，先补矩阵。
 4. 回到 `3.3 开发方案解释区`，用“当前方案 / 为什么这样做 / 可升级空间 / 判断标准”写清产品解释，避免只写给开发者看的实现细节。
 5. 再查 `3.4 多入口一致性契约`，确认同一能力是否已经出现在设置页、输入框、右侧工作区、左侧工作区、技能页或文件预览区。
