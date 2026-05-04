@@ -77,6 +77,11 @@ npm run smoke:hermes-real
 
 - `Hermes_Cowork_开发文档.md`
 
+分工：
+
+- `Hermes_Cowork_产品说明.md`：给用户看，用来判断产品方向、当前开发程度和后续路线。
+- `docs/codex-development-handbook.md`：给 Codex 看，用来恢复上下文、继续开发和选择验证方式。
+
 附录：
 
 - `docs/hermes-capability-baseline.md`：Hermes 官网能力树、本机固定内核基线、能力覆盖矩阵和长期路线。
@@ -85,7 +90,8 @@ npm run smoke:hermes-real
 
 阅读顺序：
 
-- 判断产品方向：先看主文档，再看 `docs/hermes-capability-baseline.md`。
+- 判断产品方向：先看 `Hermes_Cowork_产品说明.md`，再看 `docs/hermes-capability-baseline.md`。
+- 让 Codex 继续开发：先看 `docs/codex-development-handbook.md`，再按需要打开附录。
 - 判断交互是否符合既定方案：看 `docs/product-decisions.md`。
 - 继续编码或排查接口：看 `docs/engineering-reference.md`。
 - 评估 Hermes 官方 API Server / Runs API 时，先看 `apps/api/src/hermes_official_api.ts`、`apps/api/src/hermes_official_runs.ts` 和 `/api/hermes/official-api`。当前 Runs API 只作为并行适配层验证，不能直接替换 `tui_gateway` 主链路。
