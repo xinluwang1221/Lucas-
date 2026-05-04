@@ -1175,6 +1175,26 @@
   opacity: 0.68;
 }
 
+.settings-oauth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  color: #14713d;
+  background: #e4f4e9;
+  border: 1px solid #b8dfc4;
+  border-radius: 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-oauth-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .settings-delete-button {
   display: grid;
   place-items: center;
@@ -1248,7 +1268,8 @@
   border-bottom: 0;
 }
 
-.mcp-test-result {
+.mcp-test-result,
+.mcp-login-result {
   margin-top: 10px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1256,7 +1277,8 @@
   background: #fffdf7;
 }
 
-.mcp-test-result > div {
+.mcp-test-result > div,
+.mcp-login-result > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1266,25 +1288,30 @@
   border-bottom: 1px solid var(--line);
 }
 
-.mcp-test-result strong {
+.mcp-test-result strong,
+.mcp-login-result strong {
   color: var(--ink);
   font-size: 13px;
 }
 
-.mcp-test-result span {
+.mcp-test-result span,
+.mcp-login-result span {
   color: var(--ink-soft);
   font-size: 12px;
 }
 
-.mcp-test-result.ok > div {
+.mcp-test-result.ok > div,
+.mcp-login-result.ok > div {
   background: #ecf8f1;
 }
 
-.mcp-test-result.failed > div {
+.mcp-test-result.failed > div,
+.mcp-login-result.failed > div {
   background: #fff0f1;
 }
 
-.mcp-test-result pre {
+.mcp-test-result pre,
+.mcp-login-result pre {
   max-height: 220px;
   margin: 0;
   overflow: auto;

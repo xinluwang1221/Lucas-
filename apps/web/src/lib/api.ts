@@ -653,6 +653,16 @@ export type HermesMcpTestResult = {
   testedAt: string
 }
 
+export type HermesMcpLoginResult = {
+  serverId: string
+  ok: boolean
+  elapsedMs: number
+  output: string
+  error?: string
+  config: HermesMcpConfig
+  loggedInAt: string
+}
+
 export type HermesMcpManualConfigRequest = {
   name: string
   transport: 'stdio' | 'http' | 'sse'

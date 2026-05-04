@@ -3,6 +3,7 @@ import type {
   BackgroundServiceStatus,
   HermesMcpConfig,
   HermesMcpInstallResult,
+  HermesMcpLoginResult,
   HermesMcpManualConfigRequest,
   HermesMcpNativeCapabilities,
   HermesMcpServeStatus,
@@ -76,6 +77,12 @@ export async function stopHermesMcpServe(): Promise<HermesMcpServeStatus> {
 
 export async function testHermesMcpServer(serverId: string): Promise<HermesMcpTestResult> {
   return request(`/api/hermes/mcp/${encodeURIComponent(serverId)}/test`, {
+    method: 'POST'
+  })
+}
+
+export async function loginHermesMcpServer(serverId: string): Promise<HermesMcpLoginResult> {
+  return request(`/api/hermes/mcp/${encodeURIComponent(serverId)}/login`, {
     method: 'POST'
   })
 }

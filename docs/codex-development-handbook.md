@@ -27,6 +27,7 @@ Hermes 能力释放规划阶段
 - 工具、MCP、Skill 统一归入技能页 / 能力中心。
 - 多入口必须复用同一套状态和 API。
 - MCP 区域必须优先展示 Hermes 原生能力覆盖状态。使用 `/api/hermes/mcp/native-capabilities` 读取本机 Hermes CLI help 与 `config.yaml`，不要用静态文案伪装官方生态。
+- MCP OAuth 重新授权已接 `POST /api/hermes/mcp/:serverId/login`，只对 `auth=oauth` 的 HTTP/SSE 服务显示入口；`hermes mcp configure` 需要 TTY，不能包装成普通 Web 表单。
 
 ## 2. 每次开发的固定流程
 

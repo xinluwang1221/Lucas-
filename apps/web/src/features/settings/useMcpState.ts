@@ -3,6 +3,7 @@ import {
   configureHermesMcpServer,
   getHermesMcpConfig,
   getHermesMcpServeStatus,
+  loginHermesMcpServer,
   removeHermesMcpServer,
   setHermesMcpServerEnabled,
   setHermesMcpServerTools,
@@ -14,6 +15,7 @@ import {
 import type {
   HermesMcpConfig,
   HermesMcpInstallResult,
+  HermesMcpLoginResult,
   HermesMcpManualConfigRequest,
   HermesMcpServeStatus,
   HermesMcpTestResult
@@ -23,7 +25,9 @@ export function useMcpState() {
   const [hermesMcp, setHermesMcp] = useState<HermesMcpConfig | null>(null)
   const [mcpError, setMcpError] = useState<string | null>(null)
   const [mcpTestResults, setMcpTestResults] = useState<Record<string, HermesMcpTestResult>>({})
+  const [mcpLoginResults, setMcpLoginResults] = useState<Record<string, HermesMcpLoginResult>>({})
   const [mcpTestingId, setMcpTestingId] = useState<string | null>(null)
+  const [mcpLoggingInId, setMcpLoggingInId] = useState<string | null>(null)
   const [mcpUpdatingId, setMcpUpdatingId] = useState<string | null>(null)
   const [mcpDeletingId, setMcpDeletingId] = useState<string | null>(null)
   const [mcpToolUpdatingId, setMcpToolUpdatingId] = useState<string | null>(null)
@@ -85,6 +89,28 @@ export function useMcpState() {
     }
   }, [])
 
+  const handleLoginMcpServer = useCallback(async (serverId: string) => {
+    setMcpLoggingInId(serverId)
+    try {
+      const result = await loginHermesMcpServer(serverId)
+      setHermesMcp(result.config)
+      setMcpLoginResults((current) => ({ ...current, [serverId]: result }))
+    } catch (cause) {
+      const result: HermesMcpLoginResult = {
+        serverId,
+        ok: false,
+        elapsedMs: 0,
+        output: '',
+        error: cause instanceof Error ? cause.message : String(cause),
+        config: hermesMcp ?? { configPath: '', servers: [], updatedAt: new Date().toISOString() },
+        loggedInAt: new Date().toISOString()
+      }
+      setMcpLoginResults((current) => ({ ...current, [serverId]: result }))
+    } finally {
+      setMcpLoggingInId(null)
+    }
+  }, [hermesMcp])
+
   const handleMcpInstalled = useCallback((result: HermesMcpInstallResult) => {
     setHermesMcp(result.config)
     if (result.testResult) {
@@ -111,6 +137,11 @@ export function useMcpState() {
     try {
       setHermesMcp(await removeHermesMcpServer(serverId))
       setMcpTestResults((current) => {
+        const next = { ...current }
+        delete next[serverId]
+        return next
+      })
+      setMcpLoginResults((current) => {
         const next = { ...current }
         delete next[serverId]
         return next
@@ -179,7 +210,9 @@ export function useMcpState() {
     hermesMcp,
     mcpError,
     mcpTestResults,
+    mcpLoginResults,
     mcpTestingId,
+    mcpLoggingInId,
     mcpUpdatingId,
     mcpDeletingId,
     mcpToolUpdatingId,
@@ -190,6 +223,7 @@ export function useMcpState() {
     refreshMcpServeStatus,
     handleToggleMcpServe,
     handleTestMcpServer,
+    handleLoginMcpServer,
     handleMcpInstalled,
     handleToggleMcpServer,
     handleDeleteMcpServer,

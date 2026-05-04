@@ -68,7 +68,7 @@ flowchart TB
 - 对话任务、继续对话、停止任务和流式事件展示。
 - 工作区授权、文件上传、文件预览、文件批注、产物卡片。
 - 模型配置、Key 重填、Fallback、reasoning 入口。
-- MCP 服务管理、测试、启停、工具级 include/exclude、Hermes MCP serve，以及基于本机 Hermes CLI 的原生命令覆盖状态。
+- MCP 服务管理、测试、启停、OAuth 重新授权、工具级 include/exclude、Hermes MCP serve，以及基于本机 Hermes CLI 的原生命令覆盖状态。
 - Skill 清单、详情、文件树、启停、上传、加入下一次任务。
 - Hermes Cron 真实任务列表和基础操作。
 - 审批卡和澄清卡，用来处理危险命令和信息不足的任务。

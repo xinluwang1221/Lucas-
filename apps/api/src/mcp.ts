@@ -6,6 +6,7 @@ import { dataDir, hermesAgentDir, hermesBin } from './paths.js'
 import {
   HermesMcpConfig,
   HermesMcpInstallResult,
+  HermesMcpLoginResult,
   HermesMcpManualConfigRequest,
   HermesMcpNativeCapabilities,
   HermesMcpNativeCommand,
@@ -102,8 +103,8 @@ export function readHermesMcpNativeCapabilities(): HermesMcpNativeCapabilities {
       description: '对支持 OAuth 的 MCP 服务重新登录或刷新授权。',
       available: generalHelp.ok && hasMcpCommand(generalText, 'login') && loginHelp.ok,
       evidence: mcpEvidence('hermes mcp login --help', loginHelp, ['name']),
-      coworkStatus: 'missing',
-      coworkEntry: '待补 OAuth 登录入口和授权状态'
+      coworkStatus: 'covered',
+      coworkEntry: '设置页 OAuth MCP 重新授权按钮'
     },
     {
       id: 'serve',
@@ -130,7 +131,7 @@ export function readHermesMcpNativeCapabilities(): HermesMcpNativeCapabilities {
       ? `当前固定 Hermes 内核包含 ${presets.length} 个 preset：${presets.slice(0, 6).join('、')}${presets.length > 6 ? '…' : ''}。`
       : '当前固定 Hermes 内核暴露 --preset 参数，但 preset registry 为空；Cowork 不再维护自建 MCP 市场。',
     commands.some((command) => command.id === 'login' && command.available)
-      ? 'Hermes 已提供 MCP OAuth login 命令，Cowork 下一步需要把它做成授权按钮和状态提示。'
+      ? 'Hermes MCP OAuth login 已接入设置页；只有 auth=oauth 的 HTTP/SSE 服务会显示重新授权按钮。'
       : '未检测到可用的 MCP OAuth login 命令。',
     `${config.servers.length} 个 MCP 服务来自 ${config.configPath}，启停、工具范围和删除会写回 Hermes 配置。`
   ]
@@ -146,6 +147,40 @@ export function readHermesMcpNativeCapabilities(): HermesMcpNativeCapabilities {
     notes,
     updatedAt: new Date().toISOString()
   }
+}
+
+export function loginHermesMcpServer(serverId: string): Promise<HermesMcpLoginResult> {
+  const safeServerId = normalizeServerId(serverId)
+  if (!safeServerId) {
+    return Promise.reject(new Error('MCP 服务名称不合法'))
+  }
+
+  const server = readHermesMcpConfig().servers.find((item) => item.id === safeServerId)
+  if (!server) {
+    return Promise.reject(new Error(`MCP 服务不存在：${safeServerId}`))
+  }
+  if (!server.url || server.auth !== 'oauth') {
+    return Promise.reject(new Error('该 MCP 服务不是 OAuth 认证的 HTTP/SSE 服务，不能执行重新授权。'))
+  }
+
+  const started = Date.now()
+  return new Promise((resolve) => {
+    execFile(hermesBin, ['mcp', 'login', safeServerId], { cwd: hermesAgentDir, timeout: 180000 }, (error, stdout, stderr) => {
+      const elapsedMs = Date.now() - started
+      const output = redactSecrets(stripAnsi(`${stdout}\n${stderr}`.trim()))
+      const failedByOutput = /authentication failed|not configured for oauth|has no url|not found in config/i.test(output)
+      const ok = !error && !failedByOutput && /authenticated/i.test(output)
+      resolve({
+        serverId: safeServerId,
+        ok,
+        elapsedMs,
+        output,
+        error: ok ? undefined : redactSecrets(stripAnsi(`${error?.message ?? ''}\n${stderr}`.trim())) || output || 'Hermes MCP OAuth 登录失败',
+        config: readHermesMcpConfig(),
+        loggedInAt: new Date().toISOString()
+      })
+    })
+  })
 }
 
 export function setHermesMcpServerEnabled(serverId: string, enabled: boolean): HermesMcpConfig {

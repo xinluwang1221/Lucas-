@@ -4209,6 +4209,7 @@
 :root[data-theme-mode="dark"] .mcp-add-popover,
 :root[data-theme-mode="dark"] .mcp-server-details .settings-info-grid div,
 :root[data-theme-mode="dark"] .mcp-test-result,
+:root[data-theme-mode="dark"] .mcp-login-result,
 :root[data-theme-mode="dark"] .mcp-tool-empty,
 :root[data-theme-mode="dark"] .mcp-serve-grid div,
 :root[data-theme-mode="dark"] .mcp-serve-logs,
@@ -4307,7 +4308,8 @@
 :root[data-theme-mode="dark"] .dark-mini-button,
 :root[data-theme-mode="dark"] .settings-add-button,
 :root[data-theme-mode="dark"] .settings-button,
-:root[data-theme-mode="dark"] .settings-test-button {
+:root[data-theme-mode="dark"] .settings-test-button,
+:root[data-theme-mode="dark"] .settings-oauth-button {
   color: var(--foreground);
   background: var(--surface-muted);
   border: 1px solid var(--line);
@@ -4353,6 +4355,7 @@
 :root[data-theme-mode="dark"] .danger-button,
 :root[data-theme-mode="dark"] .settings-error-line,
 :root[data-theme-mode="dark"] .mcp-test-result.failed > div,
+:root[data-theme-mode="dark"] .mcp-login-result.failed > div,
 :root[data-theme-mode="dark"] .hermes-update-banner.blocked,
 :root[data-theme-mode="dark"] .hermes-smoke-card.failed,
 :root[data-theme-mode="dark"] .hermes-auto-update-card.failed,
@@ -4371,6 +4374,7 @@
 :root[data-theme-mode="dark"] .skill-notice,
 :root[data-theme-mode="dark"] .session-state.linked,
 :root[data-theme-mode="dark"] .mcp-test-result.ok > div,
+:root[data-theme-mode="dark"] .mcp-login-result.ok > div,
 :root[data-theme-mode="dark"] .model-credential-pill.configured,
 :root[data-theme-mode="dark"] .fallback-provider-row.active,
 :root[data-theme-mode="dark"] .model-config-memory,
@@ -4400,6 +4404,7 @@
 }
 
 :root[data-theme-mode="dark"] .mcp-test-result pre,
+:root[data-theme-mode="dark"] .mcp-login-result pre,
 :root[data-theme-mode="dark"] .mcp-serve-logs pre,
 :root[data-theme-mode="dark"] .hermes-update-log pre {
   color: var(--foreground);

@@ -332,7 +332,9 @@ function App() {
     hermesMcp,
     mcpError,
     mcpTestResults,
+    mcpLoginResults,
     mcpTestingId,
+    mcpLoggingInId,
     mcpUpdatingId,
     mcpDeletingId,
     mcpToolUpdatingId,
@@ -343,6 +345,7 @@ function App() {
     refreshMcpServeStatus,
     handleToggleMcpServe,
     handleTestMcpServer,
+    handleLoginMcpServer,
     handleMcpInstalled,
     handleToggleMcpServer,
     handleDeleteMcpServer,
@@ -1475,7 +1478,9 @@ function App() {
             hermesMcp={hermesMcp}
             mcpError={mcpError}
             mcpTestResults={mcpTestResults}
+            mcpLoginResults={mcpLoginResults}
             mcpTestingId={mcpTestingId}
+            mcpLoggingInId={mcpLoggingInId}
             mcpUpdatingId={mcpUpdatingId}
             mcpDeletingId={mcpDeletingId}
             mcpToolUpdatingId={mcpToolUpdatingId}
@@ -1505,6 +1510,7 @@ function App() {
             onToggleMcpServer={(serverId, enabled) => void handleToggleMcpServer(serverId, enabled)}
             onRefreshMcp={() => void refreshHermesMcp()}
             onTestMcpServer={(serverId) => void handleTestMcpServer(serverId)}
+            onLoginMcpServer={(serverId) => void handleLoginMcpServer(serverId)}
             onEditMcpServer={setEditingMcp}
             onSetMcpToolSelection={(serverId, mode, tools) => void handleSetMcpToolSelection(serverId, mode, tools)}
             onDeleteMcpServer={(serverId) => void handleDeleteMcpServer(serverId)}

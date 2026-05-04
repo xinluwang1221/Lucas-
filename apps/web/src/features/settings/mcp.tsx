@@ -2,6 +2,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Info,
+  KeyRound,
   Loader2,
   Play,
   Plug,
@@ -15,6 +16,7 @@ import {
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   type HermesMcpConfig,
+  type HermesMcpLoginResult,
   type HermesMcpManualConfigRequest,
   type HermesMcpNativeCapabilities,
   type HermesMcpNativeCommand,
@@ -235,7 +237,9 @@ export function McpSettingsSection({
   hermesMcp,
   mcpError,
   mcpTestResults,
+  mcpLoginResults,
   mcpTestingId,
+  mcpLoggingInId,
   mcpUpdatingId,
   mcpDeletingId,
   mcpToolUpdatingId,
@@ -246,6 +250,7 @@ export function McpSettingsSection({
   onToggleMcpServer,
   onRefreshMcp,
   onTestMcpServer,
+  onLoginMcpServer,
   onEditMcpServer,
   onSetMcpToolSelection,
   onDeleteMcpServer,
@@ -257,7 +262,9 @@ export function McpSettingsSection({
   hermesMcp: HermesMcpConfig | null
   mcpError: string | null
   mcpTestResults: Record<string, HermesMcpTestResult>
+  mcpLoginResults: Record<string, HermesMcpLoginResult>
   mcpTestingId: string | null
+  mcpLoggingInId: string | null
   mcpUpdatingId: string | null
   mcpDeletingId: string | null
   mcpToolUpdatingId: string | null
@@ -268,6 +275,7 @@ export function McpSettingsSection({
   onToggleMcpServer: (serverId: string, enabled: boolean) => void
   onRefreshMcp: () => void
   onTestMcpServer: (serverId: string) => void
+  onLoginMcpServer: (serverId: string) => void
   onEditMcpServer: (server: HermesMcpConfig['servers'][number]) => void
   onSetMcpToolSelection: (serverId: string, mode: 'all' | 'include' | 'exclude', tools: string[]) => void
   onDeleteMcpServer: (serverId: string) => void
@@ -343,6 +351,17 @@ export function McpSettingsSection({
                     {mcpTestingId === server.id ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
                     测试
                   </button>
+                  {server.auth === 'oauth' && (
+                    <button
+                      className="settings-oauth-button"
+                      onClick={() => onLoginMcpServer(server.id)}
+                      disabled={mcpLoggingInId === server.id}
+                      title="调用 hermes mcp login 重新授权"
+                    >
+                      {mcpLoggingInId === server.id ? <Loader2 size={13} className="spin" /> : <KeyRound size={13} />}
+                      重新授权
+                    </button>
+                  )}
                   <button
                     className="settings-edit-button"
                     onClick={() => onEditMcpServer(server)}
@@ -368,6 +387,7 @@ export function McpSettingsSection({
                   <McpServerDetails
                     server={server}
                     testResult={mcpTestResults[server.id]}
+                    loginResult={mcpLoginResults[server.id]}
                     isUpdatingTools={mcpToolUpdatingId === server.id}
                     onSetToolSelection={(mode, tools) => onSetMcpToolSelection(server.id, mode, tools)}
                     onTest={() => onTestMcpServer(server.id)}
@@ -664,12 +684,14 @@ function McpServePanel({ status }: { status: HermesMcpServeStatus | null }) {
 function McpServerDetails({
   server,
   testResult,
+  loginResult,
   isUpdatingTools,
   onSetToolSelection,
   onTest
 }: {
   server: HermesMcpConfig['servers'][number]
   testResult?: HermesMcpTestResult
+  loginResult?: HermesMcpLoginResult
   isUpdatingTools: boolean
   onSetToolSelection: (mode: 'all' | 'include' | 'exclude', tools: string[]) => void
   onTest: () => void
@@ -699,6 +721,15 @@ function McpServerDetails({
         ['工具范围', mcpToolModeLabel(server.toolMode)],
         ['启用状态', server.enabled ? '已启用' : '已停用']
       ]} />
+      {loginResult && (
+        <div className={loginResult.ok ? 'mcp-login-result ok' : 'mcp-login-result failed'}>
+          <div>
+            <strong>{loginResult.ok ? '授权完成' : '授权失败'}</strong>
+            <span>{loginResult.elapsedMs}ms · {new Date(loginResult.loggedInAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          <pre>{loginResult.output || loginResult.error || 'Hermes 没有返回 OAuth 登录输出。'}</pre>
+        </div>
+      )}
       {testResult && (
         <div className={testResult.ok ? 'mcp-test-result ok' : 'mcp-test-result failed'}>
           <div>

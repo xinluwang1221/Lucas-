@@ -19,7 +19,7 @@ import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { configureHermesMcpServer, getHermesMcpServeStatus, readHermesMcpConfig, readHermesMcpNativeCapabilities, removeHermesMcpServer, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
+import { configureHermesMcpServer, getHermesMcpServeStatus, loginHermesMcpServer, readHermesMcpConfig, readHermesMcpNativeCapabilities, removeHermesMcpServer, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
 import {
   configureHermesModel,
   configureHermesReasoning,
@@ -446,6 +446,17 @@ app.post('/api/hermes/mcp/:serverId/test', async (req, res) => {
     res.json(await testHermesMcpServer(serverId))
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.post('/api/hermes/mcp/:serverId/login', async (req, res) => {
+  try {
+    const result = await loginHermesMcpServer(req.params.serverId)
+    res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const status = message.includes('不存在') ? 404 : message.includes('不是 OAuth') ? 400 : 500
+    res.status(status).json({ error: message })
   }
 })
 

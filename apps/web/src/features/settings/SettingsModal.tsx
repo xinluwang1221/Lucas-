@@ -19,6 +19,7 @@ import type {
   HermesCompatibilityTestResult,
   HermesDiagnosticsStatus,
   HermesMcpConfig,
+  HermesMcpLoginResult,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesModelCatalogProvider,
@@ -69,7 +70,9 @@ export function SettingsModal({
   hermesMcp,
   mcpError,
   mcpTestResults,
+  mcpLoginResults,
   mcpTestingId,
+  mcpLoggingInId,
   mcpUpdatingId,
   mcpDeletingId,
   mcpToolUpdatingId,
@@ -97,6 +100,7 @@ export function SettingsModal({
   onToggleMcpServer,
   onRefreshMcp,
   onTestMcpServer,
+  onLoginMcpServer,
   onEditMcpServer,
   onSetMcpToolSelection,
   onDeleteMcpServer,
@@ -139,7 +143,9 @@ export function SettingsModal({
   hermesMcp: HermesMcpConfig | null
   mcpError: string | null
   mcpTestResults: Record<string, HermesMcpTestResult>
+  mcpLoginResults: Record<string, HermesMcpLoginResult>
   mcpTestingId: string | null
+  mcpLoggingInId: string | null
   mcpUpdatingId: string | null
   mcpDeletingId: string | null
   mcpToolUpdatingId: string | null
@@ -167,6 +173,7 @@ export function SettingsModal({
   onToggleMcpServer: (serverId: string, enabled: boolean) => void
   onRefreshMcp: () => void
   onTestMcpServer: (serverId: string) => void
+  onLoginMcpServer: (serverId: string) => void
   onEditMcpServer: (server: HermesMcpConfig['servers'][number]) => void
   onSetMcpToolSelection: (serverId: string, mode: 'all' | 'include' | 'exclude', tools: string[]) => void
   onDeleteMcpServer: (serverId: string) => void
@@ -254,7 +261,9 @@ export function SettingsModal({
             hermesMcp={hermesMcp}
             mcpError={mcpError}
             mcpTestResults={mcpTestResults}
+            mcpLoginResults={mcpLoginResults}
             mcpTestingId={mcpTestingId}
+            mcpLoggingInId={mcpLoggingInId}
             mcpUpdatingId={mcpUpdatingId}
             mcpDeletingId={mcpDeletingId}
             mcpToolUpdatingId={mcpToolUpdatingId}
@@ -265,6 +274,7 @@ export function SettingsModal({
             onToggleMcpServer={onToggleMcpServer}
             onRefreshMcp={onRefreshMcp}
             onTestMcpServer={onTestMcpServer}
+            onLoginMcpServer={onLoginMcpServer}
             onEditMcpServer={onEditMcpServer}
             onSetMcpToolSelection={onSetMcpToolSelection}
             onDeleteMcpServer={onDeleteMcpServer}
