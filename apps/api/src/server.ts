@@ -19,7 +19,7 @@ import { runHermesContextCommand } from './hermes_python.js'
 import { readHermesRuntimeAdapterStatus, runHermesRuntimeTask, type HermesBridgeEvent, type HermesRuntimeHandle } from './hermes_runtime.js'
 import { readHermesUpdateStatus, runHermesAutoUpdate, runHermesCompatibilityTest } from './hermes_update.js'
 import { hermesAgentDir, hermesBin, hermesPythonBin } from './paths.js'
-import { configureHermesMcpServer, getHermesMcpServeStatus, readHermesMcpConfig, removeHermesMcpServer, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
+import { configureHermesMcpServer, getHermesMcpServeStatus, readHermesMcpConfig, readHermesMcpNativeCapabilities, removeHermesMcpServer, setHermesMcpServerEnabled, setHermesMcpServerTools, startHermesMcpServe, stopHermesMcpServe, testHermesMcpServer, updateHermesMcpServer } from './mcp.js'
 import {
   configureHermesModel,
   configureHermesReasoning,
@@ -286,6 +286,14 @@ app.post('/api/hermes/sessions/:sessionId/continue', async (req, res) => {
 app.get('/api/hermes/mcp', (_req, res) => {
   try {
     res.json(readHermesMcpConfig())
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
+  }
+})
+
+app.get('/api/hermes/mcp/native-capabilities', (_req, res) => {
+  try {
+    res.json(readHermesMcpNativeCapabilities())
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : String(error) })
   }

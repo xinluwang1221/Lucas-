@@ -1232,6 +1232,194 @@
   gap: 6px;
 }
 
+.mcp-native-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.mcp-native-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.mcp-native-head strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.mcp-native-head p {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.mcp-native-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mcp-native-actions button,
+.mcp-native-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-native-loading {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.mcp-native-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mcp-native-summary span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: 11px;
+}
+
+.mcp-native-summary b {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.mcp-native-command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mcp-native-command {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.mcp-native-command.covered {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+}
+
+.mcp-native-command.partial {
+  border-color: rgba(217, 143, 36, 0.32);
+  background: var(--warning-soft);
+}
+
+.mcp-native-command > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mcp-native-command strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-native-status {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mcp-native-status.covered {
+  color: var(--success);
+  background: var(--surface);
+  border: 1px solid var(--success-border);
+}
+
+.mcp-native-status.partial {
+  color: var(--warning);
+  background: var(--surface);
+  border: 1px solid rgba(217, 143, 36, 0.28);
+}
+
+.mcp-native-status.missing {
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.mcp-native-command p,
+.mcp-native-command small,
+.mcp-native-command em {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+.mcp-native-command small {
+  color: var(--ink);
+}
+
+.mcp-native-command em {
+  white-space: nowrap;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.mcp-native-notes {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.mcp-native-notes strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.mcp-native-notes div {
+  display: grid;
+  gap: 6px;
+}
+
+.mcp-native-notes span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .connector-list {
   display: grid;
   gap: 10px;
@@ -3975,8 +4163,15 @@
 
   .skill-hub-grid,
   .mcp-ecosystem-panel,
-  .mcp-ecosystem-grid {
+  .mcp-ecosystem-grid,
+  .mcp-native-summary,
+  .mcp-native-command-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mcp-native-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
@@ -3999,6 +4194,9 @@
 :root[data-theme-mode="dark"] .utility-empty,
 :root[data-theme-mode="dark"] .connector-summary div,
 :root[data-theme-mode="dark"] .mcp-ecosystem-panel,
+:root[data-theme-mode="dark"] .mcp-native-panel,
+:root[data-theme-mode="dark"] .mcp-native-command,
+:root[data-theme-mode="dark"] .mcp-native-notes,
 :root[data-theme-mode="dark"] .skill-hub-panel,
 :root[data-theme-mode="dark"] .skill-hub-card,
 :root[data-theme-mode="dark"] .capability-card,
@@ -4047,6 +4245,8 @@
 :root[data-theme-mode="dark"] .dispatch-connector-strip,
 :root[data-theme-mode="dark"] .idea-grid button:hover,
 :root[data-theme-mode="dark"] .mcp-ecosystem-grid span,
+:root[data-theme-mode="dark"] .mcp-native-summary span,
+:root[data-theme-mode="dark"] .mcp-native-status,
 :root[data-theme-mode="dark"] .skill-hub-source-tabs button,
 :root[data-theme-mode="dark"] .skill-hub-empty,
 :root[data-theme-mode="dark"] .skill-hub-meta em,

@@ -4,6 +4,7 @@ import type {
   HermesMcpConfig,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
+  HermesMcpNativeCapabilities,
   HermesMcpServeStatus,
   HermesMcpTestResult,
   HermesMcpToolSelectionRequest,
@@ -13,6 +14,10 @@ import type {
 
 export async function getHermesMcpConfig(): Promise<HermesMcpConfig> {
   return request('/api/hermes/mcp')
+}
+
+export async function getHermesMcpNativeCapabilities(): Promise<HermesMcpNativeCapabilities> {
+  return request('/api/hermes/mcp/native-capabilities')
 }
 
 export async function getBackgroundStatus(): Promise<BackgroundServiceStatus> {

@@ -16,9 +16,12 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   type HermesMcpConfig,
   type HermesMcpManualConfigRequest,
+  type HermesMcpNativeCapabilities,
+  type HermesMcpNativeCommand,
   type HermesMcpServeStatus,
   type HermesMcpTestResult
 } from '../../lib/api'
+import { getHermesMcpNativeCapabilities } from './mcpApi'
 
 export type McpScope = 'local' | 'serve' | 'cloud'
 
@@ -36,6 +39,26 @@ export function ConnectorsView({
   onOpenNativeAdd: () => void
 }) {
   const enabledCount = connectors.filter((connector) => connector.enabled).length
+  const [nativeCapabilities, setNativeCapabilities] = useState<HermesMcpNativeCapabilities | null>(null)
+  const [nativeCapabilityError, setNativeCapabilityError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getHermesMcpNativeCapabilities()
+      .then((result) => {
+        if (cancelled) return
+        setNativeCapabilities(result)
+        setNativeCapabilityError(null)
+      })
+      .catch((failure) => {
+        if (cancelled) return
+        setNativeCapabilities(null)
+        setNativeCapabilityError(failure instanceof Error ? failure.message : String(failure))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className="connectors-panel">
@@ -72,6 +95,13 @@ export function ConnectorsView({
         </div>
       </div>
 
+      <McpNativeCapabilityPanel
+        capabilities={nativeCapabilities}
+        error={nativeCapabilityError}
+        onOpenSettings={onOpenSettings}
+        onOpenNativeAdd={onOpenNativeAdd}
+      />
+
       {error && <div className="settings-error-line">{error}</div>}
 
       <div className="connector-list">
@@ -103,6 +133,101 @@ export function ConnectorsView({
       </div>
     </div>
   )
+}
+
+function McpNativeCapabilityPanel({
+  capabilities,
+  error,
+  onOpenSettings,
+  onOpenNativeAdd
+}: {
+  capabilities: HermesMcpNativeCapabilities | null
+  error: string | null
+  onOpenSettings: () => void
+  onOpenNativeAdd: () => void
+}) {
+  if (error) {
+    return (
+      <div className="mcp-native-panel">
+        <div className="mcp-native-head">
+          <div>
+            <span className="section-kicker">官方 MCP 能力</span>
+            <strong>读取 Hermes 原生命令失败</strong>
+            <p>{error}</p>
+          </div>
+          <button className="settings-link-button" onClick={onOpenSettings}>打开 MCP 管理</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!capabilities) {
+    return (
+      <div className="mcp-native-panel">
+        <div className="mcp-native-loading"><Loader2 size={16} className="spin" /> 正在读取 Hermes MCP 原生命令</div>
+      </div>
+    )
+  }
+
+  const coveredCount = capabilities.commands.filter((command) => command.coworkStatus === 'covered').length
+  const availableCount = capabilities.commands.filter((command) => command.available).length
+  const missingCommands = capabilities.commands.filter((command) => command.coworkStatus !== 'covered')
+
+  return (
+    <div className="mcp-native-panel">
+      <div className="mcp-native-head">
+        <div>
+          <span className="section-kicker">官方 MCP 能力</span>
+          <strong>Hermes 原生命令覆盖</strong>
+          <p>这里按本机 Hermes CLI 实际暴露的 MCP 命令显示 Cowork 覆盖状态，不再用自建市场模拟生态。</p>
+        </div>
+        <div className="mcp-native-actions">
+          <button className="settings-link-button" onClick={onOpenNativeAdd}><Plus size={13} /> 添加 MCP</button>
+          <button className="settings-link-button" onClick={onOpenSettings}>管理服务</button>
+        </div>
+      </div>
+
+      <div className="mcp-native-summary">
+        <span><b>{availableCount}</b> Hermes 命令可用</span>
+        <span><b>{coveredCount}</b> Cowork 已覆盖</span>
+        <span><b>{capabilities.serverCount}</b> 本机服务</span>
+        <span><b>{capabilities.presetCount}</b> preset</span>
+      </div>
+
+      <div className="mcp-native-command-grid">
+        {capabilities.commands.map((command) => (
+          <McpNativeCommandCard command={command} key={command.id} />
+        ))}
+      </div>
+
+      <div className="mcp-native-notes">
+        <strong>{missingCommands.length ? '后续需要补齐' : '当前核心操作已覆盖'}</strong>
+        <div>
+          {capabilities.notes.map((note) => <span key={note}>{note}</span>)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function McpNativeCommandCard({ command }: { command: HermesMcpNativeCommand }) {
+  return (
+    <article className={`mcp-native-command ${command.coworkStatus}`}>
+      <div>
+        <strong>{command.label}</strong>
+        <span className={`mcp-native-status ${command.coworkStatus}`}>{mcpNativeStatusLabel(command.coworkStatus)}</span>
+      </div>
+      <p>{command.description}</p>
+      <small>{command.coworkEntry}</small>
+      <em>{command.available ? command.evidence : `Hermes 未暴露：${command.evidence}`}</em>
+    </article>
+  )
+}
+
+function mcpNativeStatusLabel(status: HermesMcpNativeCommand['coworkStatus']) {
+  if (status === 'covered') return '已接入'
+  if (status === 'partial') return '部分接入'
+  return '待补齐'
 }
 
 export function McpSettingsSection({

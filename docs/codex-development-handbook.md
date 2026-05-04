@@ -26,6 +26,7 @@ Hermes 能力释放规划阶段
 - 不把工具日志伪装成任务计划。
 - 工具、MCP、Skill 统一归入技能页 / 能力中心。
 - 多入口必须复用同一套状态和 API。
+- MCP 区域必须优先展示 Hermes 原生能力覆盖状态。使用 `/api/hermes/mcp/native-capabilities` 读取本机 Hermes CLI help 与 `config.yaml`，不要用静态文案伪装官方生态。
 
 ## 2. 每次开发的固定流程
 

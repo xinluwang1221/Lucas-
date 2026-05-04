@@ -1,12 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { dataDir, hermesAgentDir, hermesBin } from './paths.js'
 import {
   HermesMcpConfig,
   HermesMcpInstallResult,
   HermesMcpManualConfigRequest,
+  HermesMcpNativeCapabilities,
+  HermesMcpNativeCommand,
   HermesMcpServer,
   HermesMcpServeLogEntry,
   HermesMcpServeStatus,
@@ -43,6 +45,105 @@ export function readHermesMcpConfig(): HermesMcpConfig {
   return {
     configPath: hermesConfigPath,
     servers,
+    updatedAt: new Date().toISOString()
+  }
+}
+
+export function readHermesMcpNativeCapabilities(): HermesMcpNativeCapabilities {
+  const config = readHermesMcpConfig()
+  const generalHelp = readHermesMcpHelp(['mcp', '--help'])
+  const addHelp = readHermesMcpHelp(['mcp', 'add', '--help'])
+  const configureHelp = readHermesMcpHelp(['mcp', 'configure', '--help'])
+  const loginHelp = readHermesMcpHelp(['mcp', 'login', '--help'])
+  const serveHelp = readHermesMcpHelp(['mcp', 'serve', '--help'])
+  const presets = readMcpPresetNames()
+  const generalText = generalHelp.text
+
+  const commands: HermesMcpNativeCommand[] = [
+    {
+      id: 'add',
+      label: '添加服务',
+      description: '支持 stdio command、HTTP/SSE URL、OAuth/Header、env 和 preset。',
+      available: generalHelp.ok && hasMcpCommand(generalText, 'add') && /--command/.test(addHelp.text) && /--url/.test(addHelp.text),
+      evidence: mcpEvidence('hermes mcp add --help', addHelp, ['--command', '--url', '--auth', '--preset']),
+      coworkStatus: 'covered',
+      coworkEntry: '技能页 MCP 添加表单、设置页 MCP 本地服务'
+    },
+    {
+      id: 'list',
+      label: '读取服务',
+      description: '读取当前 Hermes MCP 服务配置和启用状态。',
+      available: generalHelp.ok && (hasMcpCommand(generalText, 'list') || hasMcpCommand(generalText, 'ls')),
+      evidence: mcpEvidence('hermes mcp --help', generalHelp, ['list', 'ls']),
+      coworkStatus: 'covered',
+      coworkEntry: '技能页 MCP 服务列表'
+    },
+    {
+      id: 'test',
+      label: '连接测试',
+      description: '测试单个 MCP 服务连接，并读取可发现的工具。',
+      available: generalHelp.ok && hasMcpCommand(generalText, 'test'),
+      evidence: mcpEvidence('hermes mcp --help', generalHelp, ['test']),
+      coworkStatus: 'covered',
+      coworkEntry: '设置页 MCP 服务测试'
+    },
+    {
+      id: 'configure',
+      label: '服务配置',
+      description: '进入 Hermes 原生配置流程，适合补全 OAuth、Header 或服务参数。',
+      available: generalHelp.ok && hasMcpCommand(generalText, 'configure') && configureHelp.ok,
+      evidence: mcpEvidence('hermes mcp configure --help', configureHelp, ['name']),
+      coworkStatus: 'partial',
+      coworkEntry: 'Cowork 已支持编辑配置和工具范围，尚未包装原生命令交互'
+    },
+    {
+      id: 'login',
+      label: 'OAuth 登录',
+      description: '对支持 OAuth 的 MCP 服务重新登录或刷新授权。',
+      available: generalHelp.ok && hasMcpCommand(generalText, 'login') && loginHelp.ok,
+      evidence: mcpEvidence('hermes mcp login --help', loginHelp, ['name']),
+      coworkStatus: 'missing',
+      coworkEntry: '待补 OAuth 登录入口和授权状态'
+    },
+    {
+      id: 'serve',
+      label: 'Hermes Server',
+      description: '把 Hermes 自身作为 MCP Server 暴露给其他客户端。',
+      available: generalHelp.ok && hasMcpCommand(generalText, 'serve') && /--accept-hooks/.test(serveHelp.text),
+      evidence: mcpEvidence('hermes mcp serve --help', serveHelp, ['--accept-hooks']),
+      coworkStatus: 'covered',
+      coworkEntry: '设置页 Hermes Server 启停'
+    },
+    {
+      id: 'remove',
+      label: '删除服务',
+      description: '从 Hermes MCP 配置中移除服务。',
+      available: generalHelp.ok && (hasMcpCommand(generalText, 'remove') || hasMcpCommand(generalText, 'rm')),
+      evidence: mcpEvidence('hermes mcp --help', generalHelp, ['remove', 'rm']),
+      coworkStatus: 'covered',
+      coworkEntry: '设置页 MCP 删除'
+    }
+  ]
+
+  const notes = [
+    presets.length
+      ? `当前固定 Hermes 内核包含 ${presets.length} 个 preset：${presets.slice(0, 6).join('、')}${presets.length > 6 ? '…' : ''}。`
+      : '当前固定 Hermes 内核暴露 --preset 参数，但 preset registry 为空；Cowork 不再维护自建 MCP 市场。',
+    commands.some((command) => command.id === 'login' && command.available)
+      ? 'Hermes 已提供 MCP OAuth login 命令，Cowork 下一步需要把它做成授权按钮和状态提示。'
+      : '未检测到可用的 MCP OAuth login 命令。',
+    `${config.servers.length} 个 MCP 服务来自 ${config.configPath}，启停、工具范围和删除会写回 Hermes 配置。`
+  ]
+
+  return {
+    hermesBin,
+    configPath: config.configPath,
+    serverCount: config.servers.length,
+    enabledServerCount: config.servers.filter((server) => server.enabled).length,
+    presetCount: presets.length,
+    presets,
+    commands,
+    notes,
     updatedAt: new Date().toISOString()
   }
 }
@@ -552,6 +653,52 @@ export function testHermesMcpServer(serverId: string): Promise<HermesMcpTestResu
 function normalizeServerId(serverId: string) {
   const safeServerId = serverId.trim()
   return /^[A-Za-z0-9._-]{1,120}$/.test(safeServerId) ? safeServerId : ''
+}
+
+function readHermesMcpHelp(args: string[]) {
+  try {
+    const output = execFileSync(hermesBin, args, {
+      cwd: hermesAgentDir,
+      encoding: 'utf8',
+      timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    return { ok: true, text: redactSecrets(stripAnsi(output)) }
+  } catch (error) {
+    const commandError = error as { stdout?: Buffer | string; stderr?: Buffer | string; message?: string }
+    const output = `${bufferishToString(commandError.stdout)}\n${bufferishToString(commandError.stderr)}`.trim()
+    return {
+      ok: false,
+      text: redactSecrets(stripAnsi(output || commandError.message || 'Hermes MCP help 读取失败'))
+    }
+  }
+}
+
+function bufferishToString(value: Buffer | string | undefined) {
+  if (!value) return ''
+  return Buffer.isBuffer(value) ? value.toString('utf8') : value
+}
+
+function hasMcpCommand(helpText: string, command: string) {
+  return new RegExp(`\\b${command}\\b`).test(helpText)
+}
+
+function mcpEvidence(command: string, help: { ok: boolean; text: string }, tokens: string[]) {
+  if (!help.ok) return `${command} 未读取成功：${help.text.slice(0, 120)}`
+  const found = tokens.filter((token) => help.text.includes(token))
+  return `${command}${found.length ? ` · 检测到 ${found.join(' / ')}` : ''}`
+}
+
+function readMcpPresetNames() {
+  const sourcePath = path.join(hermesAgentDir, 'hermes_cli', 'mcp_config.py')
+  if (!fs.existsSync(sourcePath)) return []
+  const source = fs.readFileSync(sourcePath, 'utf8')
+  const match = source.match(/_MCP_PRESETS[\s\S]*?=\s*{([\s\S]*?)\n}\n/)
+  if (!match) return []
+  return [...match[1].matchAll(/^\s{4}["']([^"']+)["']\s*:/gm)]
+    .map((item) => item[1])
+    .filter(Boolean)
+    .sort()
 }
 
 function normalizeCommandName(command: string) {

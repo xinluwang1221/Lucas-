@@ -617,6 +617,28 @@ export type HermesMcpConfig = {
   updatedAt: string
 }
 
+export type HermesMcpNativeCommand = {
+  id: 'add' | 'list' | 'test' | 'configure' | 'login' | 'serve' | 'remove'
+  label: string
+  description: string
+  available: boolean
+  evidence: string
+  coworkStatus: 'covered' | 'partial' | 'missing'
+  coworkEntry: string
+}
+
+export type HermesMcpNativeCapabilities = {
+  hermesBin: string
+  configPath: string
+  serverCount: number
+  enabledServerCount: number
+  presetCount: number
+  presets: string[]
+  commands: HermesMcpNativeCommand[]
+  notes: string[]
+  updatedAt: string
+}
+
 export type HermesMcpTestResult = {
   serverId: string
   ok: boolean
