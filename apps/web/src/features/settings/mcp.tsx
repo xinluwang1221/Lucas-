@@ -153,8 +153,8 @@ function McpNativeCapabilityPanel({
       <div className="mcp-native-panel">
         <div className="mcp-native-head">
           <div>
-            <span className="section-kicker">官方 MCP 能力</span>
-            <strong>读取 Hermes 原生命令失败</strong>
+            <span className="section-kicker">MCP 产品化状态</span>
+            <strong>读取 MCP 能力状态失败</strong>
             <p>{error}</p>
           </div>
           <button className="settings-link-button" onClick={onOpenSettings}>打开 MCP 管理</button>
@@ -166,22 +166,21 @@ function McpNativeCapabilityPanel({
   if (!capabilities) {
     return (
       <div className="mcp-native-panel">
-        <div className="mcp-native-loading"><Loader2 size={16} className="spin" /> 正在读取 Hermes MCP 原生命令</div>
+        <div className="mcp-native-loading"><Loader2 size={16} className="spin" /> 正在读取 MCP 能力状态</div>
       </div>
     )
   }
 
-  const coveredCount = capabilities.commands.filter((command) => command.coworkStatus === 'covered').length
-  const availableCount = capabilities.commands.filter((command) => command.available).length
-  const missingCommands = capabilities.commands.filter((command) => command.coworkStatus !== 'covered')
+  const productizedCommands = capabilities.commands.filter((command) => command.coworkStatus === 'covered')
+  const backlogCommands = capabilities.commands.filter((command) => command.coworkStatus !== 'covered')
 
   return (
     <div className="mcp-native-panel">
       <div className="mcp-native-head">
         <div>
-          <span className="section-kicker">官方 MCP 能力</span>
-          <strong>Hermes 原生命令覆盖</strong>
-          <p>这里按本机 Hermes CLI 实际暴露的 MCP 命令显示 Cowork 覆盖状态，不再用自建市场模拟生态。</p>
+          <span className="section-kicker">MCP 产品化状态</span>
+          <strong>已经可用的 MCP 操作</strong>
+          <p>这里不直接暴露 Hermes 命令，而是只展示 Cowork 已经做成用户入口的能力；还没确定交互方式的官方能力先进入开发文档清单。</p>
         </div>
         <div className="mcp-native-actions">
           <button className="settings-link-button" onClick={onOpenNativeAdd}><Plus size={13} /> 添加 MCP</button>
@@ -190,22 +189,31 @@ function McpNativeCapabilityPanel({
       </div>
 
       <div className="mcp-native-summary">
-        <span><b>{availableCount}</b> Hermes 命令可用</span>
-        <span><b>{coveredCount}</b> Cowork 已覆盖</span>
+        <span><b>{productizedCommands.length}</b> 已产品化入口</span>
+        <span><b>{backlogCommands.length}</b> 待产品化能力</span>
         <span><b>{capabilities.serverCount}</b> 本机服务</span>
         <span><b>{capabilities.presetCount}</b> preset</span>
       </div>
 
       <div className="mcp-native-command-grid">
-        {capabilities.commands.map((command) => (
+        {productizedCommands.map((command) => (
           <McpNativeCommandCard command={command} key={command.id} />
         ))}
       </div>
 
       <div className="mcp-native-notes">
-        <strong>{missingCommands.length ? '后续需要补齐' : '当前核心操作已覆盖'}</strong>
+        <strong>{backlogCommands.length ? '客户端化前待产品化' : '当前核心操作已可用'}</strong>
         <div>
-          {capabilities.notes.map((note) => <span key={note}>{note}</span>)}
+          {backlogCommands.length ? (
+            backlogCommands.map((command) => (
+              <span key={command.id}>
+                <b>{command.label}</b>
+                {command.coworkEntry}
+              </span>
+            ))
+          ) : (
+            capabilities.notes.map((note) => <span key={note}>{note}</span>)
+          )}
         </div>
       </div>
     </div>
@@ -220,8 +228,7 @@ function McpNativeCommandCard({ command }: { command: HermesMcpNativeCommand }) 
         <span className={`mcp-native-status ${command.coworkStatus}`}>{mcpNativeStatusLabel(command.coworkStatus)}</span>
       </div>
       <p>{command.description}</p>
-      <small>{command.coworkEntry}</small>
-      <em>{command.available ? command.evidence : `Hermes 未暴露：${command.evidence}`}</em>
+      <small>入口：{command.coworkEntry}</small>
     </article>
   )
 }

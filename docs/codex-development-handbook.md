@@ -28,6 +28,7 @@ Hermes 能力释放规划阶段
 - 多入口必须复用同一套状态和 API。
 - MCP 区域必须优先展示 Hermes 原生能力覆盖状态。使用 `/api/hermes/mcp/native-capabilities` 读取本机 Hermes CLI help 与 `config.yaml`，不要用静态文案伪装官方生态。
 - MCP OAuth 重新授权已接 `POST /api/hermes/mcp/:serverId/login`，只对 `auth=oauth` 的 HTTP/SSE 服务显示入口；`hermes mcp configure` 需要 TTY，不能包装成普通 Web 表单。
+- Hermes 官方命令不能直接等同于 Cowork 产品功能。只有明确了用户场景、Cowork 入口、后端写入/执行路径和验证方式，才允许放进主界面；否则写进 `hermes-capability-baseline.md` 的“未产品化能力清单”，客户端化前统一处理。
 
 ## 2. 每次开发的固定流程
 

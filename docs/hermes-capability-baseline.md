@@ -234,7 +234,7 @@ flowchart TB
 | 模型与 Provider：主模型、Provider Routing、Fallback Providers、Credential Pools、Auxiliary Providers | 设置 > 模型、输入框模型菜单、模型失败修复卡 | 部分覆盖。主模型、Key、Base URL、Fallback、reasoning 已做；credential pools、auxiliary providers、OAuth 还未完整 | 模型页改为“模型能力管理”：默认大脑、临时模型、Key 池、备用路线、辅助任务模型、OAuth/Key 两类授权、失败重填 | `/api/models`、保存后真实对话模型校验、401/invalid key repair smoke、配置备份检查 |
 | 工具与 Toolsets：web、terminal、file、browser、vision、image、tts、todo、memory、session_search、cronjob、delegate_task、execute_code | 技能页 > 工具集、过程资源、设置 > 运行环境诊断 | 部分覆盖。Toolsets 已进入技能页；工具级策略、工具使用统计和失败诊断还缺 | 把 Toolsets 做成技能页的一级能力：分类、启停、凭据状态、内置工具列表、使用统计、失败原因；与 MCP/Skill 同页但语义分清 | Dashboard `/api/tools/toolsets`、启停后 config 检查、任务过程资源工具调用检查 |
 | Skills：本地目录、外部目录、Hub、Agent 自动创建/修改 Skill | 技能页、Skill 详情、输入区预载 Skill、Skills Hub | 部分覆盖。清单、启停、上传、文件树、加入下一次任务、Hermes Skills Hub 浏览/搜索/安装已接；外部目录、Agent 自动沉淀还未完整 | 技能页继续做分类、依赖、运行前预载、安装前风险说明、Agent 自动创建/修改 Skill 的确认流 | `/api/skills`、`/api/skills/hub`、`hermes skills browse/search/install`、Skill toggle 写回 Hermes、点击 Skill 文件树、带 skill 任务 smoke |
-| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、OAuth、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、过程资源 | 部分覆盖。已取消 Cowork 自建 GitHub 市场和每日推荐；当前固定 Hermes 内核未发现类似 Skills Hub 的 MCP 官方市场，`--preset` 接口位存在但 preset registry 当前为空；新增、测试、启停、工具 include/exclude、OAuth re-login、Hermes MCP serve、技能页 MCP 生态概览已接入 Hermes 原生命令与配置；`/api/hermes/mcp/native-capabilities` 已按本机 Hermes CLI help 和 `config.yaml` 显示 `add/list/test/configure/login/serve/remove` 覆盖状态；`configure` 因 Hermes 原生命令要求 TTY 仍未普通 Web 化，远程 MCP、sampling/resources/prompts 展示和权限说明仍需深化 | MCP 页按 Hermes 官方 `mcp add/list/test/configure/login/serve` 和本机源码继续产品化：保留 OAuth 重新授权入口，后续只用 PTY/终端桥接方式处理 configure；继续补 preset registry 自动探测、远程 HTTP/SSE 指引、动态工具刷新、工具级权限说明、resources/prompts/sampling 可视化和 Hermes MCP server 生产化。只有 Hermes 官方提供 Hub/API/registry 时才新增“官方 MCP 生态”，不恢复 Cowork 自建市场 | `GET /api/hermes/mcp/native-capabilities`、`POST /api/hermes/mcp/:serverId/login`、`hermes mcp add/list/test/configure/login/serve`、源码 `_MCP_PRESETS`/MCP server capability 检查、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
+| MCP：stdio/HTTP server、自动发现、工具前缀、per-server filtering、OAuth、Hermes 作为 MCP server | 技能页 > MCP 服务、设置 > MCP、过程资源 | 部分覆盖。已取消 Cowork 自建 GitHub 市场和每日推荐；当前固定 Hermes 内核未发现类似 Skills Hub 的 MCP 官方市场，`--preset` 接口位存在但 preset registry 当前为空；新增、测试、启停、工具 include/exclude、OAuth re-login、Hermes MCP serve、技能页 MCP 生态概览已接入 Hermes 原生命令与配置；`/api/hermes/mcp/native-capabilities` 只作为内部能力探测，前端改为显示“已产品化入口/待产品化能力”，不再把 `add/list/test/configure/login/serve/remove` 当用户功能表；`configure` 因 Hermes 原生命令要求 TTY 仍未普通 Web 化，远程 MCP、sampling/resources/prompts 展示和权限说明仍需深化 | MCP 页按 Hermes 官方 `mcp add/list/test/configure/login/serve` 和本机源码继续产品化：保留 OAuth 重新授权入口，后续只用 PTY/终端桥接方式处理 configure；继续补 preset registry 自动探测、远程 HTTP/SSE 指引、动态工具刷新、工具级权限说明、resources/prompts/sampling 可视化和 Hermes MCP server 生产化。只有 Hermes 官方提供 Hub/API/registry 时才新增“官方 MCP 生态”，不恢复 Cowork 自建市场 | `GET /api/hermes/mcp/native-capabilities`、`POST /api/hermes/mcp/:serverId/login`、`hermes mcp add/list/test/configure/login/serve`、源码 `_MCP_PRESETS`/MCP server capability 检查、安装/删除后 config 检查、工具列表展示、任务中 MCP 调用事件 |
 | Cron / Automation：自然语言、cron 表达式、skills、workdir、delivery target、pause/resume/edit/run/remove | 左侧定时任务页、未来产物区、未来投递设置 | 部分覆盖。真实 Hermes Cron 基础管理已接；周期选择、Skill 分类多选、delivery target、输出产物还需完善 | 定时任务页只管理 Hermes Cron：周期选择器、工作区绑定、Skill 类目多选、运行产物、失败处理和投递渠道 | `test:hermes-cron`、Dashboard cron jobs、`~/.hermes/cron/output`、gateway/tick 运行检查 |
 | Gateway / Messaging / Mobile：长驻 gateway、平台消息、session routing、slash command、cron tick、background maintenance | 本机 gateway、未来 Electron 常驻、未来手机端 | 未完整覆盖。当前只有本机 gateway；移动端和云端中转未实现 | 设计“云端加密中转 + Mac 主机执行”：云端只做账号/设备配对、消息路由和推送；Hermes/files/tools 只在 Mac 执行 | gateway 连接测试、多设备协议设计文档、移动端发任务到 Mac 的端到端 smoke |
 | 媒体与浏览器：Browser Automation、Vision、Image Generation、Voice Mode、Voice & TTS | 文件预览、图片/文件批注、未来语音入口、未来浏览器过程面板 | 未完整覆盖。文件/图片预览已做；视觉理解、浏览器自动化可视化、TTS/Voice 还未产品化 | 新增语音输入/TTS 输出、图片视觉理解入口、浏览器任务过程可视化；执行仍走 Hermes 工具，不在 Cowork 重写工具 | Browser tool smoke、图片任务 smoke、Voice/TTS 本机权限检查、过程事件展示 |
@@ -245,6 +245,28 @@ flowchart TB
 - “已覆盖”表示已有用户入口、Adapter API 和基本验证，不表示没有体验问题。
 - “部分覆盖”表示能用，但还有 Hermes 原生能力没有完整映射，或多入口一致性仍有风险。
 - “未覆盖”必须写清是 Hermes 没有该能力，还是 Cowork 尚未对接。
+
+### 3.2.1 Hermes 官方能力产品化规则
+
+Hermes 官方命令、API 或源码能力只是“后端可能性”，不能直接等同于 Cowork 的产品功能。进入 Cowork 主界面前必须满足四个条件：
+
+1. 用户场景明确：用户知道这个入口能帮自己完成什么工作。
+2. 入口明确：功能放在对话区、工作区、技能页、设置页还是右侧工作区。
+3. 执行路径明确：Cowork API 如何调用 Hermes，是否写回 Hermes 配置，是否需要备份和复测。
+4. 验证明确：有 smoke、接口测试、真实 Hermes 配置检查或真实任务验证。
+
+如果四项不完整，只能进入下面的未产品化能力清单，不能在主界面简单暴露命令名。
+
+### 3.2.2 未产品化能力清单
+
+这些能力来自 Hermes 官方命令、官方文档或本机源码，但 Cowork 尚未形成用户可理解的产品入口。客户端化前需要逐个评估和产品化。
+
+| 能力 | 当前来源 | 为什么不能直接放界面 | 产品化方向 | 当前处理 |
+| --- | --- | --- | --- | --- |
+| MCP `configure` 原生交互 | `hermes mcp configure`，本机源码要求 TTY | 它是交互式终端流程，普通 Web 表单无法承接 curses/TTY 选择，也会让用户看不懂命令含义 | 走 PTY/终端桥接，或拆成 Cowork 自己的“工具范围/认证/参数配置向导” | 技能页只提示“客户端化前待产品化”，设置页保留已可用的编辑配置和工具 include/exclude |
+| MCP preset registry | `hermes mcp add --preset` 参数位 | 当前固定 Hermes 内核 preset registry 为空，直接展示会变成空市场或误导 | 如果 Hermes 后续提供官方 registry，再做官方来源浏览/安装；否则只保留手动 preset 输入 | 不恢复 Cowork 自建 MCP 市场 |
+| MCP resources / prompts / sampling | MCP 协议与 Hermes MCP 能力 | 用户不关心协议名，必须转换成“这个服务能读取什么资源、提供什么模板、是否允许模型回调” | 在 MCP 详情页做能力标签、权限说明和任务中资源展示 | 未进入主界面 |
+| 远程 HTTP/SSE MCP 权限治理 | Hermes HTTP/SSE MCP + OAuth/Header | 直接给 URL/Token 表单不足以解释数据会发往哪里、哪些工具会被授权 | 做远程服务风险说明、工具级开关、凭据保存策略和测试结果卡 | 只保留基础添加/测试/重新授权 |
 
 ## 3.5 Hermes 能力释放路线图（2026-05-03）
 
